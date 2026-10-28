@@ -1,0 +1,20 @@
+[package]
+name = "xdict-pack"
+description = "Builds the word pack from the pinned upstream sources, on the reader's Mac"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+flate2.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

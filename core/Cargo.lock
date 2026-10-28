@@ -1185,6 +1185,7 @@ dependencies = [
  "xdict-mdx",
  "xdict-mdx-writer",
  "xdict-mmap",
+ "xdict-pack",
  "xdict-phrase",
  "xdict-schedule",
  "xdict-win-fileid",
@@ -1284,6 +1285,16 @@ version = "0.5.0"
 dependencies = [
  "memmap2",
  "xdict-win-fileid",
+]
+
+[[package]]
+name = "xdict-pack"
+version = "0.5.0"
+dependencies = [
+ "flate2",
+ "serde_json",
+ "sha2",
+ "unicode-normalization",
 ]
 
 [[package]]

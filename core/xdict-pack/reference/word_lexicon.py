@@ -1545,7 +1545,8 @@ def notices_text(pack_name: str, pack_sha256: str, entries: list[tuple[dict, lis
         f"Pack SHA-256: `{pack_sha256}`",
         "",
         "This pack holds linguistic metadata only (pronunciations, inflected forms, derivational links and "
-        "etymological ancestry), built by `word_lexicon.py` from the sources below. It adapts ShareAlike "
+        "etymological ancestry), built by XDict's own word pack builder — `xdict-pack`, whose reference "
+        "implementation is `word_lexicon.py` — from the sources below. It adapts ShareAlike "
         "sources, so the pack as a whole is distributed under the Creative Commons Attribution-ShareAlike 4.0 "
         "International licence, https://creativecommons.org/licenses/by-sa/4.0/ (CC BY-SA 3.0 material is "
         "adapted under the later version its section 4(b) permits). Each source keeps its own terms, reproduced "
@@ -1624,7 +1625,10 @@ def _parse_provider(entry: dict, path: Path, report: dict) -> Iterator[dict]:
 PROVIDERS = frozenset({"cmudict", "oewn", "etymology-db", "morphynet-inflection", "morphynet-derivation", "kaikki"})
 
 
-TOOLS_DIR = Path(__file__).resolve().parent
+# The reference implementation moved beside the crate that superseded it (2026-10-28): the manifest it pins and
+# the pack spec stay with the crate, so this file`s default manifest is `core/xdict-core/tools/`.
+TOOLS_DIR = Path(__file__).resolve().parents[1]
+MANIFEST_DIR = TOOLS_DIR.parent / "xdict-core" / "tools"
 
 
 def repository_root(start: Path) -> Path | None:
@@ -1705,7 +1709,7 @@ def build(
 
 
 def main(argv: list[str] | None = None) -> int:
-    tools = Path(__file__).resolve().parent
+    tools = MANIFEST_DIR
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     commands = parser.add_subparsers(dest="command", required=True)
     verify = commands.add_parser("verify", help="check the raw files against the manifest's size and SHA-256")

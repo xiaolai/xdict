@@ -24,7 +24,9 @@ from unittest import mock
 
 import word_lexicon as wl
 
-TOOLS = Path(__file__).resolve().parent
+# The reference implementation moved beside the crate that superseded it (2026-10-28); the manifest it pins stays
+# with xdict-core's tools, where the builder reads it too.
+TOOLS = Path(__file__).resolve().parents[1].parent / "xdict-core" / "tools"
 PLACEHOLDER = "PLACEHOLDER-CONTENT"
 SRC = {
     "id": "t", "name": "Test source", "url": "https://example.org/t", "version": "1", "sha256": "0" * 64,

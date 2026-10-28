@@ -1,17 +1,21 @@
 # The word pack
 
-This is English linguistic metadata for `xdict_core::words`: pronunciations, inflected forms, derivational families and historical roots. `word_lexicon.py` builds it with standard-library Python, from the sources pinned in `word_lexicon_sources.json`.
+This is English linguistic metadata for `xdict_core::words`: pronunciations, inflected forms, derivational families
+and historical roots. **`xdict-pack`** — `core/xdict-pack`, a Rust crate in the core's workspace — builds it from the
+sources pinned in `word_lexicon_sources.json`. It runs on the reader's Mac from downloads the app fetched: XDict
+generates nothing and hosts nothing, so no derived artifact of ours sits anywhere on the network (the owner's
+decision, 2026-10-28; `dev-docs/plan-local-word-pack.md`).
 
 **Raw downloads and built packs never enter Git.** The builder refuses an output path inside the repository.
 
-**Records hold metadata only.** No definition, gloss, example, quotation or prose etymology is read into a record. The writer refuses any record that carries such a key.
+**Records hold metadata only.** No definition, gloss, example, quotation or prose etymology is read into a record. The
+writer refuses any record that carries such a key.
 
 ## Build
 
 ```sh
-python3 -I core/xdict-core/tools/word_lexicon.py verify --raw-dir RAW
-python3 -I core/xdict-core/tools/word_lexicon.py build --raw-dir RAW \
-    [--output OUT.jsonl] [--kaikki-input kaikki/receipt.json ...] [--notice-dir DIR]
+xdict-pack verify --raw-dir RAW
+xdict-pack build --raw-dir RAW [--output OUT.jsonl] [--manifest MANIFEST] [--notice-dir DIR]
 ```
 
 The default output is `RAW/../pack/xdict-words-en.jsonl`. A build:
@@ -21,11 +25,41 @@ The default output is `RAW/../pack/xdict-words-en.jsonl`. A build:
 3. Writes three files, each atomically (a temporary file, then a rename):
    - the pack;
    - `<stem>.notices.md`, which holds every source's complete notices and must travel with the pack;
-   - `<stem>.report.json`, which lists record counts, records left out for a loader bound, and every skipped source row counted by reason (etymology rows skipped by shape, MorphyNet rows skipped by the rules below). Under `skippedSamples` it also keeps, for each reason, the first 50 skipped rows in source order as metadata only: the source line, the words, the POS codes, the morpheme and the type (`line`, `word`, `base`, `derived`, `basePos`, `derivedPos`, `affix`, `kind`), never a definition or a raw row. The counts cover every row; only the samples stop at 50. The report sits beside the pack, outside Git.
+   - `<stem>.report.json`, which lists record counts, records left out for a loader bound, and every skipped source row
+     counted by reason (etymology rows skipped by shape, MorphyNet rows skipped by the rules below). Under
+     `skippedSamples` it also keeps, for each reason, the first 50 skipped rows in source order as metadata only: the
+     source line, the words, the POS codes, the morpheme and the type (`line`, `word`, `base`, `derived`, `basePos`,
+     `derivedPos`, `affix`, `kind`), never a definition or a raw row. The counts cover every row; only the samples stop
+     at 50. The report sits beside the pack, outside Git.
 
 The same inputs give byte-identical outputs.
 
-Tests: `python3 -I -m unittest discover -s core/xdict-core/tools -p 'test_word_lexicon.py' -v`.
+The library API is `xdict_pack::build(&BuildOptions, progress)`: it reports each source as it starts and finishes,
+and a caller that answers `cancel` stops it with **nothing written**. The app reaches the same build as contract 20's
+`buildWordPack` through `Core::build_word_pack`, which then installs what it wrote; downloading the sources is the
+app's half (plan-local-word-pack WI-6), because the network is the shell's (ADR-0003).
+
+## The parity gate
+
+`core/xdict-pack/tests/parity.rs` holds the Rust builder to the reference implementation, byte for byte:
+
+```sh
+XDICT_WORD_PACK_RAW=$HOME/xdict-wordpack/raw cargo test --release -p xdict-pack --test parity -- --nocapture
+```
+
+Over the pinned sources (2026-10-28) it asserts that the pack's SHA-256 is
+`f33954be3b147fc7da87dba9b5fd6b11314aaa8e268b21137da407b0c691b7a8`, the notices sidecar's is
+`b8022ca19c24b8b8439909513ec9588281b2d5bb9069d467f33c09fffd9ab38a`, that two runs are byte-identical, and that every
+record count per source and per type is the reference's. A hand run at the reference's own output path makes all three
+files — pack, notices and report — byte-identical to the Python builder's. Without `XDICT_WORD_PACK_RAW` the gate says
+"not measured" and passes: **a green run without it is not a measurement**.
+
+**The Python builder stays as the reference implementation** — `word_lexicon.py` and its `test_word_lexicon.py`,
+outside the shipped product. It is what the parity figure above was taken from, and a behaviour that must differ from
+it is a separate, argued change, not a quiet divergence.
+
+Tests: `cargo test -p xdict-pack` — the crate's own unit tests, one per rule this file states — and the gate above. The reference implementation's own:
+`python3 -I -m unittest discover -s core/xdict-pack/reference -p 'test_word_lexicon.py' -v`.
 
 ## Pack format: `xdict-word-pack` v2
 

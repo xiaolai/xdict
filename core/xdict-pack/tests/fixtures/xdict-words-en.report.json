@@ -1,0 +1,2064 @@
+{
+  "notices": "",
+  "noticesSha256": "b8022ca19c24b8b8439909513ec9588281b2d5bb9069d467f33c09fffd9ab38a",
+  "pack": "",
+  "packSha256": "f33954be3b147fc7da87dba9b5fd6b11314aaa8e268b21137da407b0c691b7a8",
+  "parsedBySource": {
+    "cmu": {
+      "pronunciation": 135166
+    },
+    "ety": {
+      "derivation": 211899,
+      "etymon": 166503,
+      "origin": 189129
+    },
+    "morphynet-deri": {
+      "derivation": 205267
+    },
+    "morphynet-infl": {
+      "form": 223876
+    },
+    "oewn": {
+      "derivation": 73534,
+      "pronunciation": 43534,
+      "sense": 301518
+    }
+  },
+  "records": {
+    "derivation": 437361,
+    "etymon": 166503,
+    "form": 223517,
+    "origin": 189129,
+    "pronunciation": 178698,
+    "sense": 293511
+  },
+  "rejected": {},
+  "skipped": {
+    "ety: ancestry chain broken at a skipped step": 423,
+    "ety: ancestry row without related id, language or form": 1984,
+    "ety: group_affix_root inside group_related_root": 515,
+    "ety: self-edge": 58,
+    "morphynet-deri: derived word equals its base": 4,
+    "morphynet-deri: prefix spelling change not modelled": 1637,
+    "morphynet-deri: suffix spelling change not modelled": 16410,
+    "morphynet-deri: undocumented POS U": 1813,
+    "morphynet-infl: known malformed quoted row": 2
+  },
+  "skippedSamples": {
+    "ety: ancestry chain broken at a skipped step": [
+      {
+        "line": 16116,
+        "word": "Uruguay"
+      },
+      {
+        "line": 16121,
+        "word": "Uruguay"
+      },
+      {
+        "line": 17256,
+        "word": "Benin"
+      },
+      {
+        "line": 17262,
+        "word": "Benin"
+      },
+      {
+        "line": 17793,
+        "word": "Sri Lanka"
+      },
+      {
+        "line": 19662,
+        "word": "dar"
+      },
+      {
+        "line": 22328,
+        "word": "or"
+      },
+      {
+        "line": 25847,
+        "word": "genitive"
+      },
+      {
+        "line": 31015,
+        "word": "mortgage"
+      },
+      {
+        "line": 31884,
+        "word": "alligator"
+      },
+      {
+        "line": 32085,
+        "word": "copper"
+      },
+      {
+        "line": 44461,
+        "word": "mapa"
+      },
+      {
+        "line": 44474,
+        "word": "mapa"
+      },
+      {
+        "line": 46165,
+        "word": "dismal"
+      },
+      {
+        "line": 71307,
+        "word": "persen"
+      },
+      {
+        "line": 72842,
+        "word": "ore"
+      },
+      {
+        "line": 74651,
+        "word": "agora"
+      },
+      {
+        "line": 74661,
+        "word": "agora"
+      },
+      {
+        "line": 74666,
+        "word": "agora"
+      },
+      {
+        "line": 95592,
+        "word": "jamais"
+      },
+      {
+        "line": 108827,
+        "word": "extemporaneous"
+      },
+      {
+        "line": 111228,
+        "word": "share"
+      },
+      {
+        "line": 111525,
+        "word": "Los Angeles"
+      },
+      {
+        "line": 123999,
+        "word": "je"
+      },
+      {
+        "line": 125706,
+        "word": "zwischen"
+      },
+      {
+        "line": 138570,
+        "word": "wasteland"
+      },
+      {
+        "line": 142657,
+        "word": "pero"
+      },
+      {
+        "line": 147410,
+        "word": "adieu"
+      },
+      {
+        "line": 147684,
+        "word": "fegato"
+      },
+      {
+        "line": 151583,
+        "word": "fio"
+      },
+      {
+        "line": 156016,
+        "word": "apart"
+      },
+      {
+        "line": 162937,
+        "word": "nanti"
+      },
+      {
+        "line": 163596,
+        "word": "labda"
+      },
+      {
+        "line": 163925,
+        "word": "fígado"
+      },
+      {
+        "line": 163928,
+        "word": "fígado"
+      },
+      {
+        "line": 180635,
+        "word": "jade"
+      },
+      {
+        "line": 180650,
+        "word": "jade"
+      },
+      {
+        "line": 180657,
+        "word": "jade"
+      },
+      {
+        "line": 180665,
+        "word": "jade"
+      },
+      {
+        "line": 181001,
+        "word": "placenta"
+      },
+      {
+        "line": 181091,
+        "word": "Minnesota"
+      },
+      {
+        "line": 185036,
+        "word": "format"
+      },
+      {
+        "line": 193490,
+        "word": "apace"
+      },
+      {
+        "line": 196791,
+        "word": "per se"
+      },
+      {
+        "line": 196795,
+        "word": "per se"
+      },
+      {
+        "line": 222698,
+        "word": "hapax legomenon"
+      },
+      {
+        "line": 224629,
+        "word": "tantamount"
+      },
+      {
+        "line": 229602,
+        "word": "cormorant"
+      },
+      {
+        "line": 236763,
+        "word": "cam"
+      },
+      {
+        "line": 238308,
+        "word": "dynamo"
+      }
+    ],
+    "ety: ancestry row without related id, language or form": [
+      {
+        "line": 1241,
+        "word": "quid pro quo"
+      },
+      {
+        "line": 5141,
+        "word": "absque hoc"
+      },
+      {
+        "line": 8343,
+        "word": "OS"
+      },
+      {
+        "line": 14674,
+        "word": "Bahamas"
+      },
+      {
+        "line": 16116,
+        "word": "Uruguay"
+      },
+      {
+        "line": 16121,
+        "word": "Uruguay"
+      },
+      {
+        "line": 17256,
+        "word": "Benin"
+      },
+      {
+        "line": 17262,
+        "word": "Benin"
+      },
+      {
+        "line": 17793,
+        "word": "Sri Lanka"
+      },
+      {
+        "line": 17798,
+        "word": "Sri Lanka"
+      },
+      {
+        "line": 19561,
+        "word": "BID"
+      },
+      {
+        "line": 19662,
+        "word": "dar"
+      },
+      {
+        "line": 22328,
+        "word": "or"
+      },
+      {
+        "line": 23337,
+        "word": "percent"
+      },
+      {
+        "line": 25847,
+        "word": "genitive"
+      },
+      {
+        "line": 30520,
+        "word": "both"
+      },
+      {
+        "line": 30858,
+        "word": "aquamarine"
+      },
+      {
+        "line": 31015,
+        "word": "mortgage"
+      },
+      {
+        "line": 31884,
+        "word": "alligator"
+      },
+      {
+        "line": 32085,
+        "word": "copper"
+      },
+      {
+        "line": 33308,
+        "word": "salsa"
+      },
+      {
+        "line": 39062,
+        "word": "she"
+      },
+      {
+        "line": 40586,
+        "word": "Newfoundland"
+      },
+      {
+        "line": 44461,
+        "word": "mapa"
+      },
+      {
+        "line": 44474,
+        "word": "mapa"
+      },
+      {
+        "line": 46086,
+        "word": "race"
+      },
+      {
+        "line": 46165,
+        "word": "dismal"
+      },
+      {
+        "line": 48344,
+        "word": "dove"
+      },
+      {
+        "line": 58778,
+        "word": "droit de seigneur"
+      },
+      {
+        "line": 58779,
+        "word": "pendente lite"
+      },
+      {
+        "line": 63006,
+        "word": "ermine"
+      },
+      {
+        "line": 69849,
+        "word": "de facto"
+      },
+      {
+        "line": 69852,
+        "word": "de facto"
+      },
+      {
+        "line": 71307,
+        "word": "persen"
+      },
+      {
+        "line": 72842,
+        "word": "ore"
+      },
+      {
+        "line": 74646,
+        "word": "agora"
+      },
+      {
+        "line": 74647,
+        "word": "agora"
+      },
+      {
+        "line": 74651,
+        "word": "agora"
+      },
+      {
+        "line": 74652,
+        "word": "agora"
+      },
+      {
+        "line": 74655,
+        "word": "agora"
+      },
+      {
+        "line": 74656,
+        "word": "agora"
+      },
+      {
+        "line": 74657,
+        "word": "agora"
+      },
+      {
+        "line": 74661,
+        "word": "agora"
+      },
+      {
+        "line": 74666,
+        "word": "agora"
+      },
+      {
+        "line": 74792,
+        "word": "a cappella"
+      },
+      {
+        "line": 74795,
+        "word": "a cappella"
+      },
+      {
+        "line": 93721,
+        "word": "CC"
+      },
+      {
+        "line": 93722,
+        "word": "CC"
+      },
+      {
+        "line": 95402,
+        "word": "yupela"
+      },
+      {
+        "line": 95588,
+        "word": "jamais"
+      }
+    ],
+    "ety: group_affix_root inside group_related_root": [
+      {
+        "line": 2795,
+        "word": "abate"
+      },
+      {
+        "line": 2827,
+        "word": "abate"
+      },
+      {
+        "line": 2923,
+        "word": "abear"
+      },
+      {
+        "line": 4243,
+        "word": "abscond"
+      },
+      {
+        "line": 5244,
+        "word": "abstemious"
+      },
+      {
+        "line": 6054,
+        "word": "plural"
+      },
+      {
+        "line": 6067,
+        "word": "plural"
+      },
+      {
+        "line": 26625,
+        "word": "quadrilateral"
+      },
+      {
+        "line": 32312,
+        "word": "russet"
+      },
+      {
+        "line": 33976,
+        "word": "melancholy"
+      },
+      {
+        "line": 38181,
+        "word": "Polycystina"
+      },
+      {
+        "line": 38233,
+        "word": "oral"
+      },
+      {
+        "line": 38240,
+        "word": "oral"
+      },
+      {
+        "line": 44065,
+        "word": "Hyderabad"
+      },
+      {
+        "line": 45099,
+        "word": "distance"
+      },
+      {
+        "line": 55391,
+        "word": "proven"
+      },
+      {
+        "line": 55410,
+        "word": "prove"
+      },
+      {
+        "line": 59538,
+        "word": "cotton"
+      },
+      {
+        "line": 62693,
+        "word": "dromedary"
+      },
+      {
+        "line": 72308,
+        "word": "manga"
+      },
+      {
+        "line": 75094,
+        "word": "vociferate"
+      },
+      {
+        "line": 77681,
+        "word": "器"
+      },
+      {
+        "line": 79638,
+        "word": "kidney"
+      },
+      {
+        "line": 84394,
+        "word": "私"
+      },
+      {
+        "line": 104273,
+        "word": "laurestine"
+      },
+      {
+        "line": 104803,
+        "word": "slogan"
+      },
+      {
+        "line": 104835,
+        "word": "slogan"
+      },
+      {
+        "line": 106920,
+        "word": "ei"
+      },
+      {
+        "line": 111265,
+        "word": "Liverpool"
+      },
+      {
+        "line": 117391,
+        "word": "Brabant"
+      },
+      {
+        "line": 117979,
+        "word": "biennial"
+      },
+      {
+        "line": 126151,
+        "word": "ייִדיש"
+      },
+      {
+        "line": 141166,
+        "word": "revelation"
+      },
+      {
+        "line": 151613,
+        "word": "ally"
+      },
+      {
+        "line": 169529,
+        "word": "apprehend"
+      },
+      {
+        "line": 172271,
+        "word": "lethiferous"
+      },
+      {
+        "line": 174877,
+        "word": "utmost"
+      },
+      {
+        "line": 181778,
+        "word": "cantor"
+      },
+      {
+        "line": 206565,
+        "word": "dont"
+      },
+      {
+        "line": 215604,
+        "word": "hogshead"
+      },
+      {
+        "line": 226150,
+        "word": "ribald"
+      },
+      {
+        "line": 226718,
+        "word": "jidysz"
+      },
+      {
+        "line": 228691,
+        "word": "tiny"
+      },
+      {
+        "line": 229693,
+        "word": "paramount"
+      },
+      {
+        "line": 238272,
+        "word": "duma"
+      },
+      {
+        "line": 252241,
+        "word": "cottage"
+      },
+      {
+        "line": 256547,
+        "word": "proffer"
+      },
+      {
+        "line": 265646,
+        "word": "Jiddisch"
+      },
+      {
+        "line": 272186,
+        "word": "hodgepodge"
+      },
+      {
+        "line": 272397,
+        "word": "necromancy"
+      }
+    ],
+    "morphynet-deri: derived word equals its base": [
+      {
+        "affix": "er",
+        "base": "rider",
+        "basePos": "N",
+        "derived": "rider",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 204457
+      },
+      {
+        "affix": "ed",
+        "base": "disconcerted",
+        "basePos": "V",
+        "derived": "disconcerted",
+        "derivedPos": "V",
+        "kind": "suffix",
+        "line": 205239
+      },
+      {
+        "affix": "er",
+        "base": "outlander",
+        "basePos": "N",
+        "derived": "outlander",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 205788
+      },
+      {
+        "affix": "er",
+        "base": "streaker",
+        "basePos": "N",
+        "derived": "streaker",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 205805
+      }
+    ],
+    "morphynet-deri: prefix spelling change not modelled": [
+      {
+        "affix": "a",
+        "base": "blastema",
+        "basePos": "N",
+        "derived": "ablastemic",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 92
+      },
+      {
+        "affix": "a",
+        "base": "butt",
+        "basePos": "N",
+        "derived": "abut",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 212
+      },
+      {
+        "affix": "a",
+        "base": "buy",
+        "basePos": "V",
+        "derived": "aby",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 216
+      },
+      {
+        "affix": "a",
+        "base": "coy",
+        "basePos": "J",
+        "derived": "accoy",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 261
+      },
+      {
+        "affix": "archaeo",
+        "base": "astronomy",
+        "basePos": "N",
+        "derived": "archaeastronomy",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 287
+      },
+      {
+        "affix": "tetra",
+        "base": "chromatic",
+        "basePos": "J",
+        "derived": "tetrachromat",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 309
+      },
+      {
+        "affix": "be",
+        "base": "out",
+        "basePos": "N",
+        "derived": "but",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 332
+      },
+      {
+        "affix": "ad",
+        "base": "fix",
+        "basePos": "V",
+        "derived": "affix",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 374
+      },
+      {
+        "affix": "in",
+        "base": "perfect",
+        "basePos": "N",
+        "derived": "imperfect",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 429
+      },
+      {
+        "affix": "be",
+        "base": "in",
+        "basePos": "V",
+        "derived": "ben",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 547
+      },
+      {
+        "affix": "to#Etymology_2",
+        "base": "gather",
+        "basePos": "V",
+        "derived": "together",
+        "derivedPos": "R",
+        "kind": "prefix",
+        "line": 694
+      },
+      {
+        "affix": "a",
+        "base": "tend",
+        "basePos": "V",
+        "derived": "attend",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 715
+      },
+      {
+        "affix": "for",
+        "base": "aught",
+        "basePos": "N",
+        "derived": "freight",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 762
+      },
+      {
+        "affix": "be",
+        "base": "intensifier",
+        "basePos": "N",
+        "derived": "bewilder",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 803
+      },
+      {
+        "affix": "where",
+        "base": "for",
+        "basePos": "R",
+        "derived": "wherefore",
+        "derivedPos": "R",
+        "kind": "prefix",
+        "line": 893
+      },
+      {
+        "affix": "neo",
+        "base": "didymium",
+        "basePos": "N",
+        "derived": "neodymium",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1089
+      },
+      {
+        "affix": "proto",
+        "base": "actinium",
+        "basePos": "N",
+        "derived": "protactinium",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1095
+      },
+      {
+        "affix": "eu",
+        "base": "karyon",
+        "basePos": "N",
+        "derived": "eukaryote",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1150
+      },
+      {
+        "affix": "re",
+        "base": "greet",
+        "basePos": "V",
+        "derived": "regret",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1201
+      },
+      {
+        "affix": "a",
+        "base": "curse",
+        "basePos": "V",
+        "derived": "accurse",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1211
+      },
+      {
+        "affix": "aceto",
+        "base": "anilide",
+        "basePos": "N",
+        "derived": "acetanilide",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1265
+      },
+      {
+        "affix": "ad",
+        "base": "couple",
+        "basePos": "N",
+        "derived": "accouple",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1292
+      },
+      {
+        "affix": "half",
+        "base": "brother",
+        "basePos": "N",
+        "derived": "half brother",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1550
+      },
+      {
+        "affix": "half",
+        "base": "sister",
+        "basePos": "N",
+        "derived": "half sister",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 1551
+      },
+      {
+        "affix": "a",
+        "base": "forth",
+        "basePos": "J",
+        "derived": "afford",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1782
+      },
+      {
+        "affix": "a",
+        "base": "gone",
+        "basePos": "V",
+        "derived": "ago",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 1814
+      },
+      {
+        "affix": "a",
+        "base": "char",
+        "basePos": "V",
+        "derived": "ajar",
+        "derivedPos": "R",
+        "kind": "prefix",
+        "line": 1821
+      },
+      {
+        "affix": "a",
+        "base": "lay",
+        "basePos": "V",
+        "derived": "allay",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1833
+      },
+      {
+        "affix": "ad",
+        "base": "pend",
+        "basePos": "V",
+        "derived": "append",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 1945
+      },
+      {
+        "affix": "wan",
+        "base": "towed",
+        "basePos": "V",
+        "derived": "wanton",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 2111
+      },
+      {
+        "affix": "hexadeca",
+        "base": "decimal",
+        "basePos": "N",
+        "derived": "hexadecimal",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2152
+      },
+      {
+        "affix": "tessara",
+        "base": "ἀκτίς",
+        "basePos": "N",
+        "derived": "tesseract",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2326
+      },
+      {
+        "affix": "a",
+        "base": "quit",
+        "basePos": "V",
+        "derived": "acquit",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 2358
+      },
+      {
+        "affix": "azo",
+        "base": "oleic acid",
+        "basePos": "N",
+        "derived": "azoleic acid",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2407
+      },
+      {
+        "affix": "a",
+        "base": "yond",
+        "basePos": "J",
+        "derived": "ayont",
+        "derivedPos": "R",
+        "kind": "prefix",
+        "line": 2415
+      },
+      {
+        "affix": "meta",
+        "base": "universe",
+        "basePos": "N",
+        "derived": "metaverse",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2505
+      },
+      {
+        "affix": "de",
+        "base": "inflate",
+        "basePos": "V",
+        "derived": "deflate",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 2532
+      },
+      {
+        "affix": "fore",
+        "base": "ward",
+        "basePos": "N",
+        "derived": "forward",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2585
+      },
+      {
+        "affix": "para",
+        "base": "enteral",
+        "basePos": "J",
+        "derived": "parenteral",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 2614
+      },
+      {
+        "affix": "in",
+        "base": "mutable",
+        "basePos": "J",
+        "derived": "immutable",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 2663
+      },
+      {
+        "affix": "a",
+        "base": "know",
+        "basePos": "V",
+        "derived": "acknow",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 2702
+      },
+      {
+        "affix": "petro",
+        "base": "ichor",
+        "basePos": "N",
+        "derived": "petrichor",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2731
+      },
+      {
+        "affix": "in",
+        "base": "pecunious",
+        "basePos": "J",
+        "derived": "impecunious",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 2762
+      },
+      {
+        "affix": "in",
+        "base": "gote",
+        "basePos": "N",
+        "derived": "ingot",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2785
+      },
+      {
+        "affix": "a",
+        "base": "stun",
+        "basePos": "V",
+        "derived": "astonish",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 2851
+      },
+      {
+        "affix": "xero",
+        "base": "ophthalmia",
+        "basePos": "N",
+        "derived": "xerophthalmia",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2921
+      },
+      {
+        "affix": "en",
+        "base": "power",
+        "basePos": "N",
+        "derived": "empower",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 3009
+      },
+      {
+        "affix": "ed",
+        "base": "ea",
+        "basePos": "N",
+        "derived": "eddy",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 3088
+      },
+      {
+        "affix": "en",
+        "base": "bank",
+        "basePos": "N",
+        "derived": "embank",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 3090
+      },
+      {
+        "affix": "meso",
+        "base": "on",
+        "basePos": "J",
+        "derived": "meson",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 3174
+      }
+    ],
+    "morphynet-deri: suffix spelling change not modelled": [
+      {
+        "affix": "th",
+        "base": "moon",
+        "basePos": "N",
+        "derived": "month",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 2
+      },
+      {
+        "affix": "ise",
+        "base": "merchant",
+        "basePos": "N",
+        "derived": "merchandise",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 10
+      },
+      {
+        "affix": "ian",
+        "base": "Abdera",
+        "basePos": "N",
+        "derived": "Abderian",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 38
+      },
+      {
+        "affix": "able",
+        "base": "abdicate",
+        "basePos": "V",
+        "derived": "abdicable",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 39
+      },
+      {
+        "affix": "ant",
+        "base": "abdicate",
+        "basePos": "V",
+        "derived": "abdicant",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 40
+      },
+      {
+        "affix": "al",
+        "base": "abdomen",
+        "basePos": "N",
+        "derived": "abdominal",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 43
+      },
+      {
+        "affix": "or",
+        "base": "averruncate",
+        "basePos": "V",
+        "derived": "aberuncator",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 55
+      },
+      {
+        "affix": "ene",
+        "base": "abietic",
+        "basePos": "J",
+        "derived": "abietene",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 72
+      },
+      {
+        "affix": "ic",
+        "base": "abies",
+        "basePos": "V",
+        "derived": "abietic",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 73
+      },
+      {
+        "affix": "ity",
+        "base": "able",
+        "basePos": "N",
+        "derived": "ability",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 75
+      },
+      {
+        "affix": "ic",
+        "base": "abiogenesis",
+        "basePos": "N",
+        "derived": "abiogenetic",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 77
+      },
+      {
+        "affix": "ist",
+        "base": "abiogenesis",
+        "basePos": "N",
+        "derived": "abiogenist",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 78
+      },
+      {
+        "affix": "ous",
+        "base": "abiogenetic",
+        "basePos": "J",
+        "derived": "abiogenous",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 79
+      },
+      {
+        "affix": "ity",
+        "base": "abnormal",
+        "basePos": "J",
+        "derived": "abnormity",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 102
+      },
+      {
+        "affix": "tion",
+        "base": "abolish",
+        "basePos": "V",
+        "derived": "abolition",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 110
+      },
+      {
+        "affix": "cide",
+        "base": "abortion",
+        "basePos": "N",
+        "derived": "aborticide",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 121
+      },
+      {
+        "affix": "facient",
+        "base": "abortion",
+        "basePos": "N",
+        "derived": "abortifacient",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 122
+      },
+      {
+        "affix": "able",
+        "base": "abrogate",
+        "basePos": "V",
+        "derived": "abrogable",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 141
+      },
+      {
+        "affix": "ive",
+        "base": "absorption",
+        "basePos": "N",
+        "derived": "absorptive",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 179
+      },
+      {
+        "affix": "ous",
+        "base": "abstention",
+        "basePos": "N",
+        "derived": "abstentious",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 183
+      },
+      {
+        "affix": "in",
+        "base": "acacia",
+        "basePos": "N",
+        "derived": "acacin",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 221
+      },
+      {
+        "affix": "ism",
+        "base": "academy",
+        "basePos": "N",
+        "derived": "academism",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 225
+      },
+      {
+        "affix": "ity",
+        "base": "acceptable",
+        "basePos": "J",
+        "derived": "acceptability",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 228
+      },
+      {
+        "affix": "ity",
+        "base": "accessible",
+        "basePos": "J",
+        "derived": "accessibility",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 241
+      },
+      {
+        "affix": "ine",
+        "base": "accipiter",
+        "basePos": "N",
+        "derived": "accipitrine",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 249
+      },
+      {
+        "affix": "tion",
+        "base": "define",
+        "basePos": "V",
+        "derived": "definition",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 266
+      },
+      {
+        "affix": "th",
+        "base": "bear",
+        "basePos": "N",
+        "derived": "birth",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 271
+      },
+      {
+        "affix": "ology",
+        "base": "committee",
+        "basePos": "N",
+        "derived": "comitology",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 294
+      },
+      {
+        "affix": "ity",
+        "base": "subsidiary",
+        "basePos": "J",
+        "derived": "subsidiarity",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 297
+      },
+      {
+        "affix": "o",
+        "base": "hundred",
+        "basePos": "N",
+        "derived": "hundo",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 303
+      },
+      {
+        "affix": "ia",
+        "base": "Malaya",
+        "basePos": "N",
+        "derived": "Malaysia",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 316
+      },
+      {
+        "affix": "ly",
+        "base": "ere",
+        "basePos": "N",
+        "derived": "early",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 346
+      },
+      {
+        "affix": "ly",
+        "base": "ere",
+        "basePos": "N",
+        "derived": "early",
+        "derivedPos": "R",
+        "kind": "suffix",
+        "line": 347
+      },
+      {
+        "affix": "ish",
+        "base": "Spain",
+        "basePos": "N",
+        "derived": "Spanish",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 358
+      },
+      {
+        "affix": "y",
+        "base": "absorbance",
+        "basePos": "N",
+        "derived": "absorbency",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 362
+      },
+      {
+        "affix": "ence",
+        "base": "abstain",
+        "basePos": "V",
+        "derived": "abstinence",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 363
+      },
+      {
+        "affix": "ity",
+        "base": "accountable",
+        "basePos": "J",
+        "derived": "accountability",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 375
+      },
+      {
+        "affix": "cy",
+        "base": "accurate",
+        "basePos": "J",
+        "derived": "accuracy",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 382
+      },
+      {
+        "affix": "le",
+        "base": "shut",
+        "basePos": "V",
+        "derived": "shuttle",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 390
+      },
+      {
+        "affix": "ian",
+        "base": "Caucasian Albania",
+        "basePos": "N",
+        "derived": "Albanian",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 391
+      },
+      {
+        "affix": "ian",
+        "base": "Albany",
+        "basePos": "N",
+        "derived": "Albanian",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 392
+      },
+      {
+        "affix": "in",
+        "base": "abscission",
+        "basePos": "N",
+        "derived": "abscissin",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 404
+      },
+      {
+        "affix": "kin",
+        "base": "mass",
+        "basePos": "N",
+        "derived": "maskin",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 405
+      },
+      {
+        "affix": "al",
+        "base": "mentum",
+        "basePos": "N",
+        "derived": "mental",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 411
+      },
+      {
+        "affix": "th",
+        "base": "five",
+        "basePos": "N",
+        "derived": "fifth",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 415
+      },
+      {
+        "affix": "ese",
+        "base": "China",
+        "basePos": "N",
+        "derived": "Chinese",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 416
+      },
+      {
+        "affix": "er",
+        "base": "assoc.",
+        "basePos": "N",
+        "derived": "soccer",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 419
+      },
+      {
+        "affix": "en",
+        "base": "write",
+        "basePos": "V",
+        "derived": "written",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 421
+      },
+      {
+        "affix": "ing",
+        "base": "kin",
+        "basePos": "N",
+        "derived": "king",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 423
+      },
+      {
+        "affix": "an",
+        "base": "Korea",
+        "basePos": "N",
+        "derived": "Korean",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 424
+      }
+    ],
+    "morphynet-deri: undocumented POS U": [
+      {
+        "affix": "ever",
+        "base": "what",
+        "basePos": "R",
+        "derived": "whatever",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 268
+      },
+      {
+        "affix": "ant",
+        "base": "pollute",
+        "basePos": "V",
+        "derived": "pollutant",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 355
+      },
+      {
+        "affix": "ty",
+        "base": "six",
+        "basePos": "U",
+        "derived": "sixty",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 438
+      },
+      {
+        "affix": "er",
+        "base": "flow",
+        "basePos": "N",
+        "derived": "flower",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 481
+      },
+      {
+        "affix": "s",
+        "base": "their",
+        "basePos": "R",
+        "derived": "theirs",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 491
+      },
+      {
+        "affix": "er",
+        "base": "gaff",
+        "basePos": "U",
+        "derived": "gaffer",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 559
+      },
+      {
+        "affix": "st",
+        "base": "again",
+        "basePos": "R",
+        "derived": "against",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 597
+      },
+      {
+        "affix": "pre",
+        "base": "position",
+        "basePos": "N",
+        "derived": "preposition",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 598
+      },
+      {
+        "affix": "en",
+        "base": "eat",
+        "basePos": "V",
+        "derived": "eaten",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 623
+      },
+      {
+        "affix": "ed",
+        "base": "learn",
+        "basePos": "V",
+        "derived": "learned",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 657
+      },
+      {
+        "affix": "a",
+        "base": "mongamong",
+        "basePos": "U",
+        "derived": "among",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 700
+      },
+      {
+        "affix": "self",
+        "base": "our",
+        "basePos": "V",
+        "derived": "ourself",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 709
+      },
+      {
+        "affix": "selves",
+        "base": "our",
+        "basePos": "N",
+        "derived": "ourselves",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 710
+      },
+      {
+        "affix": "self",
+        "base": "it",
+        "basePos": "N",
+        "derived": "itself",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 716
+      },
+      {
+        "affix": "self",
+        "base": "one",
+        "basePos": "N",
+        "derived": "oneself",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 717
+      },
+      {
+        "affix": "self",
+        "base": "him",
+        "basePos": "N",
+        "derived": "himself",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 718
+      },
+      {
+        "affix": "self",
+        "base": "her",
+        "basePos": "N",
+        "derived": "herself",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 719
+      },
+      {
+        "affix": "selves",
+        "base": "them",
+        "basePos": "V",
+        "derived": "themselves",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 723
+      },
+      {
+        "affix": "be",
+        "base": "twain",
+        "basePos": "J",
+        "derived": "between",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 799
+      },
+      {
+        "affix": "be",
+        "base": "stow",
+        "basePos": "U",
+        "derived": "bestow",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 802
+      },
+      {
+        "affix": "th",
+        "base": "weal",
+        "basePos": "U",
+        "derived": "wealth",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 903
+      },
+      {
+        "affix": "up",
+        "base": "dive",
+        "basePos": "U",
+        "derived": "updive",
+        "derivedPos": "V",
+        "kind": "prefix",
+        "line": 939
+      },
+      {
+        "affix": "s",
+        "base": "you",
+        "basePos": "V",
+        "derived": "yous",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 944
+      },
+      {
+        "affix": "let",
+        "base": "bull",
+        "basePos": "U",
+        "derived": "bullet",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 1006
+      },
+      {
+        "affix": "y",
+        "base": "cove",
+        "basePos": "U",
+        "derived": "covey",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 1022
+      },
+      {
+        "affix": "ium",
+        "base": "Einstein",
+        "basePos": "U",
+        "derived": "einsteinium",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 1099
+      },
+      {
+        "affix": "multi",
+        "base": "million",
+        "basePos": "U",
+        "derived": "multimillion",
+        "derivedPos": "J",
+        "kind": "prefix",
+        "line": 1237
+      },
+      {
+        "affix": "ian",
+        "base": "Ecuador",
+        "basePos": "N",
+        "derived": "Ecuadorian",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 1349
+      },
+      {
+        "affix": "an",
+        "base": "Martinique",
+        "basePos": "U",
+        "derived": "Martinican",
+        "derivedPos": "N",
+        "kind": "suffix",
+        "line": 1444
+      },
+      {
+        "affix": "fold",
+        "base": "many",
+        "basePos": "U",
+        "derived": "manifold",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 1614
+      },
+      {
+        "affix": "fold",
+        "base": "many",
+        "basePos": "U",
+        "derived": "manifold",
+        "derivedPos": "V",
+        "kind": "suffix",
+        "line": 1615
+      },
+      {
+        "affix": "a",
+        "base": "cross",
+        "basePos": "N",
+        "derived": "across",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 1700
+      },
+      {
+        "affix": "s",
+        "base": "betime",
+        "basePos": "U",
+        "derived": "betimes",
+        "derivedPos": "R",
+        "kind": "suffix",
+        "line": 1733
+      },
+      {
+        "affix": "a",
+        "base": "midamid",
+        "basePos": "U",
+        "derived": "amid",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 1858
+      },
+      {
+        "affix": "ly",
+        "base": "one",
+        "basePos": "U",
+        "derived": "only",
+        "derivedPos": "J",
+        "kind": "suffix",
+        "line": 2016
+      },
+      {
+        "affix": "fore",
+        "base": "head",
+        "basePos": "N",
+        "derived": "forehead",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2018
+      },
+      {
+        "affix": "ist",
+        "base": "-logy",
+        "basePos": "N",
+        "derived": "-logist",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2026
+      },
+      {
+        "affix": "th",
+        "base": "whole",
+        "basePos": "J",
+        "derived": "health",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2028
+      },
+      {
+        "affix": "milli",
+        "base": "bar",
+        "basePos": "U",
+        "derived": "millibar",
+        "derivedPos": "N",
+        "kind": "prefix",
+        "line": 2032
+      },
+      {
+        "affix": "un",
+        "base": "till",
+        "basePos": "N",
+        "derived": "until",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2095
+      },
+      {
+        "affix": "electro",
+        "base": "mechanical",
+        "basePos": "J",
+        "derived": "electromechanical",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2104
+      },
+      {
+        "affix": "o",
+        "base": "right",
+        "basePos": "J",
+        "derived": "righto",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2148
+      },
+      {
+        "affix": "ie",
+        "base": "paste",
+        "basePos": "N",
+        "derived": "pastie",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2192
+      },
+      {
+        "affix": "fore",
+        "base": "bode",
+        "basePos": "U",
+        "derived": "forebode",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2211
+      },
+      {
+        "affix": "ize",
+        "base": "Japan",
+        "basePos": "N",
+        "derived": "Japanize",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2230
+      },
+      {
+        "affix": "ly",
+        "base": "awk",
+        "basePos": "U",
+        "derived": "awkly",
+        "derivedPos": "R",
+        "kind": "suffix",
+        "line": 2435
+      },
+      {
+        "affix": "ward",
+        "base": "awk",
+        "basePos": "U",
+        "derived": "awkward",
+        "derivedPos": "R",
+        "kind": "suffix",
+        "line": 2436
+      },
+      {
+        "affix": "be",
+        "base": "low",
+        "basePos": "J",
+        "derived": "below",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2468
+      },
+      {
+        "affix": "y",
+        "base": "fat",
+        "basePos": "N",
+        "derived": "fatty",
+        "derivedPos": "U",
+        "kind": "suffix",
+        "line": 2547
+      },
+      {
+        "affix": "on",
+        "base": "even",
+        "basePos": "J",
+        "derived": "anent",
+        "derivedPos": "U",
+        "kind": "prefix",
+        "line": 2644
+      }
+    ],
+    "morphynet-infl: known malformed quoted row": [
+      {
+        "line": 222127
+      },
+      {
+        "line": 222128
+      }
+    ]
+  },
+  "sources": [
+    "cmu",
+    "ety",
+    "morphynet-deri",
+    "morphynet-infl",
+    "oewn"
+  ]
+}

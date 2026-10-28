@@ -32,11 +32,15 @@
         {
           "file": "oewn-WNDB_License.txt",
           "marker": "Princeton University",
+          "url": "https://raw.githubusercontent.com/globalwordnet/english-wordnet/2025-edition/WNDB_License.txt",
+          "bytes": 1740,
           "sha256": "df30ec18fbabcdaf031b79ea026d3e6b959010cffe6dd7be9ac137822175b904"
         },
         {
           "file": "globalwordnet-english-wordnet-LICENSE.md",
           "marker": "Princeton WordNet",
+          "url": "https://raw.githubusercontent.com/globalwordnet/english-wordnet/2025-edition/LICENSE.md",
+          "bytes": 19863,
           "sha256": "672cc8b5663e8dc74c4b07a9dcf477193853575b119908fd3dc0aeeb60a9dbbb"
         }
       ]
