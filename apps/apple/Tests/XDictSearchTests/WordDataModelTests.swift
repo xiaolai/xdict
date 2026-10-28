@@ -60,12 +60,13 @@ struct WordDataModelTests {
         #expect(await backend.requests == [.wordPack])
     }
 
-    /// A chosen file is copied in under the one name the service is told; a refusal deletes the copy, so the container
-    /// never holds a pack the service would not take, and the version the file declares is what the row says.
+    /// **A refused replacement leaves the installed pack alone** (audit, 2026-10-28): the chosen file is copied to a
+    /// staging name and attached from there; only an accepted pack replaces the installed one. Before the fix the
+    /// destination was deleted first, so a refused file permanently lost the pack the reader had.
     @Test func aRefusedFileIsCopiedInAttachedAndThenDeleted() async throws {
         let tmp = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: tmp) }
-        let folder = Self.container(tmp)
+        let folder = Self.container(tmp, file: Data("installed\n".utf8))
         let chosen = tmp.appending(path: "chosen.jsonl")
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         try Data("{}\n".utf8).write(to: chosen)
@@ -75,8 +76,12 @@ struct WordDataModelTests {
         let model = WordDataModel(backend: backend, container: { folder })
         await model.install(chosen)
         #expect(model.state == .refused(.version(found: "1")))
+        #expect(FileManager.default.fileExists(atPath: folder.appending(path: AppGroup.wordPackFile)
+            .path(percentEncoded: false)), "the installed pack survives a refused replacement")
         let left = try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))
-        #expect(left.isEmpty, "the container holds nothing after a refusal: \(left)")
+        #expect(left == [AppGroup.wordPackFile], "only the installed pack is left: \(left)")
+        let kept = try Data(contentsOf: folder.appending(path: AppGroup.wordPackFile))
+        #expect(String(decoding: kept, as: UTF8.self) == "installed\n", "and it is the reader's old file, untouched")
     }
 
     /// Removing detaches the pack and deletes the file; a file left behind would be attached again at the next launch.

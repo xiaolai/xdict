@@ -75,21 +75,40 @@ public final class WordDataModel {
         }
         busy = true
         defer { busy = false }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let staged = folder.appending(path: AppGroup.wordPackFile + ".incoming")
         let destination = folder.appending(path: AppGroup.wordPackFile)
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let scratch = folder.appending(path: AppGroup.wordPackFile + ".incoming")
-            try? FileManager.default.removeItem(at: scratch)
-            try FileManager.default.copyItem(at: url, to: scratch)
-            _ = try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.moveItem(at: scratch, to: destination)
-        } catch {
+        // **The copy runs off the main actor**: it is up to 183 MB from a volume the reader chose, and the window must
+        // stay live while it happens. Nothing is replaced yet: a file that is later refused leaves the installed pack
+        // exactly where it was.
+        let copied = await Task.detached { () -> Bool in
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try? FileManager.default.removeItem(at: staged)
+                try FileManager.default.copyItem(at: url, to: staged)
+                return true
+            } catch {
+                return false
+            }
+        }.value
+        guard copied else {
             state = .trouble(.copyFailed)
             return
         }
-        await attach(path: destination, deleteOnRefusal: true)
+        // The staged file is attached first; only an accepted pack replaces the installed one.
+        let accepted = await attach(path: staged)
+        guard accepted else {
+            try? FileManager.default.removeItem(at: staged)
+            return
+        }
+        do {
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: staged)
+        } catch {
+            // The pack is attached and the staged copy is the file on disk under another name: keep it rather than
+            // report an install that is not there.
+            try? FileManager.default.moveItem(at: staged, to: destination)
+        }
     }
 
     /// **Removes the pack**: the service detaches it, then the app deletes the file. A failed detach keeps the file, so
@@ -108,20 +127,23 @@ public final class WordDataModel {
         state = .absent
     }
 
-    private func attach(path: URL, deleteOnRefusal: Bool = false) async {
+    @discardableResult private func attach(path: URL) async -> Bool {
         busy = true
         defer { busy = false }
         generation += 1
         let mine = generation
         let outcome = await backend.request(.setWordPack(path: path.path(percentEncoded: false)))
-        guard mine == generation else { return }
+        guard mine == generation else { return false }
         switch outcome.wordPack {
-        case .success(let state): self.state = state.pack.map { .installed($0) } ?? .absent
+        case .success(let state):
+            self.state = state.pack.map { .installed($0) } ?? .absent
+            return true
         case .failure(.wire(let error)):
             state = .refused(WordDataRefusal(error))
-            if deleteOnRefusal { try? FileManager.default.removeItem(at: path) }
+            return false
         case .failure:
             state = .trouble(.noAnswer)
+            return false
         }
     }
 

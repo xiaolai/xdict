@@ -110,17 +110,17 @@ pub fn extract(html: &str) -> Collocations {
 /// **The frame a label names**, with the headword's own name taken out of it: case, hyphens and spaces go before the
 /// comparison (`ELECTRIC-SHOCK + NOUN` is `electric shock`'s), and a leading `…` is the headword's own phrase.
 fn frame(label: &str, headword: &str) -> Option<Frame> {
-    let squash =
-        |text: &str| -> String { text.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '+').collect() };
+    // **The leading `…` survives the squash**: it is not alphanumeric, and squashing it away made `… OF STYLE`
+    // unreachable — the one gap the 2026-10-28 audit of 120 pairs left unexplained (0.7% of frames dropped).
+    let squash = |text: &str| -> String {
+        text.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '+' || *c == '…').collect()
+    };
     let head = squash(headword);
     let mut squashed = squash(label);
     if !head.is_empty() {
         squashed = squashed.replace(&head, "HW");
     }
-    // A leading ellipsis stands for the headword: `… OF STYLE` is the headword's own phrase.
-    if let Some(rest) = squashed.strip_prefix('…') {
-        squashed = format!("…OF{}", rest.trim_start_matches('+'));
-    }
+    // A leading `…` stands for the headword, and `Frame::of` reads it as such: `… OF STYLE` squashes to `…OFHW`.
     Frame::of(&squashed)
 }
 
@@ -218,6 +218,17 @@ mod tests {
             extract(html).pairs,
             vec![(Frame::Phrases, "a sin".to_string()), (Frame::Phrases, "the sin of".to_string())]
         );
+    }
+
+    /// **`… OF <headword>` is the headword's own phrase** (audit, 2026-10-28): the ellipsis was squashed away before it
+    /// was looked for, so the whole frame was dropped and counted as unknown.
+    #[test]
+    fn an_ellipsis_frame_is_the_headwords_own_phrase() {
+        let html = r#"<span class="ocd_hw">style</span><span class="ocd_m2"><span class="ocd_ps">… OF STYLE</span></span><span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">a</span></span></span></span>"#;
+        let Collocations { headword, pairs, dropped } = extract(html);
+        assert_eq!(headword, "style");
+        assert_eq!(pairs, vec![(Frame::PhraseOfHeadword, "a".to_string())]);
+        assert_eq!(dropped, 0);
     }
 
     /// **A frame the vocabulary does not hold is dropped and counted**, never squeezed into a neighbour: a wrong frame
