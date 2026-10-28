@@ -52,6 +52,8 @@ readonly SHIPPED_VERSIONS=Contents/Resources/CoreVersions.json
 readonly FONTS=Resources/Fonts
 # Every third-party notice (Tools/notices.py, held to the lockfile by `make test`), shown by XDict ▸ Acknowledgments.
 readonly NOTICES=Resources/Acknowledgments.txt
+# The word pack's pinned sources, one copy for the builder and the app (`WORD_LEXICON.md`).
+readonly WORD_PACK_MANIFEST=../core/xdict-core/tools/word_lexicon_sources.json
 readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 # `--timestamp` asks Apple's server and fails the way network calls fail (XiaolaiDict lost a release to it); a
 # development build signs offline and succeeds or fails on its first try.
@@ -458,6 +460,11 @@ assemble() {
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
     cp -R "$FONTS" "$contents/Resources/"
     cp "$NOTICES" "$contents/Resources/"
+    # **The word data's pinned sources ship with the app** (plan-local-word-pack WI-6): the manifest names every file the
+    # app downloads and the hash each must have, and `WordPack.sha256` pins the manifest itself, so a damaged bundle is
+    # refused rather than obeyed.
+    cp "$WORD_PACK_MANIFEST" "$contents/Resources/WordPackSources.json"
+    shasum -a 256 "$contents/Resources/WordPackSources.json" | cut -d' ' -f1 >"$contents/Resources/WordPack.sha256"
     cp "$icon_car" "$contents/Resources/Assets.car"
     cp "$MENU_BAR_ICON" "$contents/Resources/"
     printf 'tree=%s\n%s\n' "$tree" "$toolchain" >"$STAGE/$PROVENANCE"

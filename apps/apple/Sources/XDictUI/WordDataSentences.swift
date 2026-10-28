@@ -12,6 +12,24 @@ public enum WordDataSentences {
         "Rhymes, word families, roots, forms, synonyms and antonyms need the word data, which is not installed yet.")
     public static let choose = LocalizedStringResource("Choose Word Data…")
     public static let remove = LocalizedStringResource("Remove")
+    public static let build = LocalizedStringResource("Build Word Data…")
+    public static let cancel = LocalizedStringResource("Cancel")
+
+    /// **What the download is doing** (plan-local-word-pack WI-6): the file in hand of how many, and how far in — the
+    /// size and the minutes said once, before it starts, so nobody waits for 185 MB unannounced.
+    public static func downloading(_ progress: WordDataProgress) -> LocalizedStringResource {
+        let done = progress.done.formatted(.byteCount(style: .file))
+        let total = progress.total.formatted(.byteCount(style: .file))
+        return LocalizedStringResource("""
+            Downloading the word data from its own sources: file \(String(progress.file)) of \
+            \(String(progress.files)), \(done) of \(total). This is about 185 MB, and a few minutes of this Mac's \
+            time once it is here.
+            """, comment: "Word data: the file being downloaded, its bytes so far and of all")
+    }
+
+    public static let building = LocalizedStringResource("""
+        Building the word data from the downloaded sources. This takes a few minutes and needs no network.
+        """)
 
     /// What is installed, in one line: the schema version, the records it holds and its sources — enough to tell one
     /// release of the pack from another without opening the file.
@@ -38,6 +56,8 @@ public enum WordDataSentences {
             LocalizedStringResource("That file could not be read, so nothing was installed.")
         case .transport:
             LocalizedStringResource("The dictionary service did not answer, so nothing was installed.")
+        case .build(let detail):
+            LocalizedStringResource("The word data could not be built: \(detail)")
         }
     }
 
@@ -52,6 +72,29 @@ public enum WordDataSentences {
             LocalizedStringResource("The word data could not be removed. Try again.")
         case .noAnswer:
             LocalizedStringResource("The dictionary service did not answer.")
+        case .noManifest:
+            LocalizedStringResource("This XDict has no word data sources to download, so nothing was built.")
+        case .download(let failure):
+            sentence(failure)
+        }
+    }
+
+    /// **Why a download failed, naming the file** (plan-local-word-pack WI-6): the file and both hashes for a mismatch
+    /// — the one thing that tells a damaged mirror from a substituted file — and the transport's own words otherwise.
+    public static func sentence(_ failure: WordPackDownload.Failure) -> LocalizedStringResource {
+        switch failure {
+        case .transport(let file, let detail):
+            LocalizedStringResource("The word data's \(file) could not be downloaded: \(detail)")
+        case .sizeMismatch(let file, let expected, let found):
+            LocalizedStringResource("""
+                The word data's \(file) arrived at \(String(found)) bytes instead of \(String(expected)), so nothing \
+                was installed.
+                """)
+        case .hashMismatch(let file, let expected, let found):
+            LocalizedStringResource("""
+                The word data's \(file) is not the file it should be: its SHA-256 is \(found), and the one XDict \
+                checks for is \(expected). Nothing was installed.
+                """)
         }
     }
 }

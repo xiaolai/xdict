@@ -80,6 +80,15 @@ extension ClientOutcome {
         }
     }
 
+    var wordPackBuilt: Result<WordPackState, ClientFailure> {
+        flatMap { delivered in
+            guard case .wordPackBuilt(let state) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not a word data build")))
+            }
+            return .success(state)
+        }
+    }
+
     var collocations: Result<[Collocation], ClientFailure> {
         flatMap { delivered in
             guard case .collocations(let pairs) = delivered.answer else {

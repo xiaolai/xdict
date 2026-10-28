@@ -69,7 +69,9 @@ struct ModuleBoundaryTests {
         // reader's own computer gives, shown beside the model's prose, never sent.
         "XDictUI": ["AppKit", "Combine", "Foundation", "NaturalLanguage", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
-        "XDictSearch": ["Foundation", "Observation"],
+        // `CryptoKit` checks each downloaded source of the word pack against the hash the app ships (plan-local-word-pack
+        // WI-6): the manifest's hash is the only thing that tells the right file from a substituted one.
+        "XDictSearch": ["CryptoKit", "Foundation", "Observation"],
         // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028): the system's index and nothing else; the words'
         // own source (the service) is the app's to hand in, so this target knows no client, no library and no AppKit.
         "XDictSpotlight": ["CoreSpotlight", "Foundation", "Observation", "os"],

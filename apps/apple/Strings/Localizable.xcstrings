@@ -3118,6 +3118,22 @@
         }
       }
     },
+    "Build Word Data…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build Word Data…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建词数据…"
+          }
+        }
+      }
+    },
     "Building examples…": {
       "localizations": {
         "en": {
@@ -3130,6 +3146,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在建立例句…"
+          }
+        }
+      }
+    },
+    "Building the word data from the downloaded sources. This takes a few minutes and needs no network.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Building the word data from the downloaded sources. This takes a few minutes and needs no network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在用已下载的源数据构建词数据。需要几分钟，无需联网。"
           }
         }
       }
@@ -4640,6 +4672,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "在“词典”App 中下载…"
+          }
+        }
+      }
+    },
+    "Downloading the word data from its own sources: file %@ of %@, %@ of %@. This is about 185 MB, and a few minutes of this Mac's time once it is here.": {
+      "comment": "Word data: the file being downloaded, its bytes so far and of all",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading the word data from its own sources: file %1$@ of %2$@, %3$@ of %4$@. This is about 185 MB, and a few minutes of this Mac's time once it is here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在从原始来源下载词数据：第 %@ 个文件，共 %@ 个，已下载 %@，共 %@。约 185 MB，下载完成后还需几分钟本机运算。"
           }
         }
       }
@@ -13697,6 +13746,22 @@
         }
       }
     },
+    "The word data could not be built: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data could not be built: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据无法构建：%@"
+          }
+        }
+      }
+    },
     "The word data could not be removed. Try again.": {
       "localizations": {
         "en": {
@@ -13757,6 +13822,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "该词数据是 %@ 版，此 XDict 无法读取。请安装与本版本匹配的词数据。"
+          }
+        }
+      }
+    },
+    "The word data's %@ arrived at %@ bytes instead of %@, so nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data's %1$@ arrived at %2$@ bytes instead of %3$@, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据的 %@ 是 %@ 字节，应为 %@ 字节，因此没有安装任何内容。"
+          }
+        }
+      }
+    },
+    "The word data's %@ could not be downloaded: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data's %1$@ could not be downloaded: %2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据的 %@ 无法下载：%@"
+          }
+        }
+      }
+    },
+    "The word data's %@ is not the file it should be: its SHA-256 is %@, and the one XDict checks for is %@. Nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data's %1$@ is not the file it should be: its SHA-256 is %2$@, and the one XDict checks for is %3$@. Nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据的 %@ 与应有的文件不符：其 SHA-256 为 %@，而 XDict 校验的是 %@。没有安装任何内容。"
           }
         }
       }
@@ -13869,6 +13982,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台 Mac 无法运行 Apple 智能。"
+          }
+        }
+      }
+    },
+    "This XDict has no word data sources to download, so nothing was built.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This XDict has no word data sources to download, so nothing was built."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 XDict 没有可下载的词数据源，因此没有构建。"
           }
         }
       }

@@ -23,13 +23,22 @@ public struct SettingsWordData: View {
             Text(WordDataSentences.title)
                 .font(.headline)
             ActionRow(.pane) {
-                sentence
+                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                    sentence
+                    bar
+                }
             } actions: {
-                if case .installed = model.state {
+                if model.isWorking {
+                    Button(role: .cancel) { model.cancelBuild() } label: { Text(WordDataSentences.cancel) }
+                        .accessibilityIdentifier("settings.worddata.cancel")
+                } else if case .installed = model.state {
                     Button(role: .destructive) { Task { await model.remove() } } label: { Text(WordDataSentences.remove) }
                         .disabled(model.busy)
                         .accessibilityIdentifier("settings.worddata.remove")
                 } else {
+                    Button { Task { await model.buildFromSources() } } label: { Text(WordDataSentences.build) }
+                        .disabled(model.busy)
+                        .accessibilityIdentifier("settings.worddata.build")
                     Button(action: choose) { Text(WordDataSentences.choose) }
                         .disabled(model.busy)
                         .accessibilityIdentifier("settings.worddata.choose")
@@ -60,6 +69,8 @@ public struct SettingsWordData: View {
     private var text: LocalizedStringResource {
         switch model.state {
         case .unknown, .absent: WordDataSentences.absent
+        case .downloading(let progress): WordDataSentences.downloading(progress)
+        case .building: WordDataSentences.building
         case .installed: WordDataSentences.installed
         case .refused(let refusal): WordDataSentences.sentence(refusal)
         case .trouble(let trouble): WordDataSentences.sentence(trouble)
@@ -71,6 +82,14 @@ public struct SettingsWordData: View {
         switch model.state {
         case .refused, .trouble: "exclamationmark.triangle"
         default: "info.circle"
+        }
+    }
+
+    /// How much of the download is done, under its sentence; nothing when nothing is arriving.
+    @ViewBuilder private var bar: some View {
+        if case .downloading(let progress) = model.state {
+            ProgressView(value: progress.fraction)
+                .accessibilityIdentifier("settings.worddata.progress")
         }
     }
 

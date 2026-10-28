@@ -21,6 +21,10 @@ public final class WordDataModel {
         case unknown
         /// The service holds no pack: the modes that need one say what they need.
         case absent
+        /// The pinned files are arriving (plan-local-word-pack WI-6): which one, of how many, and the bytes of all.
+        case downloading(WordDataProgress)
+        /// Every source is here and the service is building the pack.
+        case building
         /// The pack installed, as the core reports it.
         case installed(WordPackInfo)
         /// A file was refused, by the kind the core refused it with (`WordDataRefusal`): the app words it.
@@ -31,18 +35,42 @@ public final class WordDataModel {
     }
 
     public private(set) var state: State = .unknown
-    /// A copy or an attach is running: the row's buttons are disabled meanwhile.
+    /// A copy, a download or an attach is running: the row's buttons are disabled meanwhile.
     public private(set) var busy = false
+    /// **A download and build are running**, observable in its own right: the row draws a Cancel button from it, and a
+    /// flag hidden behind an `@ObservationIgnored` task handle never redrew the row when the work ended.
+    public private(set) var isWorking = false
+    /// The download and build started by `buildFromSources`, held so the row can stop it.
+    @ObservationIgnored private var working: Task<Void, Never>?
 
     @ObservationIgnored private let backend: any SearchBackend
     @ObservationIgnored private let container: @Sendable () -> URL?
+    /// The manifest that ships in the app: the bytes the download checks each file against. `nil` is the trouble the
+    /// row reports, never a list compiled into the shell.
+    @ObservationIgnored private let manifest: @Sendable () -> Data?
     @ObservationIgnored private var generation = 0
 
     /// `container` names the app group's `WordPack` folder, or nil in a process without the entitlement (the test
     /// hosts). The model never falls back to another folder: a pack the service cannot read is no pack.
-    public init(backend: any SearchBackend, container: @escaping @Sendable () -> URL?) {
+    public init(backend: any SearchBackend, container: @escaping @Sendable () -> URL?,
+                manifest: @escaping @Sendable () -> Data? = WordDataModel.bundledManifest) {
         self.backend = backend
         self.container = container
+        self.manifest = manifest
+    }
+
+    /// The manifest in the app's own bundle, checked against `Resources/WordPack.sha256` when that file is there: a
+    /// bundle whose manifest was damaged is no manifest at all.
+    nonisolated public static func bundledManifest() -> Data? {
+        guard let url = Bundle.main.url(forResource: "WordPackSources", withExtension: "json"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        guard let pin = Bundle.main.url(forResource: "WordPack", withExtension: "sha256"),
+              let pinned = try? String(contentsOf: pin, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+              !pinned.isEmpty
+        else { return data }
+        let found = WordPackDownload.measure(of: data)
+        return found == pinned ? data : nil
     }
 
     /// The installed pack's path in the container, when there is one and the file exists.
@@ -108,6 +136,93 @@ public final class WordDataModel {
             // The pack is attached and the staged copy is the file on disk under another name: keep it rather than
             // report an install that is not there.
             try? FileManager.default.moveItem(at: staged, to: destination)
+        }
+    }
+
+    /// **Builds the pack on this Mac from the pinned sources** (plan-local-word-pack WI-6): the app downloads each file
+    /// into the container, checks it against the manifest that ships in the app, and asks the service to build it —
+    /// which writes the pack and installs what it wrote. The network is the app's, never the service's (ADR-0003).
+    ///
+    /// A download that fails names its file and leaves nothing behind; a cancel removes what it wrote and installs
+    /// nothing; a build the service refuses comes back as a refusal with the builder's own sentence.
+    public func buildFromSources() async {
+        guard container() != nil else {
+            state = .trouble(.noContainer)
+            return
+        }
+        guard let manifest = manifest(), let sources = WordPackSources(manifest) else {
+            state = .trouble(.noManifest)
+            return
+        }
+        let work = Task { await self.run(sources, manifest) }
+        working = work
+        isWorking = true
+        await work.value
+        working = nil
+        isWorking = false
+    }
+
+    /// **Stops a running build**: the download stops, what it wrote is removed, and nothing is installed.
+    public func cancelBuild() {
+        working?.cancel()
+    }
+
+    private func run(_ sources: WordPackSources, _ manifest: Data) async {
+        guard let folder = container() else {
+            state = .trouble(.noContainer)
+            return
+        }
+        busy = true
+        defer { busy = false }
+        let sourceFolder = folder.appending(path: "sources")
+        do {
+            try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
+            try manifest.write(to: sourceFolder.appending(path: WordPackSources.manifestName), options: .atomic)
+            state = .downloading(WordDataProgress(file: 0, files: sources.items.count, done: 0, total: sources.totalBytes))
+            try await WordPackDownload(sources: sources).fetch(into: sourceFolder) { [weak self] file, done, total in
+                Task { @MainActor in
+                    // **Only while the download is the phase**: a report that lands after the build started, or after a
+                    // cancel, would put `downloading` back over a state the reader has already been told.
+                    guard let self, case .downloading = self.state else { return }
+                    self.state = .downloading(WordDataProgress(file: file, files: sources.items.count, done: done,
+                                                               total: total))
+                }
+            }
+        } catch is CancellationError {
+            state = .absent
+            return
+        } catch let failure as WordPackDownload.Failure {
+            state = .trouble(.download(failure))
+            return
+        } catch {
+            state = .trouble(.copyFailed)
+            return
+        }
+        // **A cancel that arrived during the download starts no build**: the service call is not interruptible from
+        // here (`SearchBackend` exposes no ticket for a long call), so not starting it is what can be honoured.
+        if Task.isCancelled {
+            state = .absent
+            return
+        }
+        state = .building
+        let output = folder.appending(path: AppGroup.wordPackFile)
+        let request = ServiceOperation.buildWordPack(
+            sources: sourceFolder.path(percentEncoded: false),
+            manifest: sourceFolder.appending(path: WordPackSources.manifestName).path(percentEncoded: false),
+            output: output.path(percentEncoded: false))
+        let outcome = await backend.request(request)
+        switch outcome.wordPackBuilt {
+        case .success(let answer):
+            state = answer.pack.map { .installed($0) } ?? .absent
+        // **The builder's own sentence survives**: it names the source and the line, which is the one thing a reader
+        // with a damaged download needs; flattening it into "damaged file" throws that away.
+        case .failure(.wire(.core(.malformed(let detail)))), .failure(.wire(.core(.unsupported(_, let detail)))),
+             .failure(.wire(.core(.tooLarge(_, let detail)))), .failure(.wire(.core(.io(_, let detail)))):
+            state = .refused(.build(detail: detail))
+        case .failure(.wire(let error)):
+            state = .refused(WordDataRefusal(error))
+        case .failure:
+            state = .trouble(.noAnswer)
         }
     }
 
@@ -182,6 +297,9 @@ public enum WordDataRefusal: Equatable, Sendable {
     case unreadable
     /// The call failed before the core saw a file: no answer, or the transport's refusal.
     case transport
+    /// **The builder refused the sources**, with the sentence it wrote: a source missing, one whose hash does not
+    /// match, one that does not parse (the sentence names its line), or a pack past a bound.
+    case build(detail: String)
 
     public init(_ error: WireError) {
         switch error {
@@ -206,4 +324,33 @@ public enum WordDataTrouble: Equatable, Sendable {
     case removeFailed
     /// The service sent no answer.
     case noAnswer
+    /// The app's bundle holds no word-data manifest this release reads, or one that fails its own pin.
+    case noManifest
+    /// A pinned file did not arrive, arrived at the wrong size, or was not the file the manifest pins.
+    case download(WordPackDownload.Failure)
+}
+
+/// **How far the download has got** (plan-local-word-pack WI-6): the file being fetched, of how many, and the bytes
+/// done of all — what the row's bar counts and its sentence names.
+public struct WordDataProgress: Equatable, Sendable {
+    /// The file being fetched, 1-based; 0 before the first starts.
+    public let file: Int
+    /// How many files there are.
+    public let files: Int
+    /// Bytes finished.
+    public let done: UInt64
+    /// Bytes there are to finish.
+    public let total: UInt64
+
+    public init(file: Int, files: Int, done: UInt64, total: UInt64) {
+        self.file = file
+        self.files = files
+        self.done = done
+        self.total = total
+    }
+
+    /// How much of the download is done, from 0 to 1.
+    public var fraction: Double {
+        total == 0 ? 0 : min(1, Double(done) / Double(total))
+    }
 }
