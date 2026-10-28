@@ -455,18 +455,25 @@ pub fn nearest(file: &File, query: &str, max_distance: u8, limit: usize, out: &m
             return Ok(true);
         }
         let key = file.key(i)?;
-        let len = key.chars().count();
-        if len.abs_diff(wanted.len()) > max {
+        // **Only the lower side can be settled before folding** (audit, 2026-10-28): a key is never shorter than its
+        // folded form, so one too short to reach the query is skipped cheaply. A long one may fold down to a match —
+        // `café` with a combining accent is longer than `cafe` — so the upper side is compared after the fold, which is
+        // where the old filter threw real matches away.
+        let raw = key.chars().count();
+        if raw + max < wanted.len() {
+            return Ok(true);
+        }
+        let folded = if key.is_ascii() { key.to_ascii_lowercase() } else { unmark(&key).to_lowercase() };
+        let chars: Vec<char> = folded.chars().collect();
+        if chars.len().abs_diff(wanted.len()) > max {
             return Ok(true);
         }
         // Every cell an `osa` call would touch is charged before it is touched; the scan stops when none is left.
-        let charge = (wanted.len() as u64 + 1).saturating_mul(len as u64 + 1);
+        let charge = (wanted.len() as u64 + 1).saturating_mul(chars.len() as u64 + 1);
         if charge > *cells {
             return Ok(false);
         }
         *cells -= charge;
-        let folded = if key.is_ascii() { key.to_ascii_lowercase() } else { unmark(&key).to_lowercase() };
-        let chars: Vec<char> = folded.chars().collect();
         if let Some(distance) = osa(&wanted, &chars, max) {
             found.push((distance, i));
         }
