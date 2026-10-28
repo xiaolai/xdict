@@ -110,14 +110,27 @@ def oewn_docs():
         "impossible": {"a": {"sense": [{"id": "impossible%3:00:00::", "synset": "3-a"}]}},
         "record": {
             "n": {"pronunciation": [{"value": "ˈɹɛkɔːd"}],
-                  "sense": [{"id": "record%1:10:03::", "derivation": ["record%2:32:00::"]}]},
+                  "sense": [{"id": "record%1:10:03::", "synset": "4-n", "derivation": ["record%2:32:00::"]}]},
             "v": {"form": ["recorded"], "pronunciation": [{"value": "ɹɪˈkɔɹd", "variety": "US"}],
-                  "sense": [{"id": "record%2:32:00::", "derivation": ["record%1:10:03::"]},
-                            {"id": "record%2:32:01::", "derivation": ["record%2:32:00::"]}]},
+                  "sense": [{"id": "record%2:32:00::", "synset": "5-v", "derivation": ["record%1:10:03::"]},
+                            {"id": "record%2:32:01::", "synset": "6-v", "derivation": ["record%2:32:00::"]}]},
         },
     }
-    synsets = {"1-a": {"definition": [PLACEHOLDER], "example": [PLACEHOLDER], "members": ["possible"]}}
+    synsets = {
+        "1-a": {"partOfSpeech": "a", "members": ["possible", "feasible"], "definition": [PLACEHOLDER],
+                "example": [PLACEHOLDER]},
+        "2-n": {"partOfSpeech": "n", "members": ["possibility"]},
+        "3-a": {"partOfSpeech": "a", "members": ["impossible"]},
+        "4-n": {"partOfSpeech": "n", "members": ["record"]},
+        "5-v": {"partOfSpeech": "v", "members": ["record"]},
+        "6-v": {"partOfSpeech": "v", "members": ["record"]},
+    }
     return [("entries-p.json", entries), ("adj.all.json", synsets)]
+
+
+def oewn_synsets(*rows) -> tuple[str, dict]:
+    """A synset document for `(id, part of speech, members)` rows, for a fixture that only needs one declared."""
+    return ("noun.act.json", {sid: {"partOfSpeech": pos, "members": members} for sid, pos, members in rows})
 
 
 class OewnTests(Raises, unittest.TestCase):
@@ -148,31 +161,72 @@ class OewnTests(Raises, unittest.TestCase):
             },
         )
 
-    def test_synset_files_and_content_are_never_read(self):
+    def test_synset_definitions_and_examples_never_reach_a_record(self):
         records = wl.parse_oewn_entries(oewn_docs(), "oewn")
         self.assertNotIn(PLACEHOLDER, json.dumps(records, ensure_ascii=False))
         self.assertEqual(of_type(records, "form"), [])
+        self.assertEqual({r["type"] for r in records}, {"pronunciation", "derivation", "sense"})
+
+    def test_a_synset_gives_its_members_as_synonyms_both_ways(self):
+        records = of_type(wl.parse_oewn_entries(oewn_docs(), "oewn"), "sense")
+        synonyms = {(r["word"], r["other"], r["synset"], r["pos"]) for r in records if r["relation"] == "synonym"}
+        self.assertEqual(
+            synonyms, {("possible", "feasible", "1-a", "adj"), ("feasible", "possible", "1-a", "adj")}
+        )
+
+    def test_antonyms_are_one_each_way_with_each_words_own_synset(self):
+        records = of_type(wl.parse_oewn_entries(oewn_docs(), "oewn"), "sense")
+        self.assertEqual(
+            {(r["word"], r["other"], r["synset"], r["pos"]) for r in records if r["relation"] == "antonym"},
+            {("possible", "impossible", "1-a", "adj"), ("impossible", "possible", "3-a", "adj")},
+        )
+
+    def test_a_sense_must_name_a_declared_synset(self):
+        no_synset = [("entries-x.json", {"x": {"n": {"sense": [{"id": "x%1"}]}}})]
+        self.assertLexicon("malformed", wl.parse_oewn_entries, no_synset, "oewn")
+        dangling = [("entries-x.json", {"x": {"n": {"sense": [{"id": "x%1", "synset": "9-n"}]}}})]
+        self.assertLexicon("malformed", wl.parse_oewn_entries, dangling, "oewn")
+
+    def test_a_dangling_antonym_is_malformed(self):
+        docs = [("entries-x.json", {"x": {"n": {"sense": [{"id": "x%1", "synset": "1-n",
+                                                             "antonym": ["y%1"]}]}}}),
+                ("noun.act.json", {"1-n": {"partOfSpeech": "n", "members": ["x"]}})]
+        self.assertLexicon("malformed", wl.parse_oewn_entries, docs, "oewn")
+
+    def test_a_malformed_synset_file_is_refused(self):
+        for synset in ({"1-n": {"members": ["x"]}}, {"1-n": {"partOfSpeech": "q", "members": ["x"]}},
+                       {"1-n": {"partOfSpeech": "n", "members": []}},
+                       {"1-n": {"partOfSpeech": "n", "members": [3]}}):
+            with self.subTest(synset=synset):
+                docs = [("noun.act.json", synset)]
+                self.assertLexicon("malformed", wl.parse_oewn_entries, docs, "oewn")
 
     def test_dangling_derivation_and_unknown_pos_are_malformed(self):
-        dangling = [("entries-x.json", {"x": {"n": {"sense": [{"id": "x%1", "derivation": ["y%1"]}]}}})]
+        sync = oewn_synsets(("1-n", "n", ["x"]), ("2-v", "v", ["x"]))
+        dangling = [("entries-x.json", {"x": {"n": {"sense": [{"id": "x%1", "synset": "1-n",
+                                                              "derivation": ["y%1"]}]}}}), sync]
         self.assertLexicon("malformed", wl.parse_oewn_entries, dangling, "oewn")
-        unknown = [("entries-x.json", {"x": {"q": {"sense": []}}})]
+        unknown = [("entries-x.json", {"x": {"q": {"sense": []}}}), sync]
         self.assertLexicon("malformed", wl.parse_oewn_entries, unknown, "oewn")
-        twice = [("entries-x.json", {"x": {"n": {"sense": [{"id": "s"}]}, "v": {"sense": [{"id": "s"}]}}})]
+        twice = [("entries-x.json", {"x": {"n": {"sense": [{"id": "s", "synset": "1-n"}]},
+                                           "v": {"sense": [{"id": "s", "synset": "2-v"}]}}}), sync]
         self.assertLexicon("malformed", wl.parse_oewn_entries, twice, "oewn")
 
     def test_numbered_homograph_entries_are_all_read(self):
         # OEWN numbers further lexemes of one POS `n-1`, `n-2`: each keeps its own pronunciation and senses.
         docs = [("entries-b.json", {
             "bass": {
-                "n": {"pronunciation": [{"value": "beɪs"}], "sense": [{"id": "bass%1:10:00::"}]},
-                "n-1": {"pronunciation": [{"value": "bæs", "variety": "GB"}], "sense": [{"id": "bass%1:13:00::"}]},
-                "n-2": {"sense": [{"id": "bass%1:05:00::", "derivation": ["basso%1:18:00::"]}]},
+                "n": {"pronunciation": [{"value": "beɪs"}], "sense": [{"id": "bass%1:10:00::", "synset": "1-n"}]},
+                "n-1": {"pronunciation": [{"value": "bæs", "variety": "GB"}],
+                        "sense": [{"id": "bass%1:13:00::", "synset": "2-n"}]},
+                "n-2": {"sense": [{"id": "bass%1:05:00::", "synset": "3-n", "derivation": ["basso%1:18:00::"]}]},
             },
-            "bassist": {"n": {"sense": [{"id": "bassist%1:18:00::",
+            "bassist": {"n": {"sense": [{"id": "bassist%1:18:00::", "synset": "4-n",
                                          "derivation": ["bass%1:10:00::", "bass%1:13:00::"]}]}},
-            "basso": {"n": {"sense": [{"id": "basso%1:18:00::", "derivation": ["bass%1:05:00::"]}]}},
-        })]
+            "basso": {"n": {"sense": [{"id": "basso%1:18:00::", "synset": "5-n",
+                                       "derivation": ["bass%1:05:00::"]}]}},
+        }), oewn_synsets(*[(f"{i}-n", "n", [w]) for i, w in
+                           ((1, "bass"), (2, "bass"), (3, "bass"), (4, "bassist"), (5, "basso"))])]
         records = wl.parse_oewn_entries(docs, "oewn")
         self.assertEqual(
             {(p["word"], p["pos"], p.get("dialect"), p["phonemes"][0]) for p in of_type(records, "pronunciation")},
@@ -195,7 +249,7 @@ class OewnTests(Raises, unittest.TestCase):
                 docs = [("entries-x.json", {"x": {code: {"sense": []}}})]
                 self.assertLexicon("malformed", wl.parse_oewn_entries, docs, "oewn")
 
-    def test_zip_reader_opens_only_entries(self):
+    def test_zip_reader_opens_entries_and_synsets_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "oewn.zip"
             with zipfile.ZipFile(path, "w") as archive:
@@ -203,7 +257,7 @@ class OewnTests(Raises, unittest.TestCase):
                     archive.writestr(name, json.dumps(doc))
                 archive.writestr("frames.json", "not json at all")
             docs = wl.read_oewn_zip(path, "oewn")
-            self.assertEqual([name for name, _ in docs], ["entries-p.json"])
+            self.assertEqual([name for name, _ in docs], ["adj.all.json", "entries-p.json"])
             (Path(tmp) / "bad.zip").write_bytes(b"not a zip")
             self.assertLexicon("malformed", wl.read_oewn_zip, Path(tmp) / "bad.zip", "oewn")
 
@@ -823,6 +877,9 @@ class RecordTests(Raises, unittest.TestCase):
             {"type": "origin", "id": "ety:1", "language": "English", "form": "run", "word": "run"},
             {"type": "etymon", "child": "ety:1", "parent": "ety:2", "relation": "inherited", "uncertain": False,
              "source": "t"},
+            {"type": "sense", "word": "good", "other": "fine", "relation": "synonym", "synset": "s-1", "pos": "adj",
+             "source": "t"},
+            {"type": "sense", "word": "good", "other": "bad", "relation": "antonym", "synset": "s-2", "source": "t"},
         ):
             with self.subTest(type=record["type"]):
                 self.assertEqual(wl.validate_record(record), record)
@@ -849,6 +906,9 @@ class RecordTests(Raises, unittest.TestCase):
                            "source": "t"}),
             ("malformed", {"type": "etymon", "child": "a", "parent": "b", "relation": "inherited", "uncertain": 0,
                            "source": "t"}),
+            ("malformed", {"type": "sense", "word": "a", "other": "b", "relation": "meronym", "synset": "s",
+                           "source": "t"}),
+            ("malformed", {"type": "sense", "word": "a", "other": "b", "relation": "synonym", "source": "t"}),
             ("bound", pron(word="a" * (wl.MAX_STRING_CHARS + 1))),
             ("bound", pron(system="ipa", phonemes=["a"] * (wl.MAX_LIST_ITEMS + 1))),
         ]
@@ -861,7 +921,7 @@ class RecordTests(Raises, unittest.TestCase):
         header = json.loads(wl.pack_lines([SRC | {"coverage": "all", "notice": "long", "provider": "x"}], [])[0])
         self.assertEqual(
             header,
-            {"type": "header", "schema": "xdict-word-pack", "version": 1, "language": "en",
+            {"type": "header", "schema": "xdict-word-pack", "version": 2, "language": "en",
              "sources": [SRC | {"coverage": "all"}]},
         )
         for bad, kind in ((SRC | {"sha256": "A" * 64}, "malformed"), (SRC | {"licence": ""}, "licence"),
@@ -1138,6 +1198,7 @@ class BuildTests(Raises, unittest.TestCase):
         lines = pack.splitlines()
         header = json.loads(lines[0])
         self.assertEqual(header["schema"], "xdict-word-pack")
+        self.assertEqual(header["version"], 2)
         self.assertEqual([s["id"] for s in header["sources"]],
                          ["cmu", "ety", "kaikki:impossible", "morphynet-deri", "morphynet-infl", "oewn"])
         records = [json.loads(line) for line in lines[1:]]
@@ -1145,6 +1206,10 @@ class BuildTests(Raises, unittest.TestCase):
         self.assertIn({"type": "origin", "id": "ety:p", "language": "English", "form": "possible", "word": "possible"},
                       records)
         self.assertNotIn("ety:x", pack)
+        self.assertIn({"type": "sense", "word": "possible", "other": "feasible", "relation": "synonym",
+                       "synset": "1-a", "pos": "adj", "source": "oewn"}, records)
+        self.assertIn({"type": "sense", "word": "impossible", "other": "possible", "relation": "antonym",
+                       "synset": "3-a", "pos": "adj", "source": "oewn"}, records)
         self.assertIn({"type": "derivation", "base": "possible", "derived": "impossible", "derivedPos": "adj",
                        "kind": "prefix", "affix": "im-", "source": "kaikki:impossible"}, records)
         self.assertEqual(result["records"], {k: sum(1 for r in records if r["type"] == k) for k in wl.RECORD_TYPES})

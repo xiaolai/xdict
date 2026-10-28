@@ -47,7 +47,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path, PurePosixPath
 
 PACK_SCHEMA = "xdict-word-pack"
-PACK_VERSION = 1
+PACK_VERSION = 2
 PACK_LANGUAGE = "en"
 MANIFEST_FORMAT = "xdict-word-lexicon-sources"
 MANIFEST_VERSION = 2
@@ -81,7 +81,7 @@ ARPABET_CONSONANTS = frozenset(
     }
 )
 
-RECORD_TYPES = ("pronunciation", "form", "derivation", "origin", "etymon")
+RECORD_TYPES = ("pronunciation", "form", "derivation", "origin", "etymon", "sense")
 # type -> (required fields, optional fields). `phonemes` and `tags` are lists, `uncertain` a bool, the rest strings.
 RECORD_FIELDS = {
     "pronunciation": ({"word", "system", "phonemes", "source"}, {"pos", "dialect"}),
@@ -89,6 +89,7 @@ RECORD_FIELDS = {
     "derivation": ({"base", "derived", "kind", "source"}, {"basePos", "derivedPos", "affix", "stem"}),
     "origin": ({"id", "language", "form"}, {"word"}),
     "etymon": ({"child", "parent", "relation", "uncertain", "source"}, set()),
+    "sense": ({"word", "other", "relation", "synset", "source"}, {"pos"}),
 }
 LIST_FIELDS = frozenset({"phonemes", "tags"})
 # A derivation's optional `stem` (`StemAlignment` in src/words/lexicon.rs): exactly these fields, two ARPAbet
@@ -100,6 +101,9 @@ FAMILY_KINDS = frozenset({"prefix", "suffix", "conversion", "compound", "other"}
 ETYMON_RELATIONS = frozenset(
     {"inherited", "borrowed", "learned", "derived", "calque", "compound", "affix", "root", "unknown"}
 )
+# A sense record's relation: the loader's four (`SenseRelation` in src/words/lexicon.rs), and no others. The writer
+# emits synonym and antonym, the two a mode reads; hypernym and hyponym are read but not written (WORD_LEXICON.md).
+SENSE_RELATIONS = frozenset({"synonym", "antonym", "hypernym", "hyponym"})
 SOURCE_FIELDS = ("id", "name", "url", "version", "sha256", "licence", "attribution")
 
 # Keys that carry dictionary content rather than metadata. A record holding one is refused.
@@ -114,6 +118,9 @@ OEWN_POS = {"n": "noun", "v": "verb", "a": "adj", "s": "adj", "r": "adv"}
 # An entry key is a POS code, optionally numbered (`n-1`, `n-2`) for a further lexeme of the same POS (a homograph).
 OEWN_ENTRY_KEY = re.compile(r"([nvars])(?:-[1-9][0-9]*)?")
 OEWN_ENTRIES = re.compile(r"entries-[^/]+\.json")
+# A synset file is named for its part of speech and its lexicographer class (`noun.act.json`, `adj.all.json`);
+# `frames.json` sits beside them and holds syntactic frames, which are never read.
+OEWN_SYNSETS = re.compile(r"(?:adj|adv|noun|verb)\.[A-Za-z_]+\.json")
 
 # etymology-db relation types (README of 2023-12, plus `has_root`, which the README omits and the data uses),
 # each in exactly one class. A type in none fails the build after the whole file is read, listing every one.
@@ -552,14 +559,16 @@ def parse_cmudict(lines: Iterable[str], source: str) -> Iterator[dict]:
 
 
 def read_oewn_zip(path: Path, source: str) -> list[tuple[str, object]]:
-    """The zip's `entries-*.json` documents, by name. Synset files (definitions, examples) are never opened."""
+    """The zip's `entries-*.json` and synset documents, by name: entries give pronunciations, derivation links and
+    antonyms, synsets give a sense's synonyms and its part of speech. Nothing else is opened — `frames.json`, every
+    synset's definitions and examples and every other file in the zip stay unread."""
     docs = []
     names: set[str] = set()
     try:
         with zipfile.ZipFile(path) as archive:
             for info in sorted(archive.infolist(), key=lambda i: i.filename):
                 name = PurePosixPath(info.filename).name
-                if info.is_dir() or not OEWN_ENTRIES.fullmatch(name):
+                if info.is_dir() or not (OEWN_ENTRIES.fullmatch(name) or OEWN_SYNSETS.fullmatch(name)):
                     continue
                 if name in names:
                     raise LexiconError("malformed", f"{name} appears twice", source=source)
@@ -576,28 +585,72 @@ def read_oewn_zip(path: Path, source: str) -> list[tuple[str, object]]:
                     raise LexiconError("malformed", f"{name}: {error}", source=source) from error
     except zipfile.BadZipFile as error:
         raise LexiconError("malformed", f"not a zip: {error}", source=source) from error
-    if not docs:
+    if not any(OEWN_ENTRIES.fullmatch(name) for name, _ in docs):
         raise LexiconError("version", "no entries-*.json in the zip", source=source)
     return docs
 
 
+def _read_oewn_synsets(doc: object, source: str, name: str, into: dict[str, tuple[str, list[str]]]) -> None:
+    """One synset file's members and part of speech, by synset id: `noun.act.json` -> {id: (`noun`, [lemmas])}.
+
+    A synset's definitions and examples are never read. A synset whose id another file also declares, one with no
+    members, a member that is not a string, or a part of speech that is not one of OEWN's five codes is `malformed`.
+    """
+    if not isinstance(doc, dict):
+        raise LexiconError("malformed", "not an object", source=f"{source}/{name}")
+    for sid, synset in doc.items():
+        if not isinstance(sid, str) or not sid:
+            raise LexiconError("malformed", f"a synset id that is not a string: {sid!r}", source=f"{source}/{name}")
+        if sid in into:
+            raise LexiconError("malformed", f"synset {sid!r} declared twice", source=f"{source}/{name}")
+        if not isinstance(synset, dict):
+            raise LexiconError("malformed", f"synset {sid!r} is not an object", source=f"{source}/{name}")
+        code = synset.get("partOfSpeech")
+        if not isinstance(code, str) or code not in OEWN_POS:
+            raise LexiconError("malformed", f"synset {sid!r}: unknown part of speech {code!r}",
+                               source=f"{source}/{name}")
+        members = synset.get("members")
+        if not isinstance(members, list) or not members:
+            raise LexiconError("malformed", f"synset {sid!r} has no members", source=f"{source}/{name}")
+        for member in members:
+            if not isinstance(member, str) or not member.strip():
+                raise LexiconError("malformed", f"synset {sid!r}: a member that is not a word: {member!r}",
+                                   source=f"{source}/{name}")
+        into[sid] = (OEWN_POS[code], members)
+
+
 def parse_oewn_entries(docs: Iterable[tuple[str, object]], source: str) -> list[dict]:
-    """OEWN `entries-*.json` documents `(file name, parsed JSON)` to IPA pronunciation and derivation records.
+    """OEWN `entries-*.json` and synset documents `(file name, parsed JSON)` to pronunciation, derivation and sense
+    records.
 
     Documents with other names are skipped unread. Each pronunciation keeps its entry's part of speech and its
     `variety` as the dialect, as one whole transcription. A sense's `derivation` targets become derivation
     records: OEWN gives no direction, so the pair is written in alphabetical order and its `base` and `derived`
     are unoriented endpoints, not a claim of which word is the base; the kind is `conversion` when the spelling
     is the same and `other` otherwise, and a conversion's endpoints are just as unoriented (record noun -> verb
-    is only the alphabetical order of the parts of speech). Antonyms, the untagged `form` lists and every other relation are not read.
+    is only the alphabetical order of the parts of speech). The untagged `form` lists are not read, and neither is
+    any relation but the two below.
+
+    **Sense records** (schema 2). A synset's `members` are its synonyms, written one pair each way. A sense's
+    `antonym` target is a sense of another word, resolved to that word: the pair is written each way too, and each
+    record names the synset its own word's sense declares (so `good` -> `bad` carries good's synset and
+    `bad` -> `good` carries bad's). Every sense declares a synset that a synset file declares, and a part of speech
+    that maps to one of the four words; a sense or an antonym naming something no document declares is
+    `malformed`.
+
     A numbered entry key (`n-1`) is a further lexeme of its base POS; every one is read in full. An unknown entry
-    key, a sense id declared under two words or parts of speech, or a derivation to a sense no entry declares
-    is `malformed`.
+    key or a sense id declared under two words or parts of speech is `malformed`.
     """
     senses: dict[str, tuple[str, str]] = {}
-    links: list[tuple[tuple[str, str], str, str]] = []
+    sense_synset: dict[str, str] = {}
+    links: list[tuple[str, str, str]] = []
+    antonyms: list[tuple[str, str, str]] = []
+    synsets: dict[str, tuple[str, list[str]]] = {}
     out: list[dict] = []
     for name, doc in docs:
+        if OEWN_SYNSETS.fullmatch(name):
+            _read_oewn_synsets(doc, source, name, synsets)
+            continue
         if not OEWN_ENTRIES.fullmatch(name):
             continue
         where = f"{source}/{name}"
@@ -634,15 +687,45 @@ def parse_oewn_entries(docs: Iterable[tuple[str, object]], source: str) -> list[
                         raise LexiconError("malformed", f"{lemma!r}: a sense without an id", source=where)
                     if senses.setdefault(sid, (lemma, pos)) != (lemma, pos):
                         raise LexiconError("malformed", f"sense {sid!r} declared twice", source=where)
+                    synset = sense.get("synset")
+                    if not isinstance(synset, str) or not synset:
+                        raise LexiconError("malformed", f"{sid!r}: a sense without a synset", source=where)
+                    sense_synset[sid] = synset
                     targets = sense.get("derivation") or []
                     if not isinstance(targets, list):
                         raise LexiconError("malformed", f"{sid!r}: derivation is not a list", source=where)
                     for target in targets:
                         if not isinstance(target, str):
                             raise LexiconError("malformed", f"{sid!r}: a derivation target is not a string", source=where)
-                        links.append(((lemma, pos), target, where))
-    for here, target, where in links:
+                        links.append((sid, target, where))
+                    opposites = sense.get("antonym") or []
+                    if not isinstance(opposites, list):
+                        raise LexiconError("malformed", f"{sid!r}: antonym is not a list", source=where)
+                    for target in opposites:
+                        if not isinstance(target, str):
+                            raise LexiconError("malformed", f"{sid!r}: an antonym target is not a string", source=where)
+                        antonyms.append((sid, target, where))
+    for sid, synset in sense_synset.items():
+        if synset not in synsets:
+            raise LexiconError("malformed", f"sense {sid!r} names undeclared synset {synset!r}", source=source)
+    for sid, (pos, members) in synsets.items():
+        for word in members:
+            for other in members:
+                if word != other:
+                    out.append({"type": "sense", "word": word, "other": other, "relation": "synonym",
+                                "synset": sid, "pos": pos, "source": source})
+    for sid, target, where in antonyms:
         there = senses.get(target)
+        if there is None:
+            raise LexiconError("malformed", f"antonym to undeclared sense {target!r}", source=where)
+        if senses[sid] == there:
+            continue
+        for mine, theirs in ((sid, target), (target, sid)):
+            out.append({"type": "sense", "word": senses[mine][0], "other": senses[theirs][0],
+                        "relation": "antonym", "synset": sense_synset[mine], "pos": senses[mine][1],
+                        "source": source})
+    for sid, target, where in links:
+        here, there = senses[sid], senses.get(target)
         if there is None:
             raise LexiconError("malformed", f"derivation to undeclared sense {target!r}", source=where)
         if here == there:
@@ -1254,6 +1337,8 @@ def validate_record(record: object) -> dict:
         raise LexiconError("malformed", f"unknown derivation kind {out['kind']!r}")
     elif kind == "etymon" and out["relation"] not in ETYMON_RELATIONS:
         raise LexiconError("malformed", f"unknown relation {out['relation']!r}")
+    elif kind == "sense" and out["relation"] not in SENSE_RELATIONS:
+        raise LexiconError("malformed", f"unknown sense relation {out['relation']!r}")
     return out
 
 

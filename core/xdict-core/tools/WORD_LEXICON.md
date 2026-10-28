@@ -27,20 +27,20 @@ The same inputs give byte-identical outputs.
 
 Tests: `python3 -I -m unittest discover -s core/xdict-core/tools -p 'test_word_lexicon.py' -v`.
 
-## Pack format: `xdict-word-pack` v1
+## Pack format: `xdict-word-pack` v2
 
 The pack is JSONL in UTF-8. Every string is NFC with no control characters. Each line is canonical JSON: keys sorted, no spaces, non-ASCII kept as is.
 
 Line 1 is the header:
 
 ```json
-{"type":"header","schema":"xdict-word-pack","version":1,"language":"en",
+{"type":"header","schema":"xdict-word-pack","version":2,"language":"en",
  "sources":[{"id","name","url","version","sha256","licence","attribution","coverage"?}]}
 ```
 
 A source id is a lowercase manifest id (`cmu`, `morphynet-deri`), optionally followed by `:` and a per-file part of letters, digits, `.`, `_` and `-` (`kaikki:impossible`), or by `:sha256:` and 64 lowercase hex digits. Every id stays within the loader's charset (letters, digits and `- _ . :`), and the writer refuses any other.
 
-After the header, records come in this order: pronunciation, form, derivation, origin, etymon. Within a type they are sorted by canonical line and de-duplicated. An absent optional field is omitted.
+After the header, records come in this order: pronunciation, form, derivation, origin, etymon, sense. Within a type they are sorted by canonical line and de-duplicated. An absent optional field is omitted.
 
 | Type | Fields |
 |---|---|
@@ -49,6 +49,7 @@ After the header, records come in this order: pronunciation, form, derivation, o
 | `derivation` | `base`, `basePos`?, `derived`, `derivedPos`?, `kind` (`prefix`, `suffix`, `conversion`, `compound` or `other`), `affix`?, `stem`? (see below), `source` |
 | `origin` | `id` (unique), `language`, `form`, `word`? (set on an English term's own node) |
 | `etymon` | `child`, `parent` (origin ids), `relation` (`inherited`, `borrowed`, `learned`, `derived`, `calque`, `compound`, `affix`, `root` or `unknown`), `uncertain`, `source` |
+| `sense` | `word`, `other`, `relation` (`synonym`, `antonym`, `hypernym` or `hyponym`), `synset` (the source's own id), `pos`?, `source` |
 
 **`stem` is never written by the current providers.** No source supplies a stem alignment, and the builder never infers one, so every family step's stem stress is unknown. The field exists because the loader reads it. The writer validates a record that carries one exactly as the loader does:
 
@@ -58,6 +59,18 @@ After the header, records come in this order: pronunciation, form, derivation, o
 - both ranges are the same length.
 
 An absent or `null` stem means none.
+
+**Sense records are written one direction each way.** A synset's members are synonyms of one another, so every
+ordered pair of distinct members is a record (`possible → feasible` and `feasible → possible`): a reader looking up
+either word finds the other, and no consumer has to know which side the source filed. An antonym pair is the same,
+except that each direction carries the synset its own word's sense declares, so `good → bad` names good's synset
+and `bad → good` names bad's. A relation a source declares only one way is therefore written two ways; a pair of
+one word with itself is never written.
+
+**`hypernym` and `hyponym` are read by the pack schema and not written.** OEWN's hypernym edges are available, but
+no mode reads them yet, and writing them would roughly triple the pack's sense records (about 332,000 edges, each a
+cross product of two synsets' members) for a tab that does not exist. The relation stays in the loader's vocabulary
+and in this schema, so a later pack can carry it as version 2.
 
 The writer holds the pack to the Rust loader's bounds (`LexiconLimits::default()` in `src/words/lexicon.rs`):
 
@@ -80,7 +93,7 @@ The exception is Kaikki: it keeps its own POS names verbatim, which are the same
 | id | Source | Gives |
 |---|---|---|
 | `cmu` | CMUdict, pinned commit | ARPAbet pronunciation, every variant (`word(2)`), no POS |
-| `oewn` | Open English Wordnet 2025 JSON (`entries-*.json` only) | POS-tagged IPA, with `variety` (GB or US) as the dialect; sense-level derivation links |
+| `oewn` | Open English Wordnet 2025 JSON (`entries-*.json` and the synset files) | POS-tagged IPA, with `variety` (GB or US) as the dialect; sense-level derivation links; synonyms from a synset's members and antonyms from a sense's own links |
 | `ety` | etymology-db 2023-12 CSV | explicit ancestry (origin and etymon records); English `*_with_root` derivations |
 | `morphynet-infl` | MorphyNet `eng.inflectional.v1.tsv` | forms with UniMorph tags, verbatim (`V\|PRS;3;SG` gives verb, tags `PRS`, `3`, `SG`) |
 | `morphynet-deri` | MorphyNet `eng.derivational.v1.tsv` | prefix and suffix derivations with both parts of speech; the affix is hyphenated by type (`im-`, `-ly`) |
@@ -98,7 +111,10 @@ For every OEWN pair, of kind `other` or `conversion`, `base` and `derived` are *
 
 **Other errors.** Any other entry key (`n-x`, `n-0`, `n1`) fails the build. So does a link to a sense that no entry declares.
 
-**Not read.** Antonyms and the untagged `form` lists are not read. Synset files are never opened.
+**Antonyms and synsets.** A sense's `antonym` targets name senses of other words; each resolves to that word, and
+the pair is written one record each way (see *Sense records*). A synset file (`noun.act.json`, `adj.all.json`)
+gives its members and its part of speech; a synset's `definition` and `example`, `frames.json` beside them and
+every other file in the zip are never read. The untagged `form` lists are not read.
 
 ### etymology-db
 
