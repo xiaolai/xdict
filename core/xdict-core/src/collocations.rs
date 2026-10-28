@@ -52,9 +52,10 @@ impl Store {
             let mut dropped = 0u32;
             let mut seen: BTreeMap<String, u32> = BTreeMap::new();
             for i in 0..file.len() {
-                let record = file.record(i).map_err(|e| CoreError::Malformed { detail: format!("record {i}: {e}") })?;
-                let key =
-                    file.key(i).map_err(|e| CoreError::Malformed { detail: format!("key {i}: {e}") })?.into_owned();
+                // **A read's kind survives the context it is given**: an I/O fault, a limit or an unsupported
+                // compression used to be reported as `Malformed`, which blames the dictionary for a disk.
+                let record = file.record(i).map_err(|e| with_record(CoreError::from(e), i))?;
+                let key = file.key(i).map_err(|e| with_record(CoreError::from(e), i))?.into_owned();
                 let occurrence = *seen.entry(key.clone()).and_modify(|n| *n += 1).or_insert(0);
                 let html = String::from_utf8_lossy(&record.data);
                 let Collocations { headword, pairs: found, dropped: lost } = extract(&html);
@@ -128,6 +129,15 @@ impl Store {
 impl fmt::Display for Collocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} | {:?} | {}", self.lemma, self.frame, self.partner)
+    }
+}
+
+/// One record's own error, with the record's number added and its kind kept.
+fn with_record(error: CoreError, i: usize) -> CoreError {
+    match error {
+        CoreError::Malformed { detail } => CoreError::Malformed { detail: format!("record {i}: {detail}") },
+        CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("record {i}: {detail}") },
+        other => other,
     }
 }
 

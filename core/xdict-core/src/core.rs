@@ -473,6 +473,14 @@ impl Core {
                     state.phrase_matchers.remove(&crate::phrases::store_name(&dict.edition));
                 }
             }
+            // **Its collocation store goes with it** (audit, 2026-10-28): the store is keyed `<handle>:<edition>` and
+            // nothing evicted it, so opening and closing a dictionary in a loop kept one whole store per round.
+            if removed.is_some()
+                && let Ok(mut held) = self.colloc.lock()
+            {
+                let prefix = format!("{handle}:");
+                held.retain(|key, _| !key.starts_with(&prefix));
+            }
             drop(state);
             drop(removed);
             Ok(())
@@ -603,9 +611,11 @@ impl Core {
     #[cfg(not(target_family = "wasm"))]
     pub fn attach_word_pack(&self, path: String) -> Result<crate::words::WordPackInfo, CoreError> {
         guard(|| {
-            let file = std::fs::File::open(&path).map_err(|error| CoreError::Io {
-                kind: crate::error::IoKind::Other,
-                detail: format!("the word pack {path}: {error}"),
+            // **The kind is the file's own**: a pack that is not there is `NotFound` and one the service may not read is
+            // `PermissionDenied`; both used to arrive as an anonymous `Other` across the boundary.
+            let file = std::fs::File::open(&path).map_err(|error| match CoreError::io(&error) {
+                CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("the word pack {path}: {detail}") },
+                other => other,
             })?;
             let lexicon =
                 crate::words::WordLexicon::from_jsonl(std::io::BufReader::new(file)).map_err(word_pack_error)?;
