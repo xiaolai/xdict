@@ -1068,18 +1068,30 @@ impl Inner {
         let Some(senses) = lex.senses.get(text) else {
             return none(WordStatus::QueryUnknown { data: WordData::Senses });
         };
-        let mut found = Vec::new();
+        // **One row per word, however many synsets tie it** (audit, 2026-10-28): a word in two synsets that both
+        // carry the query was listed twice, inflating the total and repeating it across pages. Each synset becomes a
+        // reason on the one row, which is what a reader wants to see anyway.
+        let mut found: Vec<Found> = Vec::new();
+        let mut seen: HashMap<u32, usize> = HashMap::new();
         for (relation, other, synset) in senses {
             if *relation != want {
                 continue;
             }
             for head in self.catalog.join(other) {
-                found.push(Found {
-                    order: 0,
-                    rank: self.catalog.rank(head),
-                    head,
-                    reasons: vec![WordReason::Sense { relation: *relation, synset: synset.clone() }],
-                });
+                let reason = WordReason::Sense { relation: *relation, synset: synset.clone() };
+                match seen.get(&head) {
+                    Some(&at) => {
+                        if let Some(row) = found.get_mut(at)
+                            && !row.reasons.contains(&reason)
+                        {
+                            row.reasons.push(reason);
+                        }
+                    }
+                    None => {
+                        seen.insert(head, found.len());
+                        found.push(Found { order: 0, rank: self.catalog.rank(head), head, reasons: vec![reason] });
+                    }
+                }
             }
         }
         self.finish(query, found, None, 0, false, |f| f.reasons)
