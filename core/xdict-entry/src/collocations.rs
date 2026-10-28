@@ -124,6 +124,18 @@ fn frame(label: &str, headword: &str) -> Option<Frame> {
     Frame::of(&squashed)
 }
 
+/// **The elements HTML never closes**: a walk that counts one as nesting runs past its element's own close tag.
+const VOID_ELEMENTS: [&str; 14] = [
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
+];
+
+/// Whether one tag is a void element, by its name in either case.
+fn is_void(tag: &str) -> bool {
+    let name: String = tag.trim_start_matches('<').chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+    let name = name.to_ascii_lowercase();
+    VOID_ELEMENTS.contains(&name.as_str())
+}
+
 /// Every marked span of one class, in document order: its byte offset and its **whole** text, nested markup included.
 ///
 /// **The text runs to the matching close**, not to the first `<`: a collocate the dictionary emphasises —
@@ -147,9 +159,11 @@ fn spans(html: &str, class: &str) -> Vec<(usize, String)> {
             let tag_at = cursor + next;
             let Some(tag_end) = html[tag_at..].find('>') else { break };
             let tag = &html[tag_at..tag_at + tag_end + 1];
+            // **A void element never closes, so it never deepens the walk** (audit, 2026-10-28): counting `<br>` as
+            // nesting made the span run past its own close tag and swallow the next collocate's text into this one.
             if tag.starts_with("</") {
                 depth -= 1;
-            } else if !tag.ends_with("/>") {
+            } else if !tag.ends_with("/>") && !is_void(tag) {
                 depth += 1;
             }
             cursor = tag_at + tag_end + 1;
@@ -217,6 +231,18 @@ mod tests {
         assert_eq!(
             extract(html).pairs,
             vec![(Frame::Phrases, "a sin".to_string()), (Frame::Phrases, "the sin of".to_string())]
+        );
+    }
+
+    /// **A `<br>` in a collocate does not swallow the next one** (audit, 2026-10-28): counted as nesting, it kept the span
+    /// open past its close tag and merged two partners into one text.
+    #[test]
+    fn a_void_element_does_not_deepen_a_span() {
+        let html = r#"<span class="ocd_hw">run</span><span class="ocd_m2"><span class="ocd_ps">ADVERB</span></span><span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">fast<br>and hard</span>, <span class="ocd_co">slowly</span></span></span></span>"#;
+        let Collocations { pairs, .. } = extract(html);
+        assert_eq!(
+            pairs.iter().map(|(_, partner)| partner.as_str()).collect::<Vec<_>>(),
+            ["fastand hard", "slowly"]
         );
     }
 
