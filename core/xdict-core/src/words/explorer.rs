@@ -1071,13 +1071,25 @@ impl Inner {
         // **One row per word, however many synsets tie it** (audit, 2026-10-28): a word in two synsets that both
         // carry the query was listed twice, inflating the total and repeating it across pages. Each synset becomes a
         // reason on the one row, which is what a reader wants to see anyway.
+        // **Charged like every other mode** (audit, 2026-10-28): gathering cloned every relation's evidence before
+        // `WordBudget` saw any of it, so one word in a hundred synsets bought a hundred rows for free.
+        let mut work = Meter::new(self.budget.max_comparisons);
+        let mut cut = None;
         let mut found: Vec<Found> = Vec::new();
         let mut seen: HashMap<u32, usize> = HashMap::new();
         for (relation, other, synset) in senses {
             if *relation != want {
                 continue;
             }
+            if !work.take(PROBE_COST) {
+                cut = Some(WordLimit::Work);
+                break;
+            }
             for head in self.catalog.join(other) {
+                if !work.take(1) {
+                    cut = Some(WordLimit::Work);
+                    break;
+                }
                 let reason = WordReason::Sense { relation: *relation, synset: synset.clone() };
                 match seen.get(&head) {
                     Some(&at) => {
@@ -1094,7 +1106,7 @@ impl Inner {
                 }
             }
         }
-        self.finish(query, found, None, 0, false, |f| f.reasons)
+        self.finish(query, found, cut, 0, false, |f| f.reasons)
     }
 
     fn ends_with(&self, query: &WordQuery, text: &str) -> WordPage {
