@@ -21,6 +21,13 @@ use crate::types::EntryRef;
 /// either, so a store built before is rebuilt rather than read under rules it was not built with.
 pub const COLLOCATION_VERSION: u32 = 1;
 
+/// **The most one store may hold and read** (audit, 2026-10-28): the build walks every record of the file with no
+/// other bound, so a huge or pathological dictionary would hold the calling thread for as long as it takes. The pair
+/// count bounds what is retained, the byte count what is read, and both refuse the whole store rather than truncate it
+/// — half a dictionary's collocations would look like a dictionary that has fewer.
+pub const MAX_COLLOCATION_PAIRS: usize = 2_000_000;
+pub const MAX_COLLOCATION_BYTES: u64 = 512 << 20;
+
 /// One collocation a dictionary writes: the word it is filed under, its frame, the partner, and the entry that said so.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Collocation {
@@ -50,6 +57,7 @@ impl Store {
         {
             let mut pairs = Vec::new();
             let mut dropped = 0u32;
+            let mut read: u64 = 0;
             let mut seen: BTreeMap<String, u32> = BTreeMap::new();
             for i in 0..file.len() {
                 // **A read's kind survives the context it is given**: an I/O fault, a limit or an unsupported
@@ -57,6 +65,13 @@ impl Store {
                 let record = file.record(i).map_err(|e| with_record(CoreError::from(e), i))?;
                 let key = file.key(i).map_err(|e| with_record(CoreError::from(e), i))?.into_owned();
                 let occurrence = *seen.entry(key.clone()).and_modify(|n| *n += 1).or_insert(0);
+                read = read.saturating_add(record.data.len() as u64);
+                if read > MAX_COLLOCATION_BYTES {
+                    return Err(CoreError::TooLarge {
+                        limit: crate::error::Limit::File,
+                        detail: format!("{dict} reads past {MAX_COLLOCATION_BYTES} bytes of entries for its collocations"),
+                    });
+                }
                 let html = String::from_utf8_lossy(&record.data);
                 let Collocations { headword, pairs: found, dropped: lost } = extract(&html);
                 dropped += lost;
@@ -65,6 +80,12 @@ impl Store {
                 }
                 let entry = EntryRef { edition: edition.into(), key, occurrence };
                 for (frame, partner) in found {
+                    if pairs.len() >= MAX_COLLOCATION_PAIRS {
+                        return Err(CoreError::TooLarge {
+                            limit: crate::error::Limit::File,
+                            detail: format!("{dict} holds more than {MAX_COLLOCATION_PAIRS} collocations"),
+                        });
+                    }
                     pairs.push(Collocation {
                         lemma: headword.clone(),
                         frame,
