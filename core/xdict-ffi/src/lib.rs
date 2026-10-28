@@ -13,7 +13,7 @@ use std::sync::Arc;
 use xdict_core as core;
 use xdict_core::collocations::{Collocation, Frame};
 use xdict_core::explore::{ExploreAnswer, ExploreReason, ExploreRow, ExploreState};
-use xdict_core::words::WordMode;
+use xdict_core::words::{WordMode, WordPackInfo};
 use xdict_core::{
     BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Coverage,
     CoverageEntry, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport,
@@ -893,6 +893,15 @@ pub enum ExploreState {
     Unknown,
 }
 
+/// **The word pack the reader installed** (plan-word-exploration WI-5), as Settings reports it.
+#[uniffi::remote(Record)]
+pub struct WordPackInfo {
+    pub version: u32,
+    pub language: String,
+    pub sources: Vec<String>,
+    pub records: u64,
+}
+
 /// One page of an exploration.
 #[uniffi::remote(Record)]
 pub struct ExploreAnswer {
@@ -958,6 +967,24 @@ impl Core {
         limit: u32,
     ) -> Result<ExploreAnswer, CoreError> {
         self.0.explore(dicts, mode, text, offset, limit)
+    }
+
+    /// **Installs the word pack from a file** (plan-word-exploration WI-5): a damaged or wrong-version file is refused
+    /// with the loader's sentence and replaces nothing. The Web has no disk file to install from, so `xdict-wasm` does
+    /// not carry this.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn attach_word_pack(&self, path: String) -> Result<WordPackInfo, CoreError> {
+        self.0.attach_word_pack(path)
+    }
+
+    /// The word pack held now, or none: what Settings says when it opens.
+    pub fn word_pack(&self) -> Option<WordPackInfo> {
+        self.0.word_pack()
+    }
+
+    /// **Removes the installed word pack**: true when one was held.
+    pub fn detach_word_pack(&self) -> bool {
+        self.0.detach_word_pack()
     }
 
     /// **The reverse-example query** (ADR-0031, plan-reverse-examples WI-4): the pairs whose Chinese carries the

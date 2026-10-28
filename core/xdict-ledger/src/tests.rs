@@ -808,10 +808,14 @@ fn a_kept_phrase_survives_compaction_past_the_reading_bound() {
     let later = at + 15.0 * 86_400.0;
     let report = ledger.compact(later, 0).unwrap();
     assert!(report.removed >= 1, "the old reading is compacted away");
-    assert!(ledger.notes().iter().any(|held| held.target.entry_key == "take something into account"),
-            "the kept phrase survives compaction");
-    assert!(ledger.cards().iter().any(|card| card.target.entry_key == "take something into account"),
-            "and it is still a card, because a card is its note");
+    assert!(
+        ledger.notes().iter().any(|held| held.target.entry_key == "take something into account"),
+        "the kept phrase survives compaction"
+    );
+    assert!(
+        ledger.cards().iter().any(|card| card.target.entry_key == "take something into account"),
+        "and it is still a card, because a card is its note"
+    );
 }
 
 #[test]
@@ -829,8 +833,10 @@ fn a_kept_phrase_from_another_device_returns_after_an_erase() {
     // ADR-0024: erasure is this device's; another device's notes are its own and a sync brings them, exactly as the
     // readings the neighbouring test follows.
     a.merge(&untouched.log_bytes().unwrap()).unwrap();
-    assert!(a.notes().iter().any(|held| held.target.entry_key == "take something into account"),
-            "the peer's kept phrase came back with its log");
+    assert!(
+        a.notes().iter().any(|held| held.target.entry_key == "take something into account"),
+        "the peer's kept phrase came back with its log"
+    );
 }
 
 #[test]

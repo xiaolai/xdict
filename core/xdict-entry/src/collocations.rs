@@ -93,9 +93,8 @@ pub fn extract(html: &str) -> Collocations {
             // college` is what this extractor can see. An audit of 118 pairs found it three times; it is dropped and
             // counted with the unnamed frames rather than shown as a collocation.
             let repeats = word.trim().eq_ignore_ascii_case(&headword) || {
-                let squash = |text: &str| -> String {
-                    text.to_uppercase().chars().filter(|c| c.is_alphanumeric()).collect()
-                };
+                let squash =
+                    |text: &str| -> String { text.to_uppercase().chars().filter(|c| c.is_alphanumeric()).collect() };
                 !headword.is_empty() && squash(word) == squash(&headword)
             };
             match frame {

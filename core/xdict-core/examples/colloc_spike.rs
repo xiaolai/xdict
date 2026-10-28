@@ -68,8 +68,11 @@ fn main() {
             for lemma in ["decision", "blood vessel", "attempt"] {
                 let found = store.collocates(lemma);
                 if !found.is_empty() {
-                    println!("  {lemma}: {} collocates, first three: {:?}", found.len(),
-                             found.iter().take(3).map(|c| format!("{:?} {}", c.frame, c.partner)).collect::<Vec<_>>());
+                    println!(
+                        "  {lemma}: {} collocates, first three: {:?}",
+                        found.len(),
+                        found.iter().take(3).map(|c| format!("{:?} {}", c.frame, c.partner)).collect::<Vec<_>>()
+                    );
                 }
             }
         }

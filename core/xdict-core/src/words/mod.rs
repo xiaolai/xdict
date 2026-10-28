@@ -48,6 +48,6 @@ pub use lexicon::{
 pub use types::{
     EtymonRelation, FamilyKind, FamilyStep, FormRole, LexiconSource, MAX_FAMILY_STEPS, MAX_FUZZY_DISTANCE,
     MAX_QUERY_CHARS, MAX_ROOT_DEPTH, MAX_WORD_PAGE, OriginNode, OriginStep, PhoneSystem, Pronunciation, QueryProblem,
-    StemStress, StressUnknown, WordCatalogEntry, WordData, WordError, WordHit, WordLimit, WordMode, WordPage,
-    WordQuery, WordReason, WordSource, WordStats, WordStatus,
+    StemStress, StressUnknown, WordCatalogEntry, WordData, WordError, WordHit, WordLimit, WordMode, WordPackInfo,
+    WordPage, WordQuery, WordReason, WordSource, WordStats, WordStatus,
 };

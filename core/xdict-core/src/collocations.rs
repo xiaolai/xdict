@@ -9,9 +9,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use xdict_entry::collocations::{Collocations, extract};
 /// **The frame vocabulary is the entry crate's**: extraction and storage must not drift into two lists.
 pub use xdict_entry::collocations::Frame;
+use xdict_entry::collocations::{Collocations, extract};
 use xdict_mdx::File;
 
 use crate::CoreError;

@@ -93,9 +93,21 @@ pub struct Core {
     /// **Each edition's collocation store, kept** (plan-word-exploration WI-6): built from the dictionary's own
     /// records the first time a word is asked about it, keyed by handle and edition so a replaced file rebuilds.
     colloc: Mutex<HashMap<String, Arc<crate::collocations::Store>>>,
+    /// **The word pack the reader installed** (plan-word-exploration WI-5), if any: the explorer is built with it, and
+    /// a mode that reads it answers `NoData` without one. Never locked while `explore` is.
+    word_pack: Mutex<Option<AttachedPack>>,
+    /// Raised whenever a pack is attached or detached, and folded into the explorer's cache key, so an explorer built
+    /// without a pack is never answered from after one is installed.
+    pack_serial: AtomicU64,
 }
 
-/// One scope's explorer, and the key that says which scope and which editions it was built from.
+/// One attached word pack, with what the shell's Settings row reports about it.
+struct AttachedPack {
+    info: crate::words::WordPackInfo,
+    lexicon: Arc<crate::words::WordLexicon>,
+}
+
+/// One scope's explorer, and the key that says which scope, which editions and which pack it was built from.
 struct CachedExplorer {
     key: String,
     explorer: Arc<crate::words::WordExplorer>,
@@ -232,6 +244,8 @@ impl Core {
                 ledger: Mutex::new(None),
                 explore: Mutex::new(None),
                 colloc: Mutex::new(HashMap::new()),
+                word_pack: Mutex::new(None),
+                pack_serial: AtomicU64::new(0),
             })
         })
     }
@@ -579,6 +593,56 @@ impl Core {
         Ok(store)
     }
 
+    /// **Installs the word pack from a file** (plan-word-exploration WI-5): the reader chose it in Settings, or the app
+    /// downloaded the release asset, and this call validates what is on disk. **Nothing is replaced on a refusal**: a
+    /// damaged file, a pack of another version or one past a loader bound leaves the pack already held in place, and
+    /// the error carries the loader's own sentence, which the Settings row shows.
+    ///
+    /// The file is read here rather than handed over as bytes: a pack is 183 MB today, and the core and the shell
+    /// share the reader's disk. The explorer is dropped with the call, so the next exploration builds with the pack.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn attach_word_pack(&self, path: String) -> Result<crate::words::WordPackInfo, CoreError> {
+        guard(|| {
+            let file = std::fs::File::open(&path).map_err(|error| CoreError::Io {
+                kind: crate::error::IoKind::Other,
+                detail: format!("the word pack {path}: {error}"),
+            })?;
+            let lexicon =
+                crate::words::WordLexicon::from_jsonl(std::io::BufReader::new(file)).map_err(word_pack_error)?;
+            let header = lexicon.header();
+            let info = crate::words::WordPackInfo {
+                version: header.version,
+                language: header.language.clone(),
+                sources: header.sources.iter().map(|source| source.id.clone()).collect(),
+                records: lexicon.records().len() as u64,
+            };
+            if let Ok(mut held) = self.word_pack.lock() {
+                *held = Some(AttachedPack { info: info.clone(), lexicon: Arc::new(lexicon) });
+            }
+            self.pack_serial.fetch_add(1, Ordering::SeqCst);
+            if let Ok(mut held) = self.explore.lock() {
+                *held = None;
+            }
+            Ok(info)
+        })
+    }
+
+    /// The pack held now, or `None`: what Settings says when it opens.
+    pub fn word_pack(&self) -> Option<crate::words::WordPackInfo> {
+        self.word_pack.lock().ok().and_then(|held| held.as_ref().map(|pack| pack.info.clone()))
+    }
+
+    /// **Removes the pack**: true when one was held. The modes that read it answer `NoData` from the next call, and
+    /// the next exploration drops the pack's indexes.
+    pub fn detach_word_pack(&self) -> bool {
+        let held = self.word_pack.lock().map(|mut held| held.take()).ok().flatten();
+        if let Ok(mut cached) = self.explore.lock() {
+            *cached = None;
+        }
+        self.pack_serial.fetch_add(1, Ordering::SeqCst);
+        held.is_some()
+    }
+
     /// **One page of word exploration** (plan-word-exploration WI-4; the owner's shape, 2026-10-27): a miss, a rhyme,
     /// a family or a root, answered with the reader's own dictionaries' words — every row names the dictionary and the
     /// entry it opens, and the evidence behind a row is asked for separately.
@@ -593,7 +657,7 @@ impl Core {
         guard(|| {
             // **A mode the pack answers, with no pack attached, is answered at once**: building the catalog first
             // costs seconds and changes nothing, since no catalog makes a rhyme out of nothing.
-            if needs_pack(mode) {
+            if needs_pack(mode) && self.word_pack().is_none() {
                 return Ok(crate::explore::ExploreAnswer::no_data());
             }
             let explorer = self.explorer_for(&dicts)?;
@@ -602,10 +666,11 @@ impl Core {
         })
     }
 
-    /// **The explorer for a scope, built once and kept**: the key is the scope's canonical handles and each edition, so
-    /// a dictionary opened, closed, replaced or re-imported builds it again and nothing else does.
+    /// **The explorer for a scope, built once and kept**: the key is the scope's canonical handles, each edition and the
+    /// pack's serial, so a dictionary opened, closed, replaced or re-imported — or a pack attached or removed — builds
+    /// it again and nothing else does.
     fn explorer_for(&self, dicts: &[String]) -> Result<Arc<crate::words::WordExplorer>, CoreError> {
-        let mut key = String::new();
+        let mut key = format!("pack:{};", self.pack_serial.load(Ordering::SeqCst));
         for dict in dicts {
             let handle = self.parse_handle(dict)?;
             key.push_str(&handle.to_string());
@@ -746,7 +811,10 @@ impl Core {
             }
             opened.mdx_source.unchanged()?;
         }
-        let explorer = WordExplorer::new(catalog, None).map_err(word_error)?;
+        // The pack held now: a pack attached while this catalog was being read is not the one this build indexes, and
+        // the call that attached it dropped the cached explorer, so the next call builds again with it.
+        let pack = self.word_pack.lock().ok().and_then(|held| held.as_ref().map(|pack| Arc::clone(&pack.lexicon)));
+        let explorer = WordExplorer::new(catalog, pack).map_err(word_error)?;
         // **The last report comes after the explorer's indexes are built**, so a caller that shows completion at the
         // callback does not show it before the explorer can answer; a cancel here discards it (audit, 2026-10-24).
         report(done)?;
@@ -2517,11 +2585,19 @@ fn catalog_too_large(detail: String) -> CoreError {
 
 /// The explorer's constructor errors in the core's terms, each kind kept: its limits are the catalog's, its damage
 /// the file's. Building a catalog asks no query, so an `InvalidQuery` here breaks an invariant and is `Internal`.
-/// Whether a mode reads the word data: rhymes, inflections, families and roots come from the pack, never from a
-/// dictionary's own keys.
+/// Whether a mode reads the word data: rhymes, inflections, families, roots and the two synset modes come from the pack,
+/// never from a dictionary's own keys.
 fn needs_pack(mode: crate::words::WordMode) -> bool {
     use crate::words::WordMode;
-    matches!(mode, WordMode::Rhyme | WordMode::Inflections | WordMode::Derivations | WordMode::Roots { .. })
+    matches!(
+        mode,
+        WordMode::Rhyme
+            | WordMode::Inflections
+            | WordMode::Derivations
+            | WordMode::Roots { .. }
+            | WordMode::Synonyms
+            | WordMode::Antonyms
+    )
 }
 
 /// A query the explorer refused: the shell's request, not the catalog's, so it is answered as one.
@@ -2547,6 +2623,31 @@ fn word_error(error: crate::words::WordError) -> CoreError {
         }
         W::Io { detail } => CoreError::Io { kind: crate::error::IoKind::Other, detail },
         W::Internal { detail } => CoreError::internal(format!("the word explorer: {detail}")),
+    }
+}
+
+/// **A refused word pack keeps the sentence the loader wrote** (plan-word-exploration WI-5): a version this core does
+/// not read names both versions, a damaged one names its line, and Settings shows it as it is. A size fault says what
+/// it is rather than being flattened into a generic refusal.
+fn word_pack_error(error: crate::words::WordError) -> CoreError {
+    use crate::words::WordError as W;
+    match error {
+        W::UnsupportedVersion { found, supported, .. } => CoreError::Unsupported {
+            feature: crate::error::Feature::FormatVersion { version: found.to_string() },
+            detail: format!("the word data is version {found}; this XDict reads version {supported}"),
+        },
+        W::Corrupt { line, detail } => CoreError::Malformed {
+            detail: if line == 0 {
+                format!("the word data is damaged: {detail}")
+            } else {
+                format!("the word data is damaged at line {line}: {detail}")
+            },
+        },
+        W::TooLarge { limit, detail } => catalog_too_large(format!("the word pack's {limit:?} limit: {detail}")),
+        W::Io { detail } => CoreError::Io { kind: crate::error::IoKind::Other, detail },
+        W::InvalidQuery { detail, .. } | W::Internal { detail } => {
+            CoreError::internal(format!("the word pack: {detail}"))
+        }
     }
 }
 
@@ -2922,6 +3023,8 @@ fn mime(path: &str) -> &'static str {
         "mp3" => "audio/mpeg",
         "ogg" => "audio/ogg",
         "wav" => "audio/wav",
+        "mp4" | "m4v" => "video/mp4",
+        "webm" => "video/webm",
         "ttf" => "font/ttf",
         "otf" => "font/otf",
         "woff" => "font/woff",
@@ -3978,5 +4081,49 @@ mod tests {
         assert!(matches!(word_error(E::Internal { detail: "x".into() }), CoreError::Internal { .. }));
         let query = word_error(E::InvalidQuery { problem: QueryProblem::Empty, detail: "x".into() });
         assert!(matches!(query, CoreError::Internal { .. }), "{query:?}");
+    }
+
+    /// **A pack is installed, reported, read, refused and removed** (plan-word-exploration WI-5): a mode that reads the
+    /// pack answers `NoData` until one is attached and stops once it is, the report says what the header says, a pack
+    /// of another version is refused with a sentence naming both and **leaves the held pack in place**, and removing
+    /// the pack returns those modes to `NoData`.
+    #[test]
+    fn a_word_pack_is_attached_reported_refused_and_removed() {
+        use crate::explore::ExploreState;
+        use crate::words::WordMode;
+        let dir = std::env::temp_dir().join(format!("xdict-word-pack-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = |version: u32| {
+            let sha = "0".repeat(64);
+            format!(
+                r#"{{"type":"header","schema":"xdict-word-pack","version":{version},"language":"en","sources":[{{"id":"t","name":"Synthetic","url":"https://example.invalid/t","version":"test-1","sha256":"{sha}","licence":"CC0-1.0","attribution":"The xdict-core unit tests"}}]}}"#
+            )
+        };
+        let good = dir.join("good.jsonl");
+        let sense = r#"{"type":"sense","word":"good","other":"fine","relation":"synonym","synset":"s-1","pos":"adj","source":"t"}"#;
+        std::fs::write(&good, format!("{}\n{sense}\n", source(2))).unwrap();
+        let old = dir.join("old.jsonl");
+        std::fs::write(&old, format!("{}\n{sense}\n", source(1))).unwrap();
+
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let synonyms = |core: &Core| core.explore(vec![], WordMode::Synonyms, "good".into(), 0, 20).unwrap().state;
+        assert_eq!(synonyms(&core), ExploreState::NoData, "no pack, no answer");
+        assert_eq!(core.word_pack(), None);
+        assert!(!core.detach_word_pack(), "nothing to remove");
+
+        let info = core.attach_word_pack(good.to_string_lossy().into_owned()).unwrap();
+        assert_eq!((info.version, info.records, info.sources.clone()), (2, 1, vec!["t".to_string()]));
+        assert_eq!(core.word_pack(), Some(info.clone()), "the report is what was attached");
+        assert_ne!(synonyms(&core), ExploreState::NoData, "the pack is read now");
+
+        let refused = core.attach_word_pack(old.to_string_lossy().into_owned()).unwrap_err();
+        let CoreError::Unsupported { detail, .. } = &refused else { panic!("{refused:?}") };
+        assert!(detail.contains("version 1") && detail.contains("version 2"), "{detail}");
+        assert_eq!(core.word_pack(), Some(info), "a refusal replaces nothing");
+
+        assert!(core.detach_word_pack());
+        assert_eq!(core.word_pack(), None);
+        assert_eq!(synonyms(&core), ExploreState::NoData, "removed, and answered as before");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

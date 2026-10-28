@@ -149,6 +149,19 @@ record! {
         pub source: String,
     }
 
+    /// **A word pack the core holds** (plan-word-exploration WI-5), as the shell's Settings row reports it: what was
+    /// installed, from where, and how much of it. A record count by type is not here — the row says a pack is
+    /// installed and of which version, and the explorer's own statistics say what it can answer.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct WordPackInfo {
+        pub version: u32,
+        pub language: String,
+        /// Every source id, as the pack's header lists them.
+        pub sources: Vec<String>,
+        /// Records after the header, every type.
+        pub records: u64,
+    }
+
     /// What a loaded explorer holds, for the shell to say what it can answer and from where.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct WordStats {
@@ -287,9 +300,11 @@ record! {
     }
 }
 
-message! {
-    use super::lexicon::SenseRelation;
+// **Outside the macro**: `message!` applies a derive to every item it is given, and a `use` is an item — with the
+// `serde` feature on, a `use` inside the macro is a derive on a `use`, which does not compile.
+use super::lexicon::SenseRelation;
 
+message! {
 /// What to look for.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum WordMode {
