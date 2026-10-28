@@ -712,7 +712,7 @@ public final class MeaningSession {
     /// question. Meaning here lets the model choose the sense; the chosen-sense ask is `explain()`.
     public func ask() {
         let chosen = settingsProvider?() ?? settings
-        ask(operation: operation(for: chosen, selection: nil, honouring: chosenMode))
+        start(operation(for: chosen, selection: nil, honouring: chosenMode))
     }
 
     /// **The tab is the question** (owner, 2026-10-26): choosing it asks for that question — unless its answer is
@@ -814,12 +814,17 @@ public final class MeaningSession {
         if let selection, selection.dictionary != target.dictionary || selection.entry != target.entry {
             self.selection = nil
         }
-        ask(operation: Operation(mode: .grounded, selection: nil, target: target))
+        start(Operation(mode: .grounded, selection: nil, target: target))
     }
 
     /// **The reader asks about the sense they selected** (plan-explain-sense WI-5; ADR-0029 d.6): the entry's text and
     /// the chosen sense go to the source, and the answer says whether the sense fits. It has no sentence-only variant:
     /// with the switch off, the row says so and nothing is sent.
+    ///
+    /// **Every way of starting a question goes through `start(_:)`** (audit, 2026-10-28): these four — the pane's
+    /// question, a grounded dictionary's, the chosen sense, and the follow-up after a `doesNotFit` verdict — called
+    /// `ask(operation:)` directly, so "Show the request before asking" was honoured for the tabs and bypassed for every
+    /// one of them. `askAgain` stays direct on purpose: it repeats a request the reader has already seen and sent.
     public func explain() {
         let chosen = settingsProvider?() ?? settings
         guard chosen.sendEntryText else {
@@ -831,7 +836,7 @@ public final class MeaningSession {
             return
         }
         // The successful path's cleanup belongs to `ask(operation:)` alone (audit round 4, 2026-10-25).
-        ask(operation: Operation(mode: .explainSense, selection: selection, target: nil))
+        start(Operation(mode: .explainSense, selection: selection, target: nil))
     }
 
     /// **An early refusal**: the earlier work ends, the evidence and retry context go, and the reason is shown — the same
@@ -867,7 +872,7 @@ public final class MeaningSession {
             refuse(.entryTextOff)
             return
         }
-        ask(operation: Operation(mode: .grounded, selection: nil, target: target))
+        start(Operation(mode: .grounded, selection: nil, target: target))
     }
 
     /// One ask's kind and target, as an immutable value: the mode, the chosen sense when the mode has one, and an
