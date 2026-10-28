@@ -72,8 +72,9 @@ public struct SpotlightIndexer: Sendable {
         try await index.delete(domains: domains)
     }
 
-    /// **Deletes everything this app ever indexed**: what turning the switch off promises.
-    public func deleteAll() async throws {
-        try await index.deleteAll()
+    /// **Deletes everything this app ever indexed**: what turning the switch off promises. `onLateFailure` carries a
+    /// refusal that arrives after the run was recorded, so the app can owe the deletion again.
+    public func deleteAll(onLateFailure: @escaping @Sendable (String) -> Void = { _ in }) async throws {
+        try await index.deleteAllReportingLateFailure(onLateFailure)
     }
 }

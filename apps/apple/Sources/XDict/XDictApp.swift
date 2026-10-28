@@ -47,7 +47,15 @@ struct XDictApp: App {
         previous?.cancel()
         spotlightRun = Task { @MainActor in
             _ = await previous?.value   // the older run finishes (or gives up) before this one begins
-            let outcome = await spotlight.apply(on)
+            // **A deletion refused after its run was recorded owes itself again** (audit, 2026-10-28): the order is
+            // placed and answered later, or never; an error that does arrive puts the cleanup back in the debt, so the
+            // next launch tries it instead of the row saying "not included" over words still in the index.
+            let outcome = await spotlight.apply(on, onLateFailure: { why in
+                Task { @MainActor in
+                    XDictApp.spotlightLog.error("the deletion was refused after its run: \(why, privacy: .public)")
+                    XDictApp.spotlightSettings.record(failed: true)
+                }
+            })
             switch outcome {
             case .indexed(let dictionaries, let words):
                 spotlightLog.notice("indexed \(dictionaries) dictionaries, \(words) words")

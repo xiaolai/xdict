@@ -44,11 +44,11 @@ final class SpotlightLibrary {
     /// value is the order, and the next run is what follows it — so a failure is reported rather than left as a silent
     /// half-index. **The off-run places its deletion and returns** (2026-10-27): Core Spotlight receives that call and
     /// does not answer it on macOS 27, so waiting would owe it again at every launch — `SystemSpotlightIndex.deleteAll`.
-    func apply(_ on: Bool) async -> Outcome {
+    func apply(_ on: Bool, onLateFailure: @escaping @Sendable (String) -> Void = { _ in }) async -> Outcome {
         guard on else {
             do {
                 // **Everything this app indexed, in one call**, and the record of it goes with it.
-                try await indexer.deleteAll()
+                try await indexer.deleteAll(onLateFailure: onLateFailure)
                 ledger.clear()
                 return .deleted(dictionaries: 0)
             } catch {
