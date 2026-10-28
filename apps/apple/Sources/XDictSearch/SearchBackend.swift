@@ -71,6 +71,15 @@ extension ClientOutcome {
         }
     }
 
+    var wordPack: Result<WordPackState, ClientFailure> {
+        flatMap { delivered in
+            guard case .wordPacked(let state) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not the word data's state")))
+            }
+            return .success(state)
+        }
+    }
+
     var collocations: Result<[Collocation], ClientFailure> {
         flatMap { delivered in
             guard case .collocations(let pairs) = delivered.answer else {

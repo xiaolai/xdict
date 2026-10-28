@@ -251,6 +251,12 @@ extension XDictContract.ExploreAnswer {
     }
 }
 
+extension XDictContract.WordPackInfo {
+    init(_ pack: XDictCore.WordPackInfo) {
+        self.init(version: pack.version, language: pack.language, sources: pack.sources, records: pack.records)
+    }
+}
+
 extension XDictContract.Words {
     init(_ words: XDictCore.Words) {
         self.init(edition: XDictContract.Edition(rawValue: words.edition), words: words.words, total: words.total,

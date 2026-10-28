@@ -146,6 +146,17 @@ final class Dictionaries: Sendable {
                 let answer = try core.explore(dicts: dicts.map(\.rawValue), mode: XDictCore.WordMode(mode), text: text,
                                               offset: offset, limit: limit)
                 return (.answer(.explored(XDictContract.ExploreAnswer(answer))), nil)
+            // Plan-word-exploration WI-5: the word pack Settings installs, reports and removes.
+            case .wordPack:
+                return (.answer(.wordPacked(XDictContract.WordPackState(pack: core.wordPack().map {
+                    XDictContract.WordPackInfo($0)
+                }))), nil)
+            case .setWordPack(let path):
+                let info = try core.attachWordPack(path: path)
+                return (.answer(.wordPacked(XDictContract.WordPackState(pack: XDictContract.WordPackInfo(info)))), nil)
+            case .clearWordPack:
+                _ = core.detachWordPack()
+                return (.answer(.wordPacked(XDictContract.WordPackState(pack: nil))), nil)
             // ADR-0031: the reverse-example query, and the per-edition store built in the background.
             case .examples(let query, let dicts, let limit):
                 let examples = try core.examples(query: query, dicts: dicts.map(\.rawValue), limit: limit)

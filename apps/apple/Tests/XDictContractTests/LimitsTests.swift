@@ -129,16 +129,30 @@ struct LimitsTests {
     }
 
     /// Every operation has a deadline but the import and the health check, which are bounded by silence instead.
+    ///
+    /// **The ceiling is fifteen seconds except where the call's own input is too big for it** (`longReads`): a deadline
+    /// shorter than the work its operation is defined to do is a deadline that fires on a healthy service.
     @Test func everyOperationButImportHasADeadline() {
         for operation in Fixtures.operations {
             let deadline = Deadlines.deadline(for: operation, onFreshConnection: false)
             if operation.reportsProgress {
                 #expect(deadline == nil)
             } else {
-                #expect(deadline.map { $0 > .zero && $0 <= .seconds(15) } == true, "\(operation): no deadline in (0, 15 s]")
+                let ceiling = Self.isALongRead(operation) ? Deadlines.installDeadline : .seconds(15)
+                #expect(deadline.map { $0 > .zero && $0 <= ceiling } == true,
+                        "\(operation): no deadline in (0, \(ceiling)]")
             }
         }
         #expect(Deadlines.importSilence == .seconds(60))
+    }
+
+    /// **The calls whose input is a whole file with no progress to reset a silence bound**: installing the word data
+    /// reads and validates 183 MB (the 2026-10-28 pack) in one call. At ten megabytes a second that is eighteen seconds
+    /// of reading alone, before the loader parses a line of it, so fifteen is a ceiling a healthy service would meet on
+    /// a slow disk. Everything else stays at fifteen.
+    static func isALongRead(_ operation: ServiceOperation) -> Bool {
+        if case .setWordPack = operation { return true }
+        return false
     }
 
     @Test func theDeadlinesAreTheChosenOnes() {

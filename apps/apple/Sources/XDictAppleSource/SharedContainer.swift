@@ -49,6 +49,18 @@ public enum SharedContainer {
         return AppGroup.appleImports(in: container)
     }
 
+    /// **`<app-group container>/WordPack/`** (plan-word-exploration WI-5), or nil as `appleImports` is nil: where the
+    /// installed word pack sits, so the sandboxed service can read the file the reader chose.
+    public static func wordPack(team: Result<String, SigningTeam.Unavailable> = SigningTeam.own(),
+                                lookup: (String) -> URL? = {
+                                    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
+                                }) -> URL? {
+        guard case .success(let team) = team, let container = AppGroup.container(team: team, lookup: lookup) else {
+            return nil
+        }
+        return AppGroup.wordPack(in: container)
+    }
+
     /// **`<app-group container>/Sync/`**: where a sync pass's files meet (plan §2.6), in `in/` and `out/`.
     public static func sync(team: Result<String, SigningTeam.Unavailable> = SigningTeam.own(),
                             lookup: (String) -> URL? = {

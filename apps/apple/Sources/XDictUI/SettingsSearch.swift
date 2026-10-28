@@ -9,7 +9,7 @@ import Foundation
 public enum SettingsSearch {
     /// One searchable row, and the place `SettingsRoute.reveal(_:)` takes the reader to.
     public enum Anchor: String, CaseIterable, Hashable, Sendable {
-        case dictionaryList, dictionaryImport
+        case dictionaryList, dictionaryImport, wordData
         case readingWidth, readingAccent, readingPhrases, speechVoice
         case history, reviewReminders, syncFolder
         case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
@@ -42,6 +42,7 @@ public enum SettingsSearch {
     private static let chineseKeywords: [Anchor: [String]] = [
         .dictionaryList: ["词典", "词库", "排序", "启用", "停用", "删除"],
         .dictionaryImport: ["导入", "添加", "文件", "苹果"],
+        .wordData: ["词数据", "同义词", "反义词", "押韵", "词族", "词根", "变形"],
         .readingAccent: ["颜色", "外观"],
         .readingWidth: ["阅读", "宽度", "行长"],
         .readingPhrases: ["词组", "短语", "卡片", "阅读"],
@@ -68,6 +69,8 @@ public enum SettingsSearch {
              keywords: ["library", "order", "enable", "disable", "remove", "details", "mdx", "mdd"]),
         Item(.dictionaries, .dictionaryImport, "Add Dictionaries",
              keywords: ["import", "add", "mdx", "apple", "files"]),
+        Item(.dictionaries, .wordData, "Word data",
+             keywords: ["rhymes", "families", "roots", "forms", "synonyms", "antonyms", "pack", "install", "remove"]),
         Item(.readingAndSpeech, .readingAccent, "Accent color",
              keywords: ["reading", "color", "colour", "appearance"]),
         Item(.readingAndSpeech, .readingWidth, "Comfortable reading width",

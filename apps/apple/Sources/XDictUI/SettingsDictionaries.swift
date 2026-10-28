@@ -5,6 +5,7 @@ import XDictAppleSource
 import XDictContract
 import XDictEntryView
 import XDictLibrary
+import XDictSearch
 import XDictTokens
 
 /// **Settings ▸ Dictionaries, as Apple's Dictionary draws it** (parity ledger P39, P40; owner, 2026-10-17: follow
@@ -35,6 +36,10 @@ public struct SettingsDictionaries: View {
     nonisolated public static let chooseableExtensions = ["mdx", "mdd"]
     nonisolated static let chooseable: [UTType] =
         (choosesFolders ? [.folder] : []) + chooseableExtensions.compactMap { UTType(filenameExtension: $0) }
+
+    /// **What the word data's file is**: JSON Lines, typed by extension since no app registers it (`AppGroup.wordPack`).
+    nonisolated static let wordDataFile: [UTType] =
+        [UTType(filenameExtension: "jsonl") ?? .json]
 
     /// The `+` menu's items (d.2), in order.
     public enum AddItem: CaseIterable, Sendable {
@@ -134,6 +139,8 @@ public struct SettingsDictionaries: View {
     @Bindable private var route: SettingsRoute
     private let appleImport: AppleImportHost?
     private let study: StudyModel?
+    /// **The word data's row** (plan-word-exploration WI-5): nil in a host that has no service to install it in.
+    private let wordData: WordDataModel?
     @State private var selection: UUID?
     @State private var paneHeight: CGFloat = 0
     /// The list's filter (UI35); empty shows the whole library.
@@ -142,11 +149,12 @@ public struct SettingsDictionaries: View {
 
     /// `study` says what a join did to the reader's notes; nil leaves the sentence out.
     public init(library: Library, route: SettingsRoute = .shared, appleImport: AppleImportHost? = nil,
-                study: StudyModel? = nil) {
+                study: StudyModel? = nil, wordData: WordDataModel? = nil) {
         self.library = library
         self.route = route
         self.appleImport = appleImport
         self.study = study
+        self.wordData = wordData
     }
 
     public var body: some View {
@@ -171,6 +179,10 @@ public struct SettingsDictionaries: View {
                                  add: { item in add(item) }, remove: { removeSelected() })
                 .settingsAnchor(.dictionaryImport)
             options
+            if let wordData {
+                SettingsWordData(model: wordData, choose: { route.request(.wordPack) })
+                    .settingsAnchor(.wordData)
+            }
         }
         .padding(.horizontal, Tokens.Space.xl)
         .padding(.vertical, Tokens.Space.l)
@@ -181,11 +193,18 @@ public struct SettingsDictionaries: View {
         .onAppear { resolveRoute() }
         // ADR-0011 decision 7: each Apple dictionary compared with its installed bundle when Settings opens.
         .task { await checkAppleDictionaries() }
+        // Plan-word-exploration WI-5: the service starts with no pack, so the container's is attached when the pane opens.
+        .task { await wordData?.restore() }
         .onChange(of: route.pendingSelection) { resolveRoute() }
         .onChange(of: library.entries.map(\.id)) { resolveRoute() }
         .fileImporter(isPresented: presented(.importer), allowedContentTypes: Self.chooseable,
                       allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { selectFirst(of: library.add(urls)) }
+        }
+        .fileImporter(isPresented: presented(.wordPack), allowedContentTypes: Self.wordDataFile,
+                      allowsMultipleSelection: false) { result in
+            guard case .success(let urls) = result, let url = urls.first, let wordData else { return }
+            Task { await wordData.install(url) }
         }
         // The open panel's button says what happens (UI review L-19).
         .fileDialogConfirmationLabel(Text("Add"))

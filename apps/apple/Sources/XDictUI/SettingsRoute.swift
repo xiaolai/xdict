@@ -10,6 +10,8 @@ public enum SettingsPresentation: Equatable, Sendable {
     case details(UUID)
     /// The Apple import (ADR-0011, WI-5).
     case appleImport
+    /// Choosing the word data's file (plan-word-exploration WI-5).
+    case wordPack
 }
 
 /// **Opening Settings on a dictionary is routed, not hoped for** (ADR-0012 d.4): the pane to show, the dictionary to

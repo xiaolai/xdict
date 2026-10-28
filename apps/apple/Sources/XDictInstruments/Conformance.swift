@@ -41,7 +41,7 @@ public struct ConformanceScenario: Sendable {
     static let known: [String: Set<String>] = [
         "": ["comment", "view", "versions", "newWrongProtocol", "openBeforeImport", "import", "open", "lookups",
              "suggestions", "entries", "links", "resources", "health", "byteSource", "errors", "lifecycle", "lineages",
-             "displayOptions"],
+             "displayOptions", "explore"],
         "byteSource": ["comment", "name", "identity", "sidecar", "import", "open", "resourceFromPath", "resourceFromSource",
                        "shortRead"],
         "errors": ["comment", "unsupported", "malformed", "notFound", "cancelled", "sourceChanged"],

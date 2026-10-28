@@ -60,7 +60,10 @@ public enum Contract {
     /// 15 (2026-10-25): the operations `phrases` and `phrasesBuild` and their answers, the phrase covering a captured
     /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7); `PhraseAnswer.total`
     /// counts the matches before the cap, so a capped list says what it left out.
-    public static let version: UInt32 = 18
+    /// 19 (2026-10-28): the operations `wordPack`, `setWordPack` and `clearWordPack` and the answer `wordPacked`, which
+    /// install, report and remove the word pack the exploration modes read (plan-word-exploration WI-5). A refused
+    /// file answers `unsupported` or `corrupt` with the loader's sentence, and the pack already installed stays.
+    public static let version: UInt32 = 19
 }
 
 // MARK: - The request
@@ -208,6 +211,15 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// **The collocations of a word** (contract 17): what each dictionary's own collocation sections say, built into a
     /// per-edition store the first time it is asked for.
     case collocates(query: String, dicts: [DictId], limit: UInt32)
+    /// **The word pack the reader installed** (contract 19, plan-word-exploration WI-5), or none: what Settings shows
+    /// when it opens.
+    case wordPack
+    /// **Installs the word pack from a file**: one the reader chose, copied by the app into the app group's container,
+    /// where the service's sandbox can read it. A damaged file or another version is refused with the loader's
+    /// sentence and replaces nothing.
+    case setWordPack(path: String)
+    /// **Removes the installed pack**: the exploration modes that read it answer `noData` again.
+    case clearWordPack
     /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese contains `query`, from the
     /// dictionaries with a store, in their order. One without a store is answered in `notReady`, never as an error.
     case examples(query: String, dicts: [DictId], limit: UInt32)
@@ -320,7 +332,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
+             .clearWordPack: nil
         }
     }
 
@@ -333,7 +346,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
+             .clearWordPack: nil
         }
     }
 
@@ -362,7 +376,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
              .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
+             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore,
+             .explore, .collocates, .wordPack, .setWordPack, .clearWordPack: nil
         }
     }
 
@@ -395,7 +410,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .studyNoteAt, .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
-             .ledgerRemove, .ledgerRestore: []
+             .ledgerRemove, .ledgerRestore,
+             // The pack is read from the container by the service, not through one of the app's file handles.
+             .wordPack, .setWordPack, .clearWordPack: []
         }
         return direct + editionsRead.flatMap { edition in editions[edition].map { filesOf[$0] ?? [] } ?? [] }
     }
@@ -405,6 +422,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions: .versions
         case .explore: .explored
         case .collocates: .collocations
+        case .wordPack, .setWordPack, .clearWordPack: .wordPacked
         case .importPackage: .imported
         case .cancel, .cancelConversion: .cancellation
         case .openPackage: .opened
@@ -452,7 +470,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .examples, .phrases, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: false
+             .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack, .clearWordPack: false
         }
     }
 }
@@ -575,6 +593,8 @@ public enum Answer: Codable, Hashable, Sendable {
     case explored(ExploreAnswer)
     /// The collocations those dictionaries write for the word (contract 17).
     case collocations([Collocation])
+    /// The word pack installed after a call, or none (contract 19).
+    case wordPacked(WordPackState)
     /// The entry's reference, policy and lossy count; **its HTML is the payload**, as UTF-8.
     case entry(Entry)
     case link(Link)
@@ -634,7 +654,7 @@ public enum Answer: Codable, Hashable, Sendable {
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
              .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations: false
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked: false
         }
     }
 
@@ -652,6 +672,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .versions: .versions
         case .explored: .explored
         case .collocations: .collocations
+        case .wordPacked: .wordPacked
         case .imported: .imported
         case .cancellation: .cancellation
         case .opened: .opened
@@ -705,7 +726,7 @@ enum AnswerKind: String, Sendable {
     case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, phrases, phrasesBuilt, ledgerRecord,
          ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
-    case exported, erased, conflicts, synced, explored, collocations
+    case exported, erased, conflicts, synced, explored, collocations, wordPacked
 }
 
 // MARK: - Events

@@ -7,10 +7,11 @@ import XDictContract
 /// markup. A short call naming one open dictionary, holding no credit and no handle; the answer is the core's catalogue
 /// entry for that edition and its CSS, carried in the JSON, never as a payload.
 struct DisplayOptionsContractTests {
-    /// **The version this tree speaks**: 18 adds the synonym and antonym modes (WI-5), 17 `explore` and `collocates`,
-    /// 16 `explore`; 15 raised `phrases`, 14 `examples`, 13 `words` (ADR-0031, ADR-0028, ADR-0029).
-    @Test func theContractIsVersion18() {
-        #expect(Contract.version == 18, "18 adds `synonyms` and `antonyms` (plan-word-exploration WI-5)")
+    /// **The version this tree speaks**: 19 adds the word pack's install, report and remove (WI-5), 18 the synonym and
+    /// antonym modes, 17 `explore` and `collocates`, 16 `explore`; 15 raised `phrases`, 14 `examples`, 13 `words`
+    /// (ADR-0031, ADR-0028, ADR-0029).
+    @Test func theContractIsVersion19() {
+        #expect(Contract.version == 19, "19 adds `wordPack`, `setWordPack` and `clearWordPack` (plan-word-exploration WI-5)")
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

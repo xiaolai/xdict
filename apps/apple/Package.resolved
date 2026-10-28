@@ -1,0 +1,15 @@
+{
+  "originHash" : "6441dbd6508a8b5d1a17e14220ac1e4014a53b479fada8c84b168c6d4012cf9c",
+  "pins" : [
+    {
+      "identity" : "sayso",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/xiaolai/sayso",
+      "state" : {
+        "revision" : "a31fbb298b6c4eb829fd8b17f075064fb78c29a5",
+        "version" : "0.5.3"
+      }
+    }
+  ],
+  "version" : 3
+}

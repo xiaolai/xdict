@@ -37,6 +37,9 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
    `display_options` of the handle [`displayOptions.tiny`], and, for each of [`displayOptions.cases`], `import` and
    `open` of the package (the case's `mdx`, no volumes, its `sidecars`), then `display_options` of that handle
    [`result`] (ADR-0013, added 2026-10-18). The cases' MDX files are `tiny/dictionary.json`'s `displayOptions`.
+   Then `explore` of the handle, once per [`explore`] case, by its `mode` and `text` [`state`, `words` — compared
+   sorted, so the check stands on the headwords and not on the catalog's order — and `cut`] (plan-word-exploration
+   WI-4; added 2026-10-28). No pack is attached here, so the case that needs one expects `noData`.
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
    this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.

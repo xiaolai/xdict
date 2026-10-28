@@ -3361,6 +3361,22 @@
         }
       }
     },
+    "Choose Word Data…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Word Data…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择词数据…"
+          }
+        }
+      }
+    },
     "Choose a Model": {
       "localizations": {
         "en": {
@@ -10252,6 +10268,22 @@
         }
       }
     },
+    "Rhymes, word families, roots, forms, synonyms and antonyms need the word data, which is not installed yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rhymes, word families, roots, forms, synonyms and antonyms need the word data, which is not installed yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "押韵、同族词、词根、词形、同义词和反义词需要词数据，尚未安装。"
+          }
+        }
+      }
+    },
     "Roots": {
       "localizations": {
         "en": {
@@ -11656,6 +11688,54 @@
         }
       }
     },
+    "That file could not be copied into place. Try another file.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That file could not be copied into place. Try another file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法复制该文件。请换一个文件试试。"
+          }
+        }
+      }
+    },
+    "That file could not be read, so nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That file could not be read, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取该文件，因此未安装任何内容。"
+          }
+        }
+      }
+    },
+    "That file is damaged or is not XDict word data, so nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That file is damaged or is not XDict word data, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该文件已损坏，或不是 XDict 词数据，因此未安装任何内容。"
+          }
+        }
+      }
+    },
     "That is not a site. Type a name such as example.com, or paste an address.": {
       "localizations": {
         "en": {
@@ -12148,6 +12228,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "词典服务没有回应本次查询。"
+          }
+        }
+      }
+    },
+    "The dictionary service did not answer, so nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary service did not answer, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典服务没有响应，因此未安装任何内容。"
+          }
+        }
+      }
+    },
+    "The dictionary service did not answer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary service did not answer."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典服务没有响应。"
           }
         }
       }
@@ -13473,6 +13585,22 @@
         }
       }
     },
+    "The word data could not be removed. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data could not be removed. Try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移除词数据。请重试。"
+          }
+        }
+      }
+    },
     "The word data has nothing for “%@”.": {
       "localizations": {
         "en": {
@@ -13485,6 +13613,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "词数据里没有“%@”。"
+          }
+        }
+      }
+    },
+    "The word data is larger than this XDict holds, so nothing was installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data is larger than this XDict holds, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据超出此 XDict 可容纳的大小，因此未安装任何内容。"
+          }
+        }
+      }
+    },
+    "The word data is version %@, which this XDict cannot read. Install the version that matches this release.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data is version %@, which this XDict cannot read. Install the version that matches this release."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该词数据是 %@ 版，此 XDict 无法读取。请安装与本版本匹配的词数据。"
           }
         }
       }
@@ -14773,6 +14933,23 @@
         }
       }
     },
+    "Version %@ · %@ records · sources: %@": {
+      "comment": "Word data: the pack's schema version, its record count and its sources",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %1$@ · %2$@ records · sources: %3$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本 %1$@ · %2$@ 条记录 · 来源：%3$@"
+          }
+        }
+      }
+    },
     "Voice": {
       "localizations": {
         "en": {
@@ -14997,6 +15174,38 @@
         }
       }
     },
+    "Word data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Word data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据"
+          }
+        }
+      }
+    },
+    "Word data is installed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Word data is installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据已安装。"
+          }
+        }
+      }
+    },
     "Words in any writing system": {
       "comment": "Hover's scripts, when the dictionaries could hold any",
       "localizations": {
@@ -15174,6 +15383,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "XDict 已转换这部词典，但未能添加它。请再试一次。"
+          }
+        }
+      }
+    },
+    "XDict could not reach the folder it shares with its dictionary service.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict could not reach the folder it shares with its dictionary service."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 无法访问它与词典服务共享的文件夹。"
           }
         }
       }

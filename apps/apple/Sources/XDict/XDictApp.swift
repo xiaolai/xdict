@@ -79,6 +79,11 @@ struct XDictApp: App {
     }
     /// The app's one client of its dictionary service: one connection at a time, made on demand (`ServiceClient`).
     static var service: ServiceClient { setup.service }
+
+    /// **The word data Settings installs** (plan-word-exploration WI-5): restored at launch from the app group's
+    /// container, so exploration works before Settings is ever opened. The container is the shared one, never a folder
+    /// of the app's own: the service's sandbox can read only that.
+    @MainActor static let wordData = WordDataModel(backend: service, container: { SharedContainer.wordPack() })
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
     @MainActor static let library = Library(store: LibraryStore(directory: setup.libraryDirectory), backend: service)
     /// **The reading history** (ADR-0023): the drawer's days and the one place a reading is recorded. The core owns every
@@ -177,7 +182,8 @@ struct XDictApp: App {
     @MainActor @ViewBuilder static func settings(_ pane: SettingsTab) -> some View {
         switch pane {
         case .dictionaries:
-            SettingsDictionaries(library: library, route: .shared, appleImport: appleImport, study: study)
+            SettingsDictionaries(library: library, route: .shared, appleImport: appleImport, study: study,
+                                 wordData: wordData)
                 .task { await LibraryLaunch.once() }
         case .readingAndSpeech:
             ReadingSettings()
@@ -373,6 +379,10 @@ enum LibraryLaunch {
         // **Announcements from here on** (audit-fix 2026-10-22 finding 13): the launch's own settle has been read, and
         // the index is given its launch run below; a later import, removal or disable is announced through this.
         XDictApp.library.didSettle = { XDictApp.spotlightReconcile() }
+        // Plan-word-exploration WI-5: the service starts holding no pack, so the container's is attached — **not
+        // awaited**: attaching parses 183 MB in the service and the launch's own work must not wait for it. A panel
+        // asked for a pack mode in the first seconds says what Settings will then correct.
+        if XDictApp.setup.isReader { Task { await XDictApp.wordData.restore() } }
         // ADR-0011 decisions 7 and 9: the launch sweep, then each Apple dictionary compared with its installed bundle.
         if XDictApp.setup.isReader { XDictApp.appleImporter.sweep() }
         // **The index follows the library when the reader asked for it** (audit-fix 2026-10-22): the switch is kept

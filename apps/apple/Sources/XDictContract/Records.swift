@@ -292,6 +292,33 @@ public struct ExploreAnswer: Codable, Hashable, Sendable {
     }
 }
 
+/// **The word pack installed on this Mac** (contract 19): its schema version, the language its words are, the sources
+/// it was built from and how many records it holds. The Settings row says all of it, so a reader can tell one release
+/// of the pack from another without opening the file.
+public struct WordPackInfo: Codable, Hashable, Sendable {
+    public let version: UInt32
+    public let language: String
+    public let sources: [String]
+    public let records: UInt64
+
+    public init(version: UInt32, language: String, sources: [String], records: UInt64) {
+        self.version = version
+        self.language = language
+        self.sources = sources
+        self.records = records
+    }
+}
+
+/// The pack after a call: the one installed, or none when none is (`clearWordPack`, or a Mac that never installed one).
+/// Its own record rather than an optional answer, since an absent pack is an answer and not a missing one.
+public struct WordPackState: Codable, Hashable, Sendable {
+    public let pack: WordPackInfo?
+
+    public init(pack: WordPackInfo?) {
+        self.pack = pack
+    }
+}
+
 public struct Words: Codable, Hashable, Sendable {
     public let edition: Edition
     public let words: [String]

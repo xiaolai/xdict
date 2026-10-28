@@ -39,6 +39,16 @@ public enum AppGroup {
         container.appending(path: "AppleImports", directoryHint: .isDirectory)
     }
 
+    /// **Where the installed word pack lives** (plan-word-exploration WI-5): `WordPack/` in the shared container, one file,
+    /// `xdict-words-en.jsonl`. The app copies the reader's chosen file in — its sandbox cannot read outside it, and the
+    /// service's sandbox cannot read the reader's folder — and the service hands that path to the core.
+    public static func wordPack(in container: URL) -> URL {
+        container.appending(path: "WordPack", directoryHint: .isDirectory)
+    }
+
+    /// The installed pack's file name, the same on every Mac: what `wordPack(in:)` holds and what the service is given.
+    public static let wordPackFile = "xdict-words-en.jsonl"
+
     /// **Where one sync pass's files meet** (plan §2.6): the app copies the reader's folder's logs into `Sync/in` — the
     /// service's sandbox cannot read that folder — the service merges them and writes this device's log to `Sync/out`,
     /// and the app copies it back. Both processes hold the group.

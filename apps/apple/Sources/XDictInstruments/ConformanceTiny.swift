@@ -33,6 +33,7 @@ extension ConformanceScenario {
         }
         await questions(x, dict: dict, edition: i.edition, render: render, &c)
         await displayOptions(x, dir: dir, tiny: dict, &c)
+        await explore(x, dict: dict, &c)
         let second = await byteSource(x, dir: dir, first: dict, render: render, &c)
         await errors(x, dir: dir, second: second, render: render, &c)
         await lifecycle(x, dict: dict, second: second, &c)
@@ -116,6 +117,50 @@ extension ConformanceScenario {
             if case .health(let health) = d.answer { return Projection.health(health) }
             return "\(d.answer)"
         })
+    }
+
+    /// **Word exploration** (contract 16, plan-word-exploration WI-4): the answer's state, the words it found — sorted,
+    /// so the check stands on the dictionary's headwords and not on the catalog's order — and whether a budget cut it.
+    private func explore(_ x: [String: Any], dict: DictId, _ c: inout Comparisons) async {
+        for (n, q) in ((x["explore"] as? [[String: Any]]) ?? []).enumerated() {
+            guard let mode = Self.exploreMode(q) else {
+                c.fail("explore[\(n)]: unknown mode \(q["mode"] ?? "none")")
+                continue
+            }
+            let got = await client.call(.explore(dicts: [dict], mode: mode, text: q["text"] as? String ?? "",
+                                                 offset: Self.uint32(q["offset"]) ?? 0,
+                                                 limit: Self.uint32(q["limit"]) ?? 0))
+            let actual = P.outcome(got) { d -> Any in
+                guard case .explored(let answer) = d.answer else { return ["answer": "\(d.answer)"] }
+                return ["state": Self.exploreState(answer.state), "words": answer.rows.map(\.word).sorted(),
+                        "cut": answer.exhausted]
+            }
+            var expected: [String: Any] = [:]
+            for key in ["state", "words", "cut"] where q[key] != nil { expected[key] = q[key] }
+            c.compare("explore[\(n)]", expected, actual)
+        }
+    }
+
+    static func exploreMode(_ q: [String: Any]) -> ExploreMode? {
+        switch q["mode"] as? String {
+        case "endsWith": .endsWith
+        case "rhyme": .rhyme
+        case "inflections": .inflections
+        case "derivations": .derivations
+        case "synonyms": .synonyms
+        case "antonyms": .antonyms
+        case "fuzzy": .fuzzy(maxDistance: Self.uint32(q["maxDistance"]).map { UInt8(clamping: $0) } ?? 2)
+        case "roots": .roots(maxDepth: Self.uint32(q["maxDepth"]).map { UInt8(clamping: $0) } ?? 12)
+        default: nil
+        }
+    }
+
+    static func exploreState(_ state: ExploreState) -> String {
+        switch state {
+        case .answered: "answered"
+        case .noData: "noData"
+        case .unknown: "unknown"
+        }
     }
 
     static func resource(_ outcome: ClientOutcome) -> Any {

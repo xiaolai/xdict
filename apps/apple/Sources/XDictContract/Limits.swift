@@ -69,7 +69,8 @@ public enum Limits {
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .examples, .examplesBuilt,
              .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations: return nil
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked:
+            return nil
         }
     }
 
@@ -146,6 +147,12 @@ public struct Credits: Hashable, Sendable {
 /// sent). Not on the wire, so these may be retuned without a contract bump. Each is a warm service's: the first call on
 /// a new connection waits at least `coldStart`, because that call starts the service.
 public enum Deadlines {
+    /// **The one deadline above the fifteen-second ceiling for a short call** (plan-word-exploration WI-5): the word
+    /// data's install reads and validates 183 MB — eighteen seconds of reading alone at ten megabytes a second, before
+    /// the loader parses a line of it.
+    public static let installDeadline: Duration = .seconds(60)
+
+
     /// **10 s, the floor for the first call on a new connection**: it launches the service, and its very first launch
     /// creates the sandbox container. Not measured (`measurements/2026-10-14-macos-xpc`, "Open": the relaunch time);
     /// WI-2's handshake deadline, kept until WI-3 measures it.
@@ -187,6 +194,12 @@ public enum Deadlines {
         // dictionaries (1.37 M headwords), a collocation store one pass over that edition's records. Both sit under the
         // house ceiling for a short call; later pages read what the first built.
         case .explore, .collocates: .seconds(15)
+        // **Installing the pack reads and validates the whole 183 MB file** (plan-word-exploration WI-5): the loader's own
+        // parse, with no index and no hash; seconds on the build host, and `installDeadline` leaves room for a slow
+        // external disk. The call reports no progress, so no silence bound can reset it. Reporting and removing touch
+        // no file.
+        case .setWordPack: installDeadline
+        case .wordPack, .clearWordPack: .seconds(5)
         case .entry, .entryText: .seconds(10)
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.
