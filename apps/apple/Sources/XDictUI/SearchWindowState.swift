@@ -560,6 +560,11 @@ public final class SearchWindowState {
     /// **The store decides whether a replacement is needed** (audit rounds 1–4, 2026-10-26): the pane used to check
     /// first and write second, and a note saved between the two was replaced without a question. `replacing` is the
     /// reader's answer to the question the store itself asked.
+    /// **Before the Explore panel asks anything** (audit, 2026-10-28): a dictionary service that has restarted holds no
+    /// word pack, and Settings would still say it is installed. The app attaches the container's pack again here, where
+    /// the reader is about to ask a mode that needs it.
+    @ObservationIgnored public var prepareWordData: (@MainActor () async -> Void)?
+
     @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String, _ replacing: Bool) async -> StudyModel.NoteSave)?
 
     /// **Saves the answer the reader asked to keep** on the entry it was composed from. The caller builds the text — the

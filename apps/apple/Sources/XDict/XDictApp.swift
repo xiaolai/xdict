@@ -249,6 +249,9 @@ struct XDictApp: App {
         // explicit tap; a note already on the entry is replaced only after the pane asks.
         // **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): the pane no longer asks first, so a note
         // saved between the question and the write cannot be replaced unseen.
+        // **The pack comes back with the panel** (audit, 2026-10-28): `restore()` asks the service what it holds and
+        // attaches the container's file only when it holds none, so this costs one short call when all is well.
+        state.prepareWordData = { await XDictApp.wordData.restore() }
         state.noteSaver = { entry, text, name, replacing in
             await XDictApp.study.saveNote(entry: entry, text: text, name: name, replacing: replacing)
         }

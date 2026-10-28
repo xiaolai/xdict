@@ -11,12 +11,18 @@ struct ExploreButton: View {
     let dicts: @MainActor () -> [DictId]
     let open: @MainActor (ExploreRow) -> Void
     let openEntry: @MainActor (ExploreRow) -> Void
+    let prepare: @MainActor () async -> Void
     @State private var showing = false
 
     var body: some View {
         Button {  // placement: P3
-            model.show(model.tab, word: word(), dicts: dicts())
-            showing = true
+            // **The panel asks only once the pack is where the service can see it**: a service that restarted holds
+            // none, and a mode that needs one would answer "not installed" over a profile that says otherwise.
+            Task { @MainActor in
+                await prepare()
+                model.show(model.tab, word: word(), dicts: dicts())
+                showing = true
+            }
         } label: {
             Label("Explore", systemImage: "point.3.connected.trianglepath.dotted")
         }

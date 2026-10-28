@@ -169,7 +169,8 @@ public struct SearchWindow: View {
                       forward: { state.model.forward() }, pronounce: { state.pronounceSelectionOrShown() },
                       explore: window.explore, exploreWord: { window.exploreWord }, exploreDicts: { window.exploreDicts },
                       exploreOpen: { window.openExplored($0) },
-                      exploreOpenEntry: { window.openExploredEntry($0) })
+                      exploreOpenEntry: { window.openExploredEntry($0) },
+                      explorePrepare: { await window.prepareWordData?() })
     }
 
     /// The pane's width now, clamped: Settings may hold any number, geometry takes only these.

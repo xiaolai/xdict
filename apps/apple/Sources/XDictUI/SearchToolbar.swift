@@ -21,6 +21,8 @@ struct SearchToolbar: ToolbarContent {
     var exploreOpen: @MainActor (ExploreRow) -> Void = { _ in }
     /// The row's other route: the entry that said it, opened by its own key (audit, 2026-10-28).
     var exploreOpenEntry: @MainActor (ExploreRow) -> Void = { _ in }
+    /// Run before the panel's first ask, so a restarted service gets its pack back.
+    var explorePrepare: @MainActor () async -> Void = {}
 
     var body: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
@@ -50,7 +52,7 @@ struct SearchToolbar: ToolbarContent {
         if let explore {
             ToolbarItem(placement: .navigation) {
                 ExploreButton(model: explore, word: exploreWord, dicts: exploreDicts, open: exploreOpen,
-                              openEntry: exploreOpenEntry)
+                              openEntry: exploreOpenEntry, prepare: explorePrepare)
             }
             .visibilityPriority(.low)
         }
