@@ -37,7 +37,10 @@ struct ExplorePopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s) {
-            Text(word()).font(Tokens.TextRole.headline.font).lineLimit(1)
+            // **The heading names the word the rows are about** (audit, 2026-10-28): the live search word changes as the
+            // reader keeps typing, and a page for the last one shown would then be labelled with a word it never asked
+            // about — the reader could open a row believing it belonged to the new word.
+            Text(model.word.isEmpty ? word() : model.word).font(Tokens.TextRole.headline.font).lineLimit(1)
             Picker("Explore", selection: Binding(get: { model.tab },
                                                  set: { model.show($0, word: word(), dicts: dicts()) })) {
                 ForEach(ExploreModel.Tab.allCases) { tab in
