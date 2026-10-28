@@ -592,6 +592,9 @@ impl Core {
         let opened = self.dict(dict)?;
         let key = format!("{handle}:{}", opened.edition);
         if let Some(held) = self.colloc.lock().ok().and_then(|held| held.get(&key).cloned()) {
+            // **A store is answered only for the file it was built from** (audit, 2026-10-28): the key holds the handle
+            // and the edition, and neither changes when the file behind them is rewritten in place.
+            opened.mdx_source.unchanged()?;
             return Ok(held);
         }
         let store = Arc::new(crate::collocations::Store::build(&opened.mdx, dict, &opened.edition)?);
@@ -681,17 +684,26 @@ impl Core {
     /// it again and nothing else does.
     fn explorer_for(&self, dicts: &[String]) -> Result<Arc<crate::words::WordExplorer>, CoreError> {
         let mut key = format!("pack:{};", self.pack_serial.load(Ordering::SeqCst));
+        let mut sources: Vec<Arc<Dict>> = Vec::new();
         for dict in dicts {
             let handle = self.parse_handle(dict)?;
             key.push_str(&handle.to_string());
             key.push(':');
-            key.push_str(&self.dict(dict)?.edition);
+            let opened = self.dict(dict)?;
+            key.push_str(&opened.edition);
             key.push(';');
+            sources.push(opened);
         }
         if let Ok(held) = self.explore.lock()
             && let Some(cached) = held.as_ref()
             && cached.key == key
         {
+            // **The files behind the cache are checked before it answers** (audit, 2026-10-28): the key names handles
+            // and editions, and an edition is the hash of what was imported — a file rewritten in place since keeps its
+            // key, so the cached catalog would answer for bytes no longer on disk.
+            for opened in &sources {
+                opened.mdx_source.unchanged()?;
+            }
             return Ok(Arc::clone(&cached.explorer));
         }
         // **Built outside the lock**: the build reads every key of every dictionary and takes seconds; a second call
