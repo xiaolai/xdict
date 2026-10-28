@@ -171,6 +171,8 @@ final class PaneController: NSWindowController, NSWindowDelegate {
         window.toolbar = toolbar
         window.toolbarStyle = .unified
         self.toolbar = modes
+        // A question chosen from a sheet or a menu moves the segments with it.
+        state.meaningModeDidChange = { [weak modes] mode in modes?.selected(mode) }
         // **The window's own surface, corners and shadow** (owner, 2026-10-26, after the toolbar's buttons drew over
         // nothing at the pane's top edge): a titled window carries its toolbar band, its rounded corners and its shadow
         // itself, so the pane's surface reaches under the toolbar. The content no longer paints a shape of its own.
@@ -276,8 +278,16 @@ final class PaneController: NSWindowController, NSWindowDelegate {
 final class PaneToolbar: NSObject, NSToolbarDelegate {
     static let modes = NSToolbarItem.Identifier("meaning.modes")
     private let state: SearchWindowState
+    /// **The group as built**, kept so a mode chosen elsewhere moves the segments too (audit, 2026-10-28): the toolbar
+    /// is made once and reused, so the selection was whatever it was when the pane was first drawn.
+    private weak var group: NSToolbarItemGroup?
 
     init(state: SearchWindowState) { self.state = state }
+
+    /// The segments follow the state wherever the question was chosen — the group itself, a sheet, a menu.
+    func selected(_ mode: MeaningAskMode) {
+        if let group { group.selectedIndex = MeaningAskMode.allCases.firstIndex(of: mode) ?? 0 }
+    }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [Self.modes] }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [Self.modes] }
@@ -293,6 +303,7 @@ final class PaneToolbar: NSObject, NSToolbarDelegate {
         group.label = String(localized: "Question")
         group.paletteLabel = String(localized: "Question")
         group.selectedIndex = modes.firstIndex(of: state.meaning.chosenMode) ?? 0
+        self.group = group
         for (index, each) in modes.enumerated() {
             group.subitems[index].toolTip = each.helpText
         }
