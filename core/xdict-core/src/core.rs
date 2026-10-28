@@ -2629,6 +2629,9 @@ fn word_error(error: crate::words::WordError) -> CoreError {
 /// **A refused word pack keeps the sentence the loader wrote** (plan-word-exploration WI-5): a version this core does
 /// not read names both versions, a damaged one names its line, and Settings shows it as it is. A size fault says what
 /// it is rather than being flattened into a generic refusal.
+// **Not on the Web**, which has no file to install a pack from (`attach_word_pack` is not compiled there), and a
+// dead function fails a build whose warnings are errors.
+#[cfg(not(target_family = "wasm"))]
 fn word_pack_error(error: crate::words::WordError) -> CoreError {
     use crate::words::WordError as W;
     match error {
