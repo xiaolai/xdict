@@ -10,6 +10,7 @@ struct ExploreButton: View {
     let word: @MainActor () -> String
     let dicts: @MainActor () -> [DictId]
     let open: @MainActor (ExploreRow) -> Void
+    let openEntry: @MainActor (ExploreRow) -> Void
     @State private var showing = false
 
     var body: some View {
@@ -23,7 +24,7 @@ struct ExploreButton: View {
         .help(Text("Rhymes, word families, roots and forms of this word"))
         .accessibilityIdentifier("toolbar.explore")
         .popover(isPresented: $showing, arrowEdge: .bottom) {
-            ExplorePopover(model: model, word: word, dicts: dicts, open: open)
+            ExplorePopover(model: model, word: word, dicts: dicts, open: open, openEntry: openEntry)
         }
     }
 }
@@ -34,6 +35,7 @@ struct ExplorePopover: View {
     let word: @MainActor () -> String
     let dicts: @MainActor () -> [DictId]
     let open: @MainActor (ExploreRow) -> Void
+    let openEntry: @MainActor (ExploreRow) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s) {
@@ -77,9 +79,22 @@ struct ExplorePopover: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // **The other route** (audit, 2026-10-28): the click looks the row's word up; this opens the entry that
+            // said the relation, which is what a reader wants when they are checking the claim rather than the word.
+            .contextMenu {
+                Button { openEntry(row) } label: { Text(ExploreSentences.openEntry) }  // placement: explore-row
+            }
         }
         .listStyle(.plain)
         .frame(maxHeight: Tokens.Window.exploreListHeight)
         .accessibilityIdentifier("explore.rows")
+        // **The next page, when there is one** (audit, 2026-10-28): it was discarded, so a long answer stopped at the
+        // first hundred rows with nothing saying more existed.
+        if model.page.next != nil, !model.page.loading {
+            Button { model.more(dicts: dicts()) } label: { Text(ExploreSentences.more) }  // placement: explore-row
+                .buttonStyle(.plain)
+                .font(Tokens.TextRole.callout.font)
+                .accessibilityIdentifier("explore.more")
+        }
     }
 }

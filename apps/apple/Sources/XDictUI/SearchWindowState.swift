@@ -39,6 +39,15 @@ public final class SearchWindowState {
         model.submit(row.word)
     }
 
+    /// **The row's evidence entry, opened exactly** (audit, 2026-10-28): the key and dictionary that said the relation,
+    /// rather than a search for the row's word. The row's click keeps looking the word up — a reader who wants `make`
+    /// from `make a decision` is served by that — and this is the other route, on the row's context menu.
+    func openExploredEntry(_ row: ExploreRow) {
+        guard let source = model.known.first(where: { $0.handle == row.dict }), source.enabled else { return }
+        model.setScope(.one(source.id))
+        model.follow(row.entry.key, anchor: nil, from: source.id)
+    }
+
     /// The entry's sounds and the system voice (WI-7): what the window's notice shows.
     public let pronunciation: Pronunciation
     /// What the dictionary service answered at launch: shown when it did not.
@@ -155,12 +164,18 @@ public final class SearchWindowState {
 
     /// **The reader chose another question** (contract 6; plan-context-tools WI-8): the pane switches and the choice is
     /// remembered for the next window. The previous answer goes; the sentence stays.
+    /// **Told whenever the question changes, wherever it changed** (audit, 2026-10-28): the answer pane's toolbar is a
+    /// native group made once, so it cannot observe the state itself and would otherwise keep the selection it was
+    /// born with.
+    @ObservationIgnored public var meaningModeDidChange: (@MainActor (MeaningAskMode) -> Void)?
+
     public func chooseMeaningMode(_ mode: MeaningAskMode) {
         mode.store()
         // The pending phrase tap belonged to the previous question; its late answer must not land under this one.
         failedPhraseTap = nil
         phraseAskSerial += 1
         meaning.choose(mode)
+        meaningModeDidChange?(mode)
     }
 
     /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists

@@ -19,6 +19,8 @@ struct SearchToolbar: ToolbarContent {
     var exploreWord: @MainActor () -> String = { "" }
     var exploreDicts: @MainActor () -> [DictId] = { [] }
     var exploreOpen: @MainActor (ExploreRow) -> Void = { _ in }
+    /// The row's other route: the entry that said it, opened by its own key (audit, 2026-10-28).
+    var exploreOpenEntry: @MainActor (ExploreRow) -> Void = { _ in }
 
     var body: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
@@ -47,7 +49,8 @@ struct SearchToolbar: ToolbarContent {
         .visibilityPriority(.high)
         if let explore {
             ToolbarItem(placement: .navigation) {
-                ExploreButton(model: explore, word: exploreWord, dicts: exploreDicts, open: exploreOpen)
+                ExploreButton(model: explore, word: exploreWord, dicts: exploreDicts, open: exploreOpen,
+                              openEntry: exploreOpenEntry)
             }
             .visibilityPriority(.low)
         }

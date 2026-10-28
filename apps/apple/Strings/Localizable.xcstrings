@@ -1782,6 +1782,22 @@
         }
       }
     },
+    "A newer question replaced this one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A newer question replaced this one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有更新问题取代此问题。"
+          }
+        }
+      }
+    },
     "A server you name. XDict makes no promise about where it sends your text.": {
       "localizations": {
         "en": {
@@ -8999,6 +9015,22 @@
         }
       }
     },
+    "Open the Source Entry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Source Entry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开来源词条"
+          }
+        }
+      }
+    },
     "Opening": {
       "localizations": {
         "en": {
@@ -11768,6 +11800,22 @@
         }
       }
     },
+    "That question could not be answered.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That question could not be answered."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法回答该问题。"
+          }
+        }
+      }
+    },
     "The Keychain refused to remove the key (status %d).": {
       "localizations": {
         "en": {
@@ -11876,6 +11924,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "回答"
+          }
+        }
+      }
+    },
+    "The answer could not be read.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The answer could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取答案。"
           }
         }
       }
@@ -12104,18 +12168,34 @@
         }
       }
     },
-    "The dictionaries could not be searched: %@": {
+    "The dictionaries could not answer that question.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The dictionaries could not be searched: %@"
+            "value": "The dictionaries could not answer that question."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "词典无法检索：%@"
+            "value": "词典无法回答该问题。"
+          }
+        }
+      }
+    },
+    "The dictionaries took too long. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionaries took too long. Try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典响应太慢。请重试。"
           }
         }
       }
@@ -12276,6 +12356,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "词典服务未能提供这段录音。"
+          }
+        }
+      }
+    },
+    "The dictionary service is not answering. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary service is not answering. Try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典服务没有响应。请重试。"
+          }
+        }
+      }
+    },
+    "The dictionary service refused that question.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary service refused that question."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典服务拒绝了该问题。"
           }
         }
       }

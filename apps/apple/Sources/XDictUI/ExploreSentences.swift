@@ -5,6 +5,8 @@ import XDictSearch
 /// **The panel's words** (plan-word-exploration WI-3): the core carries labels, never sentences, so every sentence a
 /// reader reads is written here.
 enum ExploreSentences {
+    /// The row's second route: the entry the relation was read from (audit, 2026-10-28).
+    static let openEntry = LocalizedStringResource("Open the Source Entry")
     /// A tab's name.
     static func tab(_ tab: ExploreModel.Tab) -> LocalizedStringResource {
         switch tab {
@@ -53,9 +55,26 @@ enum ExploreSentences {
         }
     }
 
+    /// **What went wrong, in the reader's words** (audit, 2026-10-28): each kind says what the reader can do next, and
+    /// no Swift case name is ever shown.
+    static func failure(_ failure: ExploreFailure) -> LocalizedStringResource {
+        switch failure {
+        case .serviceUnavailable: "The dictionary service is not answering. Try again."
+        case .timedOut: "The dictionaries took too long. Try again."
+        case .refused: "The dictionary service refused that question."
+        case .undecodable: "The answer could not be read."
+        case .core: "The dictionaries could not answer that question."
+        case .superseded: "A newer question replaced this one."
+        case .other: "That question could not be answered."
+        }
+    }
+
+    /// The page's continuation, when the service says it holds more.
+    static let more = LocalizedStringResource("More")
+
     /// What an empty, an unanswered or a cut page says. **Never a bare blank**: each state names what happened.
     static func state(_ page: ExploreModel.Page, tab: ExploreModel.Tab, word: String) -> LocalizedStringResource? {
-        if let failure = page.failure { return LocalizedStringResource("The dictionaries could not be searched: \(failure)") }
+        if let failure = page.failure { return Self.failure(failure) }
         if page.loading { return "Looking…" }
         switch page.state {
         case .noData: return LocalizedStringResource("This needs the word data, which is not installed yet.")

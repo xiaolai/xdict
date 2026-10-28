@@ -44,8 +44,12 @@ public final class ExploreModel {
         public var state: ExploreState = .answered
         public var cut = false
         public var loading = false
-        /// What went wrong, in the shell's words; nil when nothing did.
-        public var failure: String?
+        /// The offset the service says the next page starts at, when it holds more than this page reached
+        /// (audit, 2026-10-28: it was discarded, so results past the first page vanished with nothing said).
+        public var next: UInt32?
+        /// What went wrong, as a kind the view words; nil when nothing did (audit, 2026-10-28: it was
+        /// `String(describing:)`, which showed a reader a Swift case).
+        public var failure: ExploreFailure?
     }
 
     public private(set) var tab: Tab = .rhymes
@@ -80,6 +84,13 @@ public final class ExploreModel {
         load(mode: mode, word: word, dicts: dicts)
     }
 
+    /// **One more page, when the service says there is one** (audit, 2026-10-28): the rows are appended, and the tab's
+    /// word is the word the pages already belong to.
+    public func more(dicts: [DictId]) {
+        guard let next = page.next, let mode = tab.mode else { return }
+        load(mode: mode, word: word, dicts: dicts, offset: next, appending: true)
+    }
+
     /// Asks again for the tab on screen — after the dictionaries changed, or on a retry.
     public func reload(dicts: [DictId]) {
         show(tab, word: word, dicts: dicts)
@@ -110,37 +121,71 @@ public final class ExploreModel {
                 }
                 self.page = Page(rows: rows)
             case .failure(let failure):
-                self.page = Page(failure: String(describing: failure))
+                self.page = Page(failure: ExploreFailure(failure))
             case .none:
                 self.page = Page()
             }
         }
     }
 
-    private func load(mode: ExploreMode, word: String, dicts: [DictId]) {
+    private func load(mode: ExploreMode, word: String, dicts: [DictId], offset: UInt32 = 0,
+                      appending: Bool = false) {
         generation += 1
         let mine = generation
         guard !dicts.isEmpty else {
             page = Page()
             return
         }
-        page = Page(loading: true)
+        page = appending ? page : Page(loading: true)
+        if appending { page.loading = true }
         let backend = self.backend
         let caller = self.caller
         let limit = self.limit
         Task { [weak self] in
             let pending = await backend.queue(
-                [.explore(dicts: dicts, mode: mode, text: word, offset: 0, limit: limit)], as: caller, superseding: true)
+                [.explore(dicts: dicts, mode: mode, text: word, offset: offset, limit: limit)], as: caller,
+                superseding: !appending)
             let outcome = await pending.first?.outcome()
             guard let self, mine == self.generation else { return }
             switch outcome?.explored {
             case .success(let answer):
-                self.page = Page(rows: answer.rows, state: answer.state, cut: answer.exhausted)
+                let rows = appending ? self.page.rows + answer.rows : answer.rows
+                self.page = Page(rows: rows, state: answer.state, cut: answer.exhausted, next: answer.next)
             case .failure(let failure):
-                self.page = Page(failure: String(describing: failure))
+                self.page = Page(failure: ExploreFailure(failure))
             case .none:
                 self.page = Page()
             }
+        }
+    }
+}
+
+/// **Why an exploration could not be answered, as a kind** (ADR-0007 decision 10): the service sends kinds and the view
+/// writes the sentences, so no Swift case name ever reaches a reader.
+public enum ExploreFailure: Equatable, Sendable {
+    /// The service is not there, or the connection has gone.
+    case serviceUnavailable
+    /// No answer by the call's deadline.
+    case timedOut
+    /// The service refused the call before it was made.
+    case refused
+    /// A reply that could not be read, or two contracts that differ.
+    case undecodable
+    /// The dictionaries themselves could not answer.
+    case core
+    /// A newer question replaced this one.
+    case superseded
+    case other
+
+    public init(_ failure: ClientFailure) {
+        switch failure {
+        case .wire(.interrupted), .wire(.invalidated): self = .serviceUnavailable
+        case .wire(.timedOut): self = .timedOut
+        case .wire(.refused), .needsFiles: self = .refused
+        case .wire(.undecodable), .wire(.contractMismatch): self = .undecodable
+        case .wire(.core), .reopenNeedsImport, .fileUnavailable: self = .core
+        case .superseded: self = .superseded
+        case .wire(.appleImport): self = .other
         }
     }
 }
