@@ -426,6 +426,13 @@ pub fn occurrences(file: &File, keys: &[usize]) -> Result<HashMap<usize, u32>, E
 /// scan runs only when that band held nothing — measured on the 24-dictionary corpus at 34 ms against 439 ms for the
 /// full scan (`examples/nearest_bench.rs`). Length is filtered before anything is folded, and an ASCII key is lowered
 /// without normalisation.
+/// The longest query a nearest-spelling pass will align: a "misspelling" of a longer one is not a spelling miss, and
+/// every cell it would add is 64 times the work of one character of a normal word.
+const MAX_NEAREST_QUERY_CHARS: usize = 64;
+/// The distance cells one pass may spend — about 40 ms of alignment on the build host — so a full scan of a 700,000-key
+/// file stops after a few thousand candidates instead of running to the end of it.
+const CELL_BUDGET: u64 = 64 * 1024 * 1024;
+
 pub fn nearest(file: &File, query: &str, max_distance: u8, limit: usize, out: &mut Vec<String>) -> Result<(), Error> {
     if max_distance == 0 || out.len() >= limit {
         return Ok(());
@@ -435,32 +442,44 @@ pub fn nearest(file: &File, query: &str, max_distance: u8, limit: usize, out: &m
     if wanted.is_empty() {
         return Ok(());
     }
+    if wanted.len() > MAX_NEAREST_QUERY_CHARS {
+        return Ok(());
+    }
     let max = usize::from(max_distance);
+    // **The scan pays for its alignment cells** (audit, 2026-10-28): a miss cost one distance computation per record
+    // with nothing bounding the product of the two lengths, and the full scan ran over every record of the file.
+    let mut cells = CELL_BUDGET;
     let mut found: Vec<(usize, usize)> = Vec::new();
-    let consider = |i: usize, found: &mut Vec<(usize, usize)>| -> Result<(), Error> {
+    let consider = |i: usize, found: &mut Vec<(usize, usize)>, cells: &mut u64| -> Result<bool, Error> {
         if !file.is_public(i)? {
-            return Ok(());
+            return Ok(true);
         }
         let key = file.key(i)?;
-        if key.chars().count().abs_diff(wanted.len()) > max {
-            return Ok(());
+        let len = key.chars().count();
+        if len.abs_diff(wanted.len()) > max {
+            return Ok(true);
         }
+        // Every cell an `osa` call would touch is charged before it is touched; the scan stops when none is left.
+        let charge = (wanted.len() as u64 + 1).saturating_mul(len as u64 + 1);
+        if charge > *cells {
+            return Ok(false);
+        }
+        *cells -= charge;
         let folded = if key.is_ascii() { key.to_ascii_lowercase() } else { unmark(&key).to_lowercase() };
         let chars: Vec<char> = folded.chars().collect();
         if let Some(distance) = osa(&wanted, &chars, max) {
             found.push((distance, i));
         }
-        Ok(())
+        Ok(true)
     };
     if let Some(first) = query.chars().next() {
-        file.prefixed(&first.to_string(), |i| {
-            consider(i, &mut found)?;
-            Ok(true)
-        })?;
+        file.prefixed(&first.to_string(), |i| consider(i, &mut found, &mut cells))?;
     }
     if found.is_empty() {
         for i in 0..file.len() {
-            consider(i, &mut found)?;
+            if !consider(i, &mut found, &mut cells)? {
+                break;
+            }
         }
     }
     found.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
