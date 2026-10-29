@@ -60,10 +60,10 @@ public struct GeneralSettings: View {
                 }
                 Toggle(isOn: $showsInDock) {
                     Text("Show XDict in the Dock")
-                    Text("Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon.")
+                    Text("Off, the Dock icon comes with a dictionary window and goes when the last one closes; with no window XDict waits in the menu bar, the shortcut, the Service and hover with it. Quit it from that icon.")
                 }
                 .accessibilityIdentifier("show-in-dock")
-                .onChange(of: showsInDock) { DockVisibility(defaults: defaults).apply() }
+                .onChange(of: showsInDock) { DockPresence.shared.apply() }
                 if let failure = login.failure {
                     // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
                     VStack(alignment: .leading, spacing: Tokens.Space.xxs) {

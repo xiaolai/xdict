@@ -366,6 +366,9 @@ struct MainWindow: View {
                 made.placeCanBeDrawn()
             }
         }
+        // **A dictionary window puts XDict in the Dock while it is open** (owner, 2026-10-29: "when dictionary main
+        // window is opening, the dock icon should show up"), and takes it away when the last one closes.
+        .background(DockPresenceProbe())
         // **A Spotlight result opens its word here** (ADR-0028 decision 4): the item's identifier carries the word, and
         // the window looks it up exactly as the reader typing it would.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
@@ -436,9 +439,10 @@ enum LibraryLaunch {
 /// Starts lookup from anywhere once the app has finished launching: the shortcut, the Service, the panel.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // **The reader's Dock choice, before the first window draws** (owner, 2026-10-27): off means an accessory app — no
-        // Dock icon, the menu bar's icon instead — and a regular app only when the reader asked for one.
-        DockVisibility(defaults: .standard).apply()
+        // **The reader's Dock choice, before the first window draws** (owner, 2026-10-27): off means a menu-bar app with
+        // no Dock icon of its own, and the main window that opens at launch brings one while it is open (owner,
+        // 2026-10-29; `DockPresenceProbe`).
+        DockPresence.shared.apply()
         // Main windows take tabs, as Apple's Dictionary's do (parity P32, P37): File ▸ New Tab and the Window menu's
         // tab items.
         NSWindow.allowsAutomaticWindowTabbing = true

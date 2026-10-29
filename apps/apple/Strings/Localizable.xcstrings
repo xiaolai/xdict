@@ -8584,22 +8584,6 @@
         }
       }
     },
-    "Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭时，XDict 只驻留在菜单栏：窗口关掉也继续运行，快捷键、系统服务与悬停取词照常工作。要退出，请用菜单栏图标里的「退出」。"
-          }
-        }
-      }
-    },
     "Off, only the sentence around the word is sent — to every source, one on this Mac included.": {
       "localizations": {
         "en": {
@@ -8612,6 +8596,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭时只发送单词所在的句子；此规则适用于所有来源，包括这台 Mac 上的服务。"
+          }
+        }
+      }
+    },
+    "Off, the Dock icon comes with a dictionary window and goes when the last one closes; with no window XDict waits in the menu bar, the shortcut, the Service and hover with it. Quit it from that icon.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off, the Dock icon comes with a dictionary window and goes when the last one closes; with no window XDict waits in the menu bar, the shortcut, the Service and hover with it. Quit it from that icon."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时，程序坞图标随词典窗口出现，最后一个窗口关闭时消失；没有窗口时 XDict 留在菜单栏，快捷键、服务与悬停照常。请从菜单栏图标退出。"
           }
         }
       }
