@@ -579,6 +579,8 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         onContentHeightChanged?()
         onFramesChanged?()
         reportSources()
+        // The section is settled now: a landing that was waiting on it must not wait for a document that is not coming.
+        landIfReady()
     }
 
     /// Makes the frames the viewport wants (or every frame, for find); the first refusal stops it.
@@ -610,6 +612,10 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 pane.view.configuration.userContentController.add(self, contentWorld: EntryPane.world,
                                                                   name: Self.scrollHandler)
                 section.stand(.loading, saying: String(localized: EntrySentences.pageLoading(section.name)))
+                pane.onLoadFailed = { [weak self, weak section, weak pane] _ in
+                    guard let self, let section, let pane, section.pane === pane else { return }
+                    self.sectionFailed(section)
+                }
                 let reference = section.item.reference
                 Task { @MainActor [weak self, weak section] in
                     // **A frame that could not be given its entry says so** (owner, 2026-10-29): `show` answers false
@@ -743,7 +749,8 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
 
     /// Lands at the pending offset once every frame made so far has loaded (their heights decide where it is).
     private func landIfReady() {
-        guard let target = pendingOffset, sections.allSatisfy({ $0.pane == nil || $0.finished }) else { return }
+        guard let target = pendingOffset,
+              sections.allSatisfy({ $0.pane == nil || $0.finished || $0.failed }) else { return }
         pendingOffset = nil
         document.layoutSubtreeIfNeeded()
         scrollTo(target)
@@ -980,7 +987,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         // loop's own check never ran in that case, and a cancelled print or reveal went on to act.
         if Task.isCancelled { return .cancelled }
         let deadline = ContinuousClock.now + .seconds(2)
-        while sections.contains(where: { $0.pane != nil && !$0.finished }) {
+        while sections.contains(where: { $0.pane != nil && !$0.finished && !$0.failed }) {
             if Task.isCancelled { return .cancelled }
             guard ContinuousClock.now < deadline else { return .timedOut }
             do {
@@ -997,15 +1004,22 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     /// The whole page for print: every frame made and loaded, each expanded one drawn (a PDF of its web view, as
     /// shown) under its dictionary's name; `nil` when a frame could not be made.
     func printView() async -> NSView? {
+        // **The page asked for is the page printed** (audit 2026-10-29): each await below can span a lookup that shows
+        // another page, and the print must draw the one it started on or nothing, never the replacement.
+        let mine = pageGeneration
         if let refusal = materialize(all: true) {
             onRefusal?(refusal)
             return nil
         }
         if case .loaded = await loaded() {} else { return nil }
+        guard mine == pageGeneration else {
+            EntryLog.logger.error("print: the page changed while its frames loaded")
+            return nil
+        }
         let drawn = await withLightFrames {
             await printDrawings()
         }
-        guard let (frames, collapsed, images) = drawn else { return nil }
+        guard let (frames, collapsed, images) = drawn, mine == pageGeneration else { return nil }
         let plan = EntryPrintPlan.layout(frames, collapsed: collapsed)
         guard !plan.isEmpty, plan.count == images.count else {
             EntryLog.logger.error("print: \(plan.count) sections planned for \(images.count) drawings")

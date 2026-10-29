@@ -62,7 +62,8 @@ struct ExplorePopover: View {
     }
 
     @ViewBuilder private var rows: some View {
-        if let sentence = ExploreSentences.state(model.page, tab: model.tab, word: word()) {
+        if let sentence = ExploreSentences.state(model.page, tab: model.tab,
+                                                  word: model.word.isEmpty ? word() : model.word) {
             Text(sentence)
                 .font(Tokens.TextRole.callout.font)
                 .foregroundStyle(.secondary)

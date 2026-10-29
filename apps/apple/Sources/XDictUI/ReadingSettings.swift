@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictEntryView
+import XDictTokens
 
 /// **Reading & Speech, in Settings** (⌘,; ADR-0012 d.1): the reading style's accent, the one colour a dictionary's
 /// coloured text is drawn in (owner, 2026-10-16), an open entry taking a new choice at once; then the speech rows
@@ -89,9 +90,9 @@ public struct ReadingSettings: View {
 
     static func swatch(_ accent: EntryReadingFrame.Accent) -> Color {
         switch accent {
-        case .teal: .teal
-        case .red: .red
-        case .indigo: .indigo
+        case .teal: Tokens.Tint.teal.color
+        case .red: Tokens.Tint.red.color
+        case .indigo: Tokens.Tint.indigo.color
         }
     }
 

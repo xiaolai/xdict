@@ -19,12 +19,17 @@ public struct EntryPageItem: Sendable {
 
     /// What makes two items the same frame: the same dictionary, open under the same binding, showing the same record.
     /// A frame whose identity holds is kept as it is when the page is shown again (another dictionary answered).
-    var identity: Identity { Identity(id: id, binding: content.binding, reference: reference) }
+    var identity: Identity {
+        Identity(id: id, binding: content.binding, reference: reference, language: content.language)
+    }
 
     struct Identity: Hashable {
         let id: UUID
         let binding: EntryBinding
         let reference: EntryReference
+        /// **The language the frame's document is set in** (audit 2026-10-29): correcting a dictionary's language must draw
+        /// a new frame, or the page keeps the leading of the language the reader replaced.
+        let language: String?
     }
 }
 

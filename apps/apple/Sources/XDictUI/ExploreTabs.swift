@@ -52,8 +52,10 @@ struct ChipWrapLayout: Layout {
         let width = rows.map { ChipWrap.width(of: $0, sizes: sizes, gap: gap) }.max() ?? 0
         let height = rows.map { ChipWrap.height(of: $0, sizes: sizes) }.reduce(0, +)
             + gap * CGFloat(max(rows.count - 1, 0))
-        // A proposal wider than the chips is the panel's to take: the row is left-aligned in it.
-        return CGSize(width: proposal.width ?? width, height: height)
+        // A proposal wider than the chips is the panel's to take: the row is left-aligned in it. A proposal that is
+        // absent — or infinite, as a maximum-size measurement asks — gets the chips' own width, never infinity.
+        let finite = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        return CGSize(width: finite ?? width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

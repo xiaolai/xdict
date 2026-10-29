@@ -41,6 +41,13 @@ public struct EntryFindResult: Equatable, Sendable {
 /// delegates, and the two WebKit switches read back off on the preferences it is made with.
 @MainActor
 final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    /// **Told when a load failed after `show` answered yes** (audit 2026-10-29): WebKit's failure is the only word that a
+    /// document will never arrive, and without it a frame said "Loading…" for as long as it stayed on screen.
+    var onLoadFailed: ((EntryReference) -> Void)?
+
+    /// The language this pane's content is written in, as the content declares it.
+    var contentLanguage: String? { content.language }
+
     /// The shell's own scripts run here; the page cannot reach them.
     static let world = WKContentWorld.world(name: "xdict-entry")
 
@@ -514,6 +521,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private func route(_ url: String, activatedByALink: Bool) {
         // The document the reader clicked in, not the one a newer `show` is already fetching.
         guard let reference = documentReference ?? reference else { return }
+        let askedIn = generation
         Task { @MainActor in
             let link: EntryLink
             do {
@@ -524,7 +532,11 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
             }
             let action = EntryLinkAction.for(link, activatedByALink: activatedByALink)
             host?.record(.linkRouted(url: url, action: action.name))
-            guard !closed else { return }
+            // The pane may have moved to another document while the link was being resolved: the answer belongs to the
+            // document it was asked from, never to the one showing now.
+            // **A -> B -> A is two documents** (audit 2026-10-29, verification round 2): the reference alone cannot tell
+            // them apart, so the generation the link was asked in must still be the pane's.
+            guard !closed, documentReference == reference, generation == askedIn else { return }
             switch action {
             case .scroll(let anchor): scroll(to: anchor)
             case .askReader(let remote): host?.askReader(remote, from: self)
@@ -532,6 +544,22 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
             case .lookup, .sound, .speak: host?.perform(action, from: self)
             }
         }
+    }
+
+    /// A navigation that never became the document: refused by the network, the scheme handler or WebKit itself. A
+    /// cancelled one is the `show` that superseded it, and says nothing about the document now asked for.
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation?, withError error: Error) {
+        loadFailed(error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation?, withError error: Error) {
+        loadFailed(error)
+    }
+
+    private func loadFailed(_ error: Error) {
+        guard !closed, (error as NSError).code != NSURLErrorCancelled, let reference else { return }
+        host?.record(.documentFailed(reference, "navigation: \(error)"))
+        onLoadFailed?(reference)
     }
 
     // MARK: - WKUIDelegate

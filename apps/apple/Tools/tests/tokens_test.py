@@ -333,6 +333,24 @@ class Check(unittest.TestCase):
                 want = expected if isinstance(expected, list) else [expected]
                 self.assertEqual(self.kinds(swift=code + "\n")[0], want)
 
+    def test_what_is_not_a_design_value_is_not_seen(self):
+        """The two false positives the audit of 2026-10-29 found: an animation's `value:` observation, and the statement
+        after an assignment that happens to sit within a fixed window."""
+        for code in ["x.animation(.default, value: count == 2)",
+                     "p.lineWidth = 0\nlet next = 7"]:
+            with self.subTest(code=code):
+                found, _ = self.kinds(swift=code + "\n")
+                self.assertEqual(found, [], f"reported a design value in {code!r}")
+
+    def test_a_multiline_assignment_still_sees_its_number(self):
+        # The statement-spillover fix stopped at the newline and lost `lineWidth =\n 2` (verification 2026-10-29).
+        found, _ = self.kinds(swift="p.lineWidth =\n    2\n")
+        self.assertEqual(found, [("line-width", "2")])
+
+    def test_the_animation_still_sees_its_own_numbers(self):
+        found, _ = self.kinds(swift="x.animation(.easeOut(duration: 0.2), value: step)\n")
+        self.assertEqual(found, [("motion", "0.2")])
+
     def test_distances_that_are_not_capture_tolerances_are_not_seen(self):
         found, _ = self.kinds(swift="\n".join([
             "guard dx <= tolerance.horizontal else { return }", "if count > 3 { }", "guard box.width > 0 else { return }",

@@ -10,6 +10,8 @@ import Foundation
 /// order, as Apple's popover would show it; one they removed stays out until they put it back. Ids the library no longer
 /// has are dropped on the way out, and a repeated id counts once.
 public enum HoverPopupPreferences {
+    /// Posted when the reader saves the popup's list: the open popover asks its dictionaries again (audit 2026-10-29).
+    public static let changed = Notification.Name("HoverPopupPreferences.changed")
     public static let orderKey = "hoverPopup.order"
     public static let excludedKey = "hoverPopup.excluded"
 
@@ -30,12 +32,25 @@ public enum HoverPopupPreferences {
     }
 
     /// The reader chose this list, in this order: whatever of `available` it leaves out is out until they put it back.
+    ///
+    /// **A dictionary the library is not offering right now keeps what it had** (audit 2026-10-29): it may be disabled
+    /// rather than gone, and rebuilding both lists from the enabled set alone erased its place — so a dictionary the
+    /// reader had taken out came back the day it was enabled again, and one they had ordered lost its place for being
+    /// off. Only an id the caller hands over is treated as the whole truth; the rest is carried through.
     public static func set(_ chosen: [UUID], available: [UUID], defaults: UserDefaults = .standard) {
         let present = Set(available)
         var seen: Set<UUID> = []
         let kept = chosen.filter { present.contains($0) && seen.insert($0).inserted }
-        defaults.set(kept.map(\.uuidString), forKey: orderKey)
-        defaults.set(available.filter { !seen.contains($0) }.map(\.uuidString), forKey: excludedKey)
+        let staleOrder = strings(orderKey, defaults).compactMap(UUID.init).filter { !present.contains($0) }
+        var staleSeen: Set<UUID> = []
+        let carried = staleOrder.filter { staleSeen.insert($0).inserted }
+        let staleExcluded = strings(excludedKey, defaults).compactMap(UUID.init)
+            .filter { !present.contains($0) && !staleSeen.contains($0) }
+        defaults.set((kept + carried).map(\.uuidString), forKey: orderKey)
+        defaults.set((available.filter { !seen.contains($0) } + staleExcluded).map(\.uuidString), forKey: excludedKey)
+        // **After both lists are written** (verification round 2): an observer that re-reads synchronously must see the
+        // new list, not the one this call is replacing.
+        NotificationCenter.default.post(name: changed, object: nil)
     }
 
     private static func strings(_ key: String, _ defaults: UserDefaults) -> [String] {

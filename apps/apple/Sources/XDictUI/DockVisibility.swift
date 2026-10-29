@@ -28,11 +28,6 @@ public struct DockVisibility {
 
     public var policy: NSApplication.ActivationPolicy { showsInDock ? .regular : .accessory }
 
-    /// The reader's choice alone, on the running app. The app itself goes through `DockPresence`, which also counts the
-    /// main windows that are open.
-    @MainActor public func apply() {
-        NSApp.setActivationPolicy(policy)
-    }
 }
 
 /// **The running app's Dock presence** (owner, 2026-10-29): the reader's switch, or a main window being open — whichever

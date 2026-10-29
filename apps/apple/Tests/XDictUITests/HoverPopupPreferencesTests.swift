@@ -42,6 +42,18 @@ struct HoverPopupPreferencesTests {
         #expect(HoverPopupPreferences.ordered([here, gone], defaults: defaults) == [gone, here])
     }
 
+    /// **A dictionary that is merely disabled keeps its place and its exclusion** (audit 2026-10-29): the sheet saves
+    /// from the enabled set, and rebuilding both lists from it alone brought a removed dictionary back on being
+    /// enabled again.
+    @Test func aDisabledDictionaryKeepsWhatItHad() throws {
+        let defaults = try suite()
+        let kept = UUID(), off = UUID()
+        HoverPopupPreferences.set([kept], available: [kept, off], defaults: defaults)
+        // The reader disables `off` in the library, then edits the popup again: only `kept` is on offer.
+        HoverPopupPreferences.set([kept], available: [kept], defaults: defaults)
+        #expect(HoverPopupPreferences.ordered([kept, off], defaults: defaults) == [kept], "a disabled exclusion was erased")
+    }
+
     @Test func aRepeatedOrUnknownIdCountsOnceAndNothingElse() throws {
         let defaults = try suite()
         let first = UUID(), second = UUID(), stranger = UUID()

@@ -215,7 +215,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         guard mine == showGeneration else { return false }
         endFind()
         closePage()
-        if let pane, pane.binding != content.binding || pane.closed {
+        // **A corrected language is another document's** (audit 2026-10-29): the frame is built again, so the language
+        // script and the Chinese leading it carries are installed for this content, not the last one's.
+        if let pane, pane.binding != content.binding || pane.contentLanguage != content.language || pane.closed {
             pane.close()
             self.pane = nil
         }
@@ -238,6 +240,11 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             }
         }
         guard let pane else { return false }
+        // A load that fails after `show` said yes: the sentence in place of the entry, never a blank frame.
+        pane.onLoadFailed = { [weak self, weak pane] _ in
+            guard let self, let pane, self.pane === pane, self.page == nil else { return }
+            self.say(EntrySentences.entryFailed)
+        }
         refusal = nil
         message.isHidden = true
         pane.setZoom(environment.preferences.zoom())

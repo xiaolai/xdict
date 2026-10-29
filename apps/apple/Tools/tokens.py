@@ -144,7 +144,7 @@ class Token:
             if f.get("italic"):
                 parts.append("italic")
             return " ".join(parts)
-        if k == "colour":
+        if k in ("colour", "css-palette", "css-accent"):
             return f["system"] if "system" in f else f["light"] + " / " + f["dark"]
         if k == "css":
             return f["value"]
@@ -822,6 +822,49 @@ def blank_swift(text):
     return "".join(out)
 
 
+def expression_end(text, start):
+    """The end of the expression that begins at `start`: the first comma, closing bracket, semicolon or newline at
+    bracket depth zero. A window after a label (`lineWidth:`) or an assignment (`lineWidth =`) must not cross into the
+    statement after it."""
+    depth, j = 0, start
+    while j < len(text):
+        c = text[j]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                return j
+            depth -= 1
+        elif depth == 0 and c in ",;":
+            return j
+        elif depth == 0 and c == "\n":
+            # A newline ends the statement unless the expression plainly continues on the next line: `lineWidth =\n 2`.
+            before = text[:j].rstrip()
+            if before and before[-1] in "=:+-*/(":
+                j += 1
+                continue
+            return j
+        j += 1
+    return j
+
+
+def call_arguments(text, open_end, end):
+    """Each top-level argument of a call whose `(` is just before `open_end`: `(start, stop)` ranges."""
+    out, depth, start, j = [], 0, open_end, open_end
+    while j < end:
+        c = text[j]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth = max(depth - 1, 0)
+        elif c == "," and depth == 0:
+            out.append((start, j))
+            start = j + 1
+        j += 1
+    out.append((start, end - 1 if end and text[end - 1:end] == ")" else end))
+    return out
+
+
 def span(text, open_end):
     """The end of the parenthesised arguments that start just before `open_end` (after its `(`)."""
     depth, j = 1, open_end
@@ -957,11 +1000,21 @@ def scan_swift(rel, text, modules=None):
         found.setdefault(pos, (kind, clean.count("\n", 0, pos) + 1, value))
     for pattern, kind in SWIFT_CALLS:
         for m in re.finditer(pattern, clean):
-            end = span(clean, m.end()) if m.group(0).endswith("(") else m.end() + 12
+            end = span(clean, m.end()) if m.group(0).endswith("(") else expression_end(clean, m.end())
             if kind == "font-size" and not m.group(0).endswith("("):
                 end = span(clean, m.end())
             if kind == "radius" and not m.group(0).endswith("("):
                 end = m.end() + len(re.match(r"[^,)\n]*", clean[m.end():]).group(0))
+            # **`value:` observes, it does not design** (`.animation(.default, value: count == 2)`): only the arguments
+            # before it are the animation's own.
+            if kind == "motion" and m.group(0).endswith("("):
+                for start, stop in call_arguments(clean, m.end(), end):
+                    if re.match(r"\s*value\s*:", clean[start:stop]):
+                        continue
+                    for nm in NUMBER.finditer(clean, start, stop):
+                        if not allowed(kind, numeric_value(nm.group(1)), clean, nm.start()):
+                            add(kind, nm.start(), nm.group(1))
+                continue
             for nm in NUMBER.finditer(clean, m.end(), end):
                 value = numeric_value(nm.group(1))
                 if kind == "font-size":

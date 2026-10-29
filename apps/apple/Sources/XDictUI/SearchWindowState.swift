@@ -118,7 +118,15 @@ public final class SearchWindowState {
         self.entry = entry
         isPanel = panel
         let model = SearchModel(backend: backend, window: window) { [library] in
-            library.searchSources
+            let sources = library.searchSources
+            guard panel else { return sources }
+            // **The popover asks the dictionaries it shows, and only those** (audit 2026-10-29): filtering the drawn
+            // frames alone left the lookups, the selection and the pronunciation pointing at a dictionary the reader
+            // had taken out of the popup — a blank panel over a hit the model still reported.
+            let order = HoverPopupPreferences.ordered(sources.filter(\.enabled).map(\.id))
+            var rank: [UUID: Int] = [:]
+            for (index, id) in order.enumerated() { rank[id] = index }
+            return sources.filter { rank[$0.id] != nil }.sorted { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }
         }
         self.model = model
         examples = ExamplesModel(backend: backend, window: window)
