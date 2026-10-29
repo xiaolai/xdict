@@ -24,6 +24,7 @@ space = { kind = "length", swift = "Space", doc = "The spacing scale." }
 inset = { kind = "length", swift = "Inset", doc = "Insets." }
 text = { kind = "font", swift = "TextRole", doc = "Text roles." }
 colour = { kind = "colour", swift = "Colour", doc = "Colours." }
+motion = { kind = "number", swift = "Motion", doc = "Timings." }
 css = { kind = "css", doc = "Reading style tokens." }
 palette = { kind = "css-palette", doc = "Palette." }
 accent = { kind = "css-accent", doc = "Accents." }
@@ -43,6 +44,9 @@ row = { size = 13, weight = "semibold", source = "P12" }
 [colour]
 label = { system = "labelColor" }
 rule = { light = "#929292", dark = "#5c5c5c", source = "P12" }
+
+[motion]
+settle = { value = 0.25, why = "How long the pointer must rest." }
 
 [css]
 space-1 = { value = "0.25rem", why = "The reading style's first step." }
@@ -201,6 +205,17 @@ class Find(unittest.TestCase):
         self.assertEqual(tokens.find(self.data, self.toks, "0.25rem"),
                          ["var(--xdict-space-1) = 0.25rem    [why: The reading style's first step.]"])
 
+    def test_a_number_token_is_listed_and_found(self):
+        # `list` and `find` treated every kind they did not know as a colour, so the first motion or opacity token
+        # raised (KeyError: 'light') and a number could not be looked up at all (2026-10-29).
+        root = Root(self)
+        result = root.run("list", "motion")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Tokens.Motion.settle = 0.25", result.stdout)
+        found = root.run("find", "0.25")
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertIn("Tokens.Motion.settle = 0.25", found.stdout)
+
     def test_a_name_finds_by_part(self):
         self.assertEqual(len(tokens.find(self.data, self.toks, "leading")), 1)
 
@@ -221,6 +236,16 @@ class Add(unittest.TestCase):
         self.assertEqual(root.run("add", "space.m", "12", "--why", "Again, the middle step.").returncode, 2)
         self.assertEqual(root.run("add", "space.xl", "24", "--source", "P404").returncode, 2)
         self.assertEqual((root.path / "Tokens/tokens.toml").read_text(), before)
+
+    def test_add_a_number_token(self):
+        # A `number` group (motion, opacity) took the colour branch and was refused as a bad colour value until
+        # 2026-10-29; the tokens in those groups had all been written by hand, so no test had asked.
+        root = Root(self)
+        result = root.run("add", "motion.fade", "0.3", "--why", "How long a notice fades.")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('fade = { value = 0.3, why = "How long a notice fades." }',
+                      (root.path / "Tokens/tokens.toml").read_text())
+        self.assertIn("public static let fade: Double = 0.3", (root.path / tokens.SWIFT_OUT).read_text())
 
     def test_add_a_system_role_and_a_colour(self):
         root = Root(self)

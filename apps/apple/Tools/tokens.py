@@ -148,7 +148,11 @@ class Token:
             return f["system"] if "system" in f else f["light"] + " / " + f["dark"]
         if k == "css":
             return f["value"]
-        return f["light"] + " / " + f["dark"]
+        # **A `number` group** — motion, opacity, reading — is a bare value (owner, 2026-10-29): it fell through to the
+        # colour case here too, so `list motion` and `find 0.5` raised on the first token instead of naming it.
+        if k == "number":
+            return num(f["value"])
+        raise Refused(f"{self.group}.{self.name}: no display for a {k} token")
 
     def numbers(self):
         """The numeric values `find` compares, as points (CSS lengths at the base size)."""
@@ -166,6 +170,8 @@ class Token:
             return [px] if px is not None else []
         if k == "css-density":
             return [p for p in (css_px(f["main"]), css_px(f.get("panel", ""))) if p is not None]
+        if k == "number":
+            return [f["value"]]
         return []
 
     @property
@@ -601,6 +607,11 @@ def parse_add_value(kind, raw):
     if raw is None:
         return {}
     if kind == "length":
+        return {"value": number(raw)}
+    # **A `number` group** — motion, opacity, reading — is a bare value too (owner, 2026-10-29): without this branch
+    # such a token fell through to the colour case and `add motion.x 0.5` was refused as a bad colour. The existing
+    # ones were written by hand, so nothing had exercised it.
+    if kind == "number":
         return {"value": number(raw)}
     if kind == "size":
         w, _, h = raw.partition("x")
