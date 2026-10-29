@@ -66,6 +66,9 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private(set) var scheme: EntryColourScheme
     private var frame: EntryReadingFrame
     private let style: EntryStyle
+    /// **The reader's Chinese face** (owner, 2026-10-29): `--xdict-font-cjk` on this pane's document, set at document start
+    /// and again whenever the reader chooses another.
+    private(set) var chineseFace: EntryChineseFace
     private var restartedAfterCrash = false
     private(set) var closed = false
     /// What the bound edition declares (ADR-0013), asked once for the pane's life, before its first document.
@@ -102,6 +105,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     /// refusal leaves no web view, and nothing can load.
     static func open(content: any EntryContent, confinement: EntryConfinement, scheme: EntryColourScheme,
                      frame: EntryReadingFrame = .all, style: EntryStyle = .bundled,
+                     chineseFace: EntryChineseFace = .songti,
                      ruleList: Result<WKContentRuleList, EntryRefusal>?,
                      switches: @MainActor (WKPreferences) -> any WebKitFeatureSwitches, host: EntryPaneHost,
                      makeWebView: (WKWebViewConfiguration) -> EntryWebView = { EntryWebView(frame: .zero, configuration: $0) })
@@ -127,7 +131,8 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         if confinement.ruleList, case .success(let list) = ruleList { controller.add(list) }
         configuration.userContentController = controller
         let pane = EntryPane(content: content, webView: makeWebView(configuration), server: server, handler: handler,
-                             confinement: confinement, scheme: scheme, frame: frame, style: style, host: host, readBack: readBack)
+                             confinement: confinement, scheme: scheme, frame: frame, style: style,
+                             chineseFace: chineseFace, host: host, readBack: readBack)
         // The one message handler, in the shell's world: the page's world has none to call. Removed in `close`, which
         // breaks the cycle it makes (controller → pane → web view → controller).
         controller.add(pane, contentWorld: world, name: EntryScripts.handlerName)
@@ -136,7 +141,9 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     private init(content: any EntryContent, webView: EntryWebView, server: EntryResourceServer,
                  handler: EntrySchemeHandler, confinement: EntryConfinement, scheme: EntryColourScheme,
-                 frame: EntryReadingFrame, style: EntryStyle, host: EntryPaneHost, readBack: [String: Bool]) {
+                 frame: EntryReadingFrame, style: EntryStyle, chineseFace: EntryChineseFace,
+                 host: EntryPaneHost, readBack: [String: Bool]) {
+        self.chineseFace = chineseFace
         self.binding = content.binding
         self.content = content
         self.webView = webView
@@ -290,6 +297,15 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         old.contains(.minimal) != new.contains(.minimal)
     }
 
+    /// The reader chose another Chinese face: the scripts are reinstalled and the document reloaded, so the new
+    /// `--xdict-font-cjk` is on the root before the style is applied.
+    func setChineseFace(_ face: EntryChineseFace) {
+        guard face != chineseFace else { return }
+        chineseFace = face
+        installScripts()
+        reloadDocument()
+    }
+
     func setScheme(_ scheme: EntryColourScheme) {
         guard scheme != self.scheme else { return }
         self.scheme = scheme
@@ -321,7 +337,8 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         let controller = view.configuration.userContentController
         controller.removeAllUserScripts()
         Self.install(EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues,
-                                            language: content.language),
+                                            language: content.language,
+                                            chineseFace: chineseFace),
                      into: controller)
     }
 

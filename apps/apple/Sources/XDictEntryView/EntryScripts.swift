@@ -16,6 +16,16 @@ enum EntryScripts {
         return "document.documentElement.lang=\"\(code)\";"
     }
 
+    /// **The reader's Chinese face, on the root** (owner, 2026-10-29): `--xdict-font-cjk` set inline, which beats the
+    /// style's own `:root` value, exactly as the accent does with the frame. The style's own face needs no override; a
+    /// face the Mac cannot draw is refused here rather than resolving to the Latin substitute a missing name becomes.
+    static func chineseFace(_ face: EntryChineseFace?) -> String? {
+        guard let face, face != .songti, face.isInstalled else { return nil }
+        let data = try? JSONEncoder().encode(face.stack)
+        guard let data, let list = String(data: data, encoding: .utf8) else { return nil }
+        return "document.documentElement.style.setProperty(\"--xdict-font-cjk\", \(list));"
+    }
+
     /// The reading inset every entry gets, whatever its CSS: many MDict stylesheets say `body{margin:0}`, as GoldenDict
     /// pads its articles itself. On the root and `!important`, so neither a body margin nor a plain `html{padding:0}`
     /// removes it; the dictionary's full-width rows end at it like a page margin, and the scroller stays at the edge.
@@ -82,8 +92,9 @@ enum EntryScripts {
     /// options' script comes first, so the root holds the shell's values before anything else runs.
     static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame, style: EntryStyle = .bundled,
                           display: EntryDisplayOptions = .none, values: [EntryDisplayValue] = [],
-                          language: String? = nil) -> [String] {
-        [Self.language(language), Self.display(display, values: values, style: style)].compactMap { $0 }
+                          language: String? = nil, chineseFace: EntryChineseFace? = nil) -> [String] {
+        [Self.language(language), Self.display(display, values: values, style: style), Self.chineseFace(chineseFace)]
+            .compactMap { $0 }
             + [style.script("find-core.js"), style.script("find.js"), style.script("readability-core.js"),
                appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
                style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),

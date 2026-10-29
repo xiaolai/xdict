@@ -10,7 +10,7 @@ public enum SettingsSearch {
     /// One searchable row, and the place `SettingsRoute.reveal(_:)` takes the reader to.
     public enum Anchor: String, CaseIterable, Hashable, Sendable {
         case dictionaryList, dictionaryImport, wordData
-        case readingWidth, readingAccent, readingPhrases, speechVoice
+        case readingWidth, readingAccent, readingChineseFace, readingPhrases, speechVoice
         case history, reviewReminders, syncFolder
         case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
         case aiSource, aiEntryText, aiLanguage, aiTranslationLanguage, aiPrompt
@@ -45,6 +45,7 @@ public enum SettingsSearch {
         .dictionaryImport: ["导入", "添加", "文件", "苹果"],
         .wordData: ["词数据", "同义词", "反义词", "押韵", "词族", "词根", "变形"],
         .readingAccent: ["颜色", "外观"],
+        .readingChineseFace: ["字体", "中文字体", "宋体", "苹方", "楷体"],
         .readingWidth: ["阅读", "宽度", "行长"],
         .readingPhrases: ["词组", "短语", "卡片", "阅读"],
         .speechVoice: ["语音", "朗读", "发音", "声音", "录音"],
@@ -75,6 +76,8 @@ public enum SettingsSearch {
              keywords: ["rhymes", "families", "roots", "forms", "synonyms", "antonyms", "pack", "install", "remove"]),
         Item(.readingAndSpeech, .readingAccent, "Accent color",
              keywords: ["reading", "color", "colour", "appearance"]),
+        Item(.readingAndSpeech, .readingChineseFace, "Chinese text",
+             keywords: ["reading", "chinese", "font", "face", "songti", "pingfang", "kaiti", "serif", "sans"]),
         Item(.readingAndSpeech, .readingWidth, "Comfortable reading width",
              keywords: ["reading", "width", "measure", "line", "length", "comfortable"]),
         Item(.readingAndSpeech, .readingPhrases, "Show phrases while reading",

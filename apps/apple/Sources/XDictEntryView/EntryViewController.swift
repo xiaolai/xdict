@@ -323,6 +323,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         EntryPane.open(content: content, confinement: environment.confinement,
                        scheme: currentScheme(for: content.binding.dictionary),
                        frame: currentFrame(for: content.binding.dictionary), style: environment.style,
+                       chineseFace: environment.preferences.chineseFace(),
                        ruleList: ruleList, switches: environment.switches, host: self)
     }
 
@@ -556,6 +557,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             pane.setDisplayValues(environment.preferences.displayValues(pane.display, for: pane.binding.dictionary))
             pane.setFrame(currentFrame(for: pane.binding.dictionary))
             pane.setScheme(currentScheme(for: pane.binding.dictionary))
+            pane.setChineseFace(environment.preferences.chineseFace())
         }
     }
 

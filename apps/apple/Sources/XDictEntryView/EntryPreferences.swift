@@ -47,6 +47,18 @@ public struct EntryPreferences: @unchecked Sendable {
     public static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
     /// The reading style's accent, for every dictionary (Settings ▸ Reading).
     public static let accentKey = "reading.accent"
+    /// **The face Chinese text is drawn in**, for every dictionary (Settings ▸ Reading; owner, 2026-10-29). The reading
+    /// style's own Songti SC unless the reader chooses; a value this version does not know reads as Songti SC, and a
+    /// face the Mac cannot draw is skipped by the view rather than drawn in the substitute a missing name resolves to.
+    public static let chineseFaceKey = "reading.chineseFace"
+
+    public func chineseFace() -> EntryChineseFace {
+        defaults.string(forKey: Self.chineseFaceKey).flatMap(EntryChineseFace.init(rawValue:)) ?? .songti
+    }
+
+    public func setChineseFace(_ face: EntryChineseFace) {
+        defaults.set(face.rawValue, forKey: Self.chineseFaceKey)
+    }
 
     /// The accent; teal unless chosen, and teal for a value this version does not know.
     public func accent() -> EntryReadingFrame.Accent {

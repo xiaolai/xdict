@@ -3441,6 +3441,22 @@
         }
       }
     },
+    "Chinese text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chinese text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中文文字"
+          }
+        }
+      }
+    },
     "Choose": {
       "localizations": {
         "en": {
@@ -8290,6 +8306,22 @@
         }
       }
     },
+    "Not on this Mac: %@. XDict does not offer a face it cannot draw.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not on this Mac: %@. XDict does not offer a face it cannot draw."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac 上没有：%@。XDict 不提供无法绘制的字体。"
+          }
+        }
+      }
+    },
     "Not recorded: outside your languages.": {
       "localizations": {
         "en": {
@@ -12821,6 +12853,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "解释会用这种语言书写。引文保持词典原来的语言；修改提示词也不会改变这一点：这条指令由 XDict 添加。"
+          }
+        }
+      }
+    },
+    "The face Chinese words are drawn in; English keeps the reading style's own.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The face Chinese words are drawn in; English keeps the reading style's own."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中文所用的字体；英文仍使用阅读样式自带的字体。"
           }
         }
       }
