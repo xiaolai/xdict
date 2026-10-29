@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "24fa42394c442db101e8b7329774af6590aa12293c790716c3c185843fd20495"
+    public static let sourceDigest = "adbf7bec079d142670b8cdbf7d9bd7b8e868f4d9efe1a9421e3300b613d92cfb"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -256,7 +256,7 @@ public enum Tokens {
         public static let scrollEdgeTolerance: CGFloat = 1
         /// The Explore panel's list: eight rows of the sidebar's own height, under the tabs and the word.
         public static let exploreListHeight: CGFloat = 320
-        /// The Explore panel: seven one-word tabs on one row — the widest, Collocations, at about 85 pt — then a row of a word and its reason without wrapping.
+        /// The Explore panel's least width: a row of a word and its reason reads without wrapping. The tab strip is wider than this in English — a segmented control gives all seven segments the widest label's width, Collocations at 77 pt — and the panel follows the strip instead of clipping it (2026-10-29).
         public static let explorePopoverWidth: CGFloat = 640
         /// About's app icon, at Apple's About panel proportion: the largest mark in the panel, over the name and the version.
         public static let aboutIconSize: CGFloat = 64

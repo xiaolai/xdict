@@ -61,7 +61,12 @@ struct ExplorePopover: View {
             rows
         }
         .padding(Tokens.Space.l)
-        .frame(width: Tokens.Window.explorePopoverWidth, alignment: .leading)
+        // **The panel is as wide as the wider of its two rows, never narrower than the token** (owner, 2026-10-29: the
+        // tab strip outgrew a fixed width and the last tab was cut off, growing when it was clicked). A segmented
+        // control gives every segment the width of the widest label — seven of them here — so its own width is more
+        // than the labels added up; a fixed frame clipped it instead of following, and `minWidth` lets the panel take
+        // the strip's width.
+        .frame(minWidth: Tokens.Window.explorePopoverWidth, alignment: .leading)
         .accessibilityIdentifier("explore.panel")
     }
 
