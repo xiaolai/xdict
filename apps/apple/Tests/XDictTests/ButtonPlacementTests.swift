@@ -54,6 +54,7 @@ struct ButtonPlacementTests {
         "form-pane": "a button in a grouped Settings form the pane draws as its own row (the AI source radios, the key's Test/Replace/Remove), placed by the form",
         "inspector-row": "a button in the answer pane, an inspector column that is no form (ADR-0021 d.12): its rows are the pane's own",
         "explore-row": "a word the Explore panel offers: a row of a plain list, not a form (plan-word-exploration WI-3)",
+        "explore-tab": "the Explore panel's tab row: a wrapping strip of chips the panel places itself, at its own wrap rather than a form's row (owner, 2026-10-29)",
         "meaning-chip": "\"Meaning here\" on the presented term (ADR-0021 d.1): the popover's title row and the main window's entry corner, both drawn by their container",
         "history-menu": "the reading-history drawer's language menu, a menu the system lays out (plan-history-and-learning WI-4)",
         "menubar-item": "an NSMenuItem's key equivalent: the menu-bar item's menu is drawn and dispatched by the system, and its items are not buttons a view places",

@@ -138,7 +138,7 @@ mainIdealWidth = { value = 1000, why = "The main window's opening width: the rea
 mainIdealHeight = { value = 700, why = "The main window's opening height: a full entry paragraph above the synonyms." }
 scrollEdgeTolerance = { value = 1, why = "How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll." }
 exploreListHeight = { value = 320, why = "The Explore panel's list: eight rows of the sidebar's own height, under the tabs and the word." }
-explorePopoverWidth = { value = 640, why = "The Explore panel's least width: a row of a word and its reason reads without wrapping. The tab strip is wider than this in English — a segmented control gives all seven segments the widest label's width, Collocations at 77 pt — and the panel follows the strip instead of clipping it (2026-10-29)." }
+explorePopoverWidth = { value = 640, why = "The Explore panel: seven one-word tabs on one row, then a row of a word and its reason, neither wrapping. The tabs wrap when a text size or a language asks for more (2026-10-29)." }
 aboutIconSize = { value = 64, why = "About's app icon, at Apple's About panel proportion: the largest mark in the panel, over the name and the version." }
 aboutWidth = { value = 460, why = "The About window's opening width: the version rows and a release sentence read whole, at Apple's About panel width." }
 aboutHeight = { value = 460, why = "The About window's opening height: the icon, the copy's numbers, the update row and the three links without scrolling." }

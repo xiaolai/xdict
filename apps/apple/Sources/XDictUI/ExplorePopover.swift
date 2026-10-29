@@ -49,24 +49,15 @@ struct ExplorePopover: View {
             // reader keeps typing, and a page for the last one shown would then be labelled with a word it never asked
             // about — the reader could open a row believing it belonged to the new word.
             Text(model.word.isEmpty ? word() : model.word).font(Tokens.TextRole.headline.font).lineLimit(1)
-            Picker("Explore", selection: Binding(get: { model.tab },
-                                                 set: { model.show($0, word: word(), dicts: dicts()) })) {
-                ForEach(ExploreModel.Tab.allCases) { tab in
-                    Text(ExploreSentences.tab(tab)).tag(tab)
-                }
+            // **The tabs wrap** (owner, 2026-10-29): a segmented control could not fit seven segments in the panel and
+            // was clipped at its edge, growing when a tab was clicked. See `ExploreTabs`.
+            ExploreTabs(chosen: model.tab) { tab in
+                model.show(tab, word: word(), dicts: dicts())
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityIdentifier("explore.tabs")
             rows
         }
         .padding(Tokens.Space.l)
-        // **The panel is as wide as the wider of its two rows, never narrower than the token** (owner, 2026-10-29: the
-        // tab strip outgrew a fixed width and the last tab was cut off, growing when it was clicked). A segmented
-        // control gives every segment the width of the widest label — seven of them here — so its own width is more
-        // than the labels added up; a fixed frame clipped it instead of following, and `minWidth` lets the panel take
-        // the strip's width.
-        .frame(minWidth: Tokens.Window.explorePopoverWidth, alignment: .leading)
+        .frame(width: Tokens.Window.explorePopoverWidth, alignment: .leading)
         .accessibilityIdentifier("explore.panel")
     }
 
