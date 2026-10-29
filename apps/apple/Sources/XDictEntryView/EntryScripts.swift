@@ -6,6 +6,16 @@ import XDictTokens
 /// readability rule (R4), and a reader's click on a blocked image's placeholder. Each pure part is its own object with
 /// no DOM, so `swift test` runs it in JavaScriptCore without a web view.
 enum EntryScripts {
+    /// **The entry's language on its document** (owner, 2026-10-29; `note-cjk-typography-2026-10-29.md`): the dictionary's
+    /// declared code, which the reading style's `:lang(zh)` turns into Chinese leading. Set at document start, before the
+    /// style is applied, so nothing is laid out twice; the code is encoded as JSON — never spliced into the script — and a
+    /// code that is not one leaves the document alone.
+    static func language(_ code: String?) -> String? {
+        guard let code, !code.isEmpty,
+              code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else { return nil }
+        return "document.documentElement.lang=\"\(code)\";"
+    }
+
     /// The reading inset every entry gets, whatever its CSS: many MDict stylesheets say `body{margin:0}`, as GoldenDict
     /// pads its articles itself. On the root and `!important`, so neither a body margin nor a plain `html{padding:0}`
     /// removes it; the dictionary's full-width rows end at it like a page margin, and the scroller stays at the edge.
@@ -71,8 +81,9 @@ enum EntryScripts {
     /// The shell's scripts, in the order they are installed at document start, before any of the page's. The display
     /// options' script comes first, so the root holds the shell's values before anything else runs.
     static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame, style: EntryStyle = .bundled,
-                          display: EntryDisplayOptions = .none, values: [EntryDisplayValue] = []) -> [String] {
-        [Self.display(display, values: values, style: style)].compactMap { $0 }
+                          display: EntryDisplayOptions = .none, values: [EntryDisplayValue] = [],
+                          language: String? = nil) -> [String] {
+        [Self.language(language), Self.display(display, values: values, style: style)].compactMap { $0 }
             + [style.script("find-core.js"), style.script("find.js"), style.script("readability-core.js"),
                appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
                style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),

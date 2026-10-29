@@ -13,14 +13,19 @@ public struct SearchSource: Hashable, Sendable, Identifiable {
     public let preferencesKey: String
     public let enabled: Bool
     public let state: SourceState
+    /// The language the dictionary's entries are written in (the search side of the reader's pair), for the entry view's
+    /// document (owner, 2026-10-29).
+    public let language: String?
 
-    public init(id: UUID, name: String, edition: Edition?, preferencesKey: String, enabled: Bool, state: SourceState) {
+    public init(id: UUID, name: String, edition: Edition?, preferencesKey: String, enabled: Bool, state: SourceState,
+                language: String? = nil) {
         self.id = id
         self.name = name
         self.edition = edition
         self.preferencesKey = preferencesKey
         self.enabled = enabled
         self.state = state
+        self.language = language
     }
 
     /// The open handle, when the dictionary answers.
@@ -77,7 +82,8 @@ extension Library {
         entries.map { entry in
             SearchSource(id: entry.id, name: entry.displayName, edition: entry.edition,
                          preferencesKey: entry.preferencesKey, enabled: entry.enabled,
-                         state: SourceState(phases[entry.id], handle: handle(entry.id)))
+                         state: SourceState(phases[entry.id], handle: handle(entry.id)),
+                         language: entry.languages.pair.search)
         }
     }
 }

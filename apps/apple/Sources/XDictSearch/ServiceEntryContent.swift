@@ -9,6 +9,9 @@ import XDictEntryView
 /// they were when it was made: another handle is another binding, and so another web view (ADR-0009 refutation, item 13).
 public final class ServiceEntryContent: EntryContent {
     public let binding: EntryBinding
+    /// **The dictionary's declared language** (owner, 2026-10-29): the view sets it on the document, where the reading
+    /// style keys Chinese leading off `:lang(zh)`.
+    public let language: String?
     private let backend: any SearchBackend
     private let dict: DictId
     private let edition: Edition
@@ -20,6 +23,7 @@ public final class ServiceEntryContent: EntryContent {
     public init?(source: SearchSource, backend: any SearchBackend, preferences: EntryPreferences = EntryPreferences()) {
         self.preferences = preferences
         guard let handle = source.handle, let edition = source.edition else { return nil }
+        language = source.language
         self.backend = backend
         dict = handle
         self.edition = edition

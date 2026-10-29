@@ -2246,6 +2246,11 @@ body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !importan
    digit that every Chinese text sets by hand, and the break rules that keep ，。、 off the start of a line. Both
    are inert in an entry with no Han character; `text-spacing-trim` is not supported here (measured on 27). */
 text-autospace:normal;line-break:strict}
+/* **Chinese leading** (owner, 2026-10-29): a Chinese dictionary's page is set at 1.6 — Han glyphs fill the em box
+   and need the air — while a Latin page keeps Apple's 1.4 (P18). The dictionary's own language decides it, from
+   the document's `lang`, which the shell sets from the library's pair; an entry with no declared language keeps
+   the Latin leading. */
+html:lang(zh){--xdict-leading:1.6}
 [data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}
 /* The browser's defaults, at zero specificity, so a dictionary's own (normalized) rule still wins. */
 :where(h1){font-size:var(--xdict-fs-xxl);line-height:var(--xdict-leading-tight)}

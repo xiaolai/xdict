@@ -320,7 +320,8 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private func installScripts() {
         let controller = view.configuration.userContentController
         controller.removeAllUserScripts()
-        Self.install(EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues),
+        Self.install(EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues,
+                                            language: content.language),
                      into: controller)
     }
 

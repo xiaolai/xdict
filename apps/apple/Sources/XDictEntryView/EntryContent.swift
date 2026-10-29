@@ -83,6 +83,10 @@ public enum EntryBlock: Hashable, Sendable {
 /// The three calls the view makes, for one bound dictionary. Every one may throw; the view refuses what fails.
 public protocol EntryContent: Sendable {
     var binding: EntryBinding { get }
+    /// **The language this dictionary's entries are written in**, as the library declares it (`en`, `zh-Hans`), or nil
+    /// when nothing is known. The view puts it on the document, where the reading style's `:lang(zh)` gives Chinese
+    /// text its own leading (owner, 2026-10-29; dev-docs/note-cjk-typography-2026-10-29.md).
+    var language: String? { get }
     func entry(_ reference: EntryReference) async throws -> EntryDocument
     /// `path` as it travels: the part of the URL after `r/` or `sound/`, still percent-encoded (ADR-0007 decision 8).
     func resource(_ path: String) async throws -> EntryResource
@@ -94,6 +98,8 @@ public protocol EntryContent: Sendable {
 extension EntryContent {
     /// A content that cannot say declares nothing: its entries show as the dictionary wrote them.
     public func displayOptions() async throws -> EntryDisplayOptions { .none }
+    /// And a content that cannot say what language its dictionary is in leaves the document as it was.
+    public var language: String? { nil }
 }
 
 /// Where the view lands in an entry once it has loaded (plan-macos-v1 WI-6): its top; the anchor a link named; or the
