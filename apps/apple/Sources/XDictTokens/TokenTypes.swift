@@ -34,12 +34,21 @@ public struct TokenFont: Sendable, Equatable {
         if case .fixed(let size, _, _, _) = spec { size } else { nil }
     }
 
+    /// **The Chinese face a serif role falls back to** (owner, 2026-10-29; `note-cjk-typography-2026-10-29.md`): the
+    /// serif design has no Han glyphs, and the system's own fallback for them is PingFang — a sans — so a serif Latin and
+    /// a sans Chinese share a line on the start page and in the answer pane. Songti SC is the system's Chinese serif;
+    /// where it is missing, the cascade changes nothing.
+    public static let chineseSerif = "Songti SC"
+
     /// For SwiftUI.
     public var font: Font {
         switch spec {
         case .style(let style, let weight):
             let font = Font.system(style.swiftUI)
             return weight.map { font.weight($0.swiftUI) } ?? font
+        case .fixed(_, _, .serif, _):
+            // Through AppKit, so the Chinese serif comes with it: SwiftUI's own serif design has no way to say it.
+            return Font(nsFont)
         case .fixed(let size, let weight, let design, let italic):
             let font = Font.system(size: size, weight: weight.swiftUI, design: design.swiftUI)
             return italic ? font.italic() : font
@@ -57,6 +66,10 @@ public struct TokenFont: Sendable, Equatable {
             var descriptor = NSFont.systemFont(ofSize: size, weight: weight.appKit).fontDescriptor
             if let designed = descriptor.withDesign(design.appKit) { descriptor = designed }
             if italic { descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.italic)) }
+            if design == .serif {
+                descriptor = descriptor.addingAttributes(
+                    [.cascadeList: [NSFontDescriptor(name: Self.chineseSerif, size: size)]])
+            }
             return NSFont(descriptor: descriptor, size: size) ?? NSFont.systemFont(ofSize: size, weight: weight.appKit)
         }
     }
