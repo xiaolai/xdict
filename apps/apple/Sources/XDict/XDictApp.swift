@@ -20,6 +20,8 @@ import XDictTokens
 /// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    /// About XDict opens its own window from the app menu (owner, 2026-10-29).
+    @Environment(\.openWindow) private var openWindow
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
         ?? MeasureReport.setup(CommandLine.arguments) ?? AppSetup.reader
@@ -150,6 +152,12 @@ struct XDictApp: App {
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
             AcknowledgmentsCommand()
+            // **About XDict opens XDict's own panel** (owner, 2026-10-29: "我们竟然没有一个 about menu"): this copy's
+            // numbers, its licence, its site and source, and the update check — in place of the system's stock panel,
+            // which said the name and a version and nothing XDict could correct. Acknowledgments stays after it.
+            CommandGroup(replacing: .appInfo) {  // placement: P31
+                Button { openWindow(id: XDictApp.aboutWindow) } label: { Text("About XDict") }
+            }
             FileAndHelpCommands()
             // **⌘Q closes the window, and Quit lives in the menu-bar icon's menu alone** (owner, 2026-10-27: "the only way
             // to quit xdict is by tray icon menu"): the app menu's Quit goes with its termination command, and the key
@@ -161,6 +169,14 @@ struct XDictApp: App {
                 .keyboardShortcut("q")
             }
         }
+
+        // **About XDict**, from the app menu (owner, 2026-10-29), and the same content as Settings' last pane.
+        Window("About XDict", id: Self.aboutWindow) {
+            AboutPane()
+        }
+        .defaultSize(width: Tokens.Window.aboutWidth, height: Tokens.Window.aboutHeight)
+        .windowResizability(.contentMinSize)
+        .commandsRemoved()
 
         // Every third-party notice (WI-10), from the app menu beside About; not in the Window menu (A-06).
         Window("Acknowledgments", id: Self.acknowledgmentsWindow) {
@@ -213,11 +229,14 @@ struct XDictApp: App {
                       aiConfigured: { MeaningPreferences.shared.settings.source != nil },
                       onSpotlight: { on in XDictApp.applySpotlight(on) })
                 .task { await LibraryLaunch.once() }
+        case .about:
+            AboutPane()
         }
     }
 
     static let mainWindow = "main"
     static let acknowledgmentsWindow = "acknowledgments"
+    static let aboutWindow = "about"
     static let reviewWindow = "review"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
     @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
@@ -612,6 +631,16 @@ struct AcknowledgmentsCommand: Commands {
         CommandGroup(after: .appInfo) {  // placement: P31
             Button { openWindow(id: XDictApp.acknowledgmentsWindow) } label: { Text("Acknowledgments") }
         }
+    }
+}
+
+/// **About, in its window and as Settings' last pane** (owner, 2026-10-29): one view, so the two cannot say different
+/// things; the acknowledgments the panel links to open beside whichever one is in front.
+struct AboutPane: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        AboutView(acknowledge: { openWindow(id: XDictApp.acknowledgmentsWindow) })
     }
 }
 

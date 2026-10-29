@@ -15,6 +15,7 @@ public enum SettingsSearch {
         case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
         case aiSource, aiEntryText, aiLanguage, aiTranslationLanguage, aiPrompt
         case setupBoard
+        case about
     }
 
     public struct Item: Identifiable, Sendable {
@@ -62,6 +63,7 @@ public enum SettingsSearch {
         .aiTranslationLanguage: ["翻译", "目标语言", "译文"],
         .aiPrompt: ["提示词", "模板", "高级", "预览", "翻译", "语法"],
         .setupBoard: ["设置", "权限", "辅助功能", "服务", "快捷键"],
+        .about: ["关于", "版本", "许可", "更新", "升级"],
     ]
 
     public static let items: [Item] = [
@@ -113,6 +115,8 @@ public enum SettingsSearch {
         Item(.setup, .setupBoard, "Setup",
              keywords: ["setup", "permissions", "accessibility", "screen", "recording", "shortcut", "services",
                         "spotlight", "readiness"]),
+        Item(.about, .about, "About XDict",
+             keywords: ["about", "version", "build", "licence", "license", "update", "release", "check", "source"]),
     ]
 
     /// The rows matching `query`, in sidebar order; none for an empty query.

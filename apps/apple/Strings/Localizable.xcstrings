@@ -1926,6 +1926,22 @@
         }
       }
     },
+    "About XDict": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About XDict"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于 XDict"
+          }
+        }
+      }
+    },
     "Accent color": {
       "localizations": {
         "en": {
@@ -2823,6 +2839,22 @@
         }
       }
     },
+    "Asking GitHub for the latest release…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asking GitHub for the latest release…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在向 GitHub 查询最新版本…"
+          }
+        }
+      }
+    },
     "Asking the dictionary service…": {
       "localizations": {
         "en": {
@@ -3118,6 +3150,22 @@
         }
       }
     },
+    "Build": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建版本"
+          }
+        }
+      }
+    },
     "Build Word Data…": {
       "localizations": {
         "en": {
@@ -3258,6 +3306,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "再次检查"
+          }
+        }
+      }
+    },
+    "Check for Updates…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查更新…"
           }
         }
       }
@@ -6220,6 +6284,22 @@
         }
       }
     },
+    "ISC": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ISC"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ISC"
+          }
+        }
+      }
+    },
     "If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You can change your mind afterwards.": {
       "localizations": {
         "en": {
@@ -6907,6 +6987,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "让悬停查词读取不共享文本的应用中的词语，例如终端和图片。macOS 只会询问一次。"
+          }
+        }
+      }
+    },
+    "Licence": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licence"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "许可协议"
           }
         }
       }
@@ -9724,6 +9820,22 @@
         }
       }
     },
+    "Read the Release Notes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the Release Notes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读发行说明"
+          }
+        }
+      }
+    },
     "Read the selection aloud, or the entry’s word when nothing is selected": {
       "localizations": {
         "en": {
@@ -11361,6 +11473,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "部分词典的例句无法读取。"
+          }
+        }
+      }
+    },
+    "Source Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source Code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源代码"
           }
         }
       }
@@ -14002,6 +14130,22 @@
         }
       }
     },
+    "This copy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This copy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此副本"
+          }
+        }
+      }
+    },
     "This dictionary has more than %lld files, more than XDict converts.": {
       "localizations": {
         "en": {
@@ -14416,6 +14560,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "这不是一个地址，请求仍使用上次保存的地址。"
+          }
+        }
+      }
+    },
+    "This is the newest release (%@).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the newest release (%@)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是最新版本（%@）。"
           }
         }
       }
@@ -15078,6 +15238,22 @@
         }
       }
     },
+    "Updates": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        }
+      }
+    },
     "Use Selection for Find": {
       "localizations": {
         "en": {
@@ -15170,6 +15346,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "已验证：%@。"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本"
+          }
+        }
+      }
+    },
+    "Version %@ is available.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@ is available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有更新的版本 %@ 可用。"
           }
         }
       }
@@ -15530,6 +15738,22 @@
         }
       }
     },
+    "XDict Website": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict Website"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 网站"
+          }
+        }
+      }
+    },
     "XDict already uses this combination for %@": {
       "localizations": {
         "en": {
@@ -15628,6 +15852,22 @@
         }
       }
     },
+    "XDict could not check for updates.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict could not check for updates."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 无法检查更新。"
+          }
+        }
+      }
+    },
     "XDict could not reach the folder it shares with its dictionary service.": {
       "localizations": {
         "en": {
@@ -15720,6 +15960,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "XDict 根据文件名推测了这些语言。是否正确？"
+          }
+        }
+      }
+    },
+    "XDict is free software under the ISC licence.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict is free software under the ISC licence."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 是自由软件，采用 ISC 许可协议。"
           }
         }
       }
@@ -16154,6 +16410,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "以它结尾"
+          }
+        }
+      }
+    },
+    "macOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         }
       }

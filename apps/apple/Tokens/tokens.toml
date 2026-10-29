@@ -139,6 +139,9 @@ mainIdealHeight = { value = 700, why = "The main window's opening height: a full
 scrollEdgeTolerance = { value = 1, why = "How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll." }
 exploreListHeight = { value = 320, why = "The Explore panel's list: eight rows of the sidebar's own height, under the tabs and the word." }
 explorePopoverWidth = { value = 640, why = "The Explore panel: seven one-word tabs on one row — the widest, Collocations, at about 85 pt — then a row of a word and its reason without wrapping." }
+aboutIconSize = { value = 64, why = "About's app icon, at Apple's About panel proportion: the largest mark in the panel, over the name and the version." }
+aboutWidth = { value = 460, why = "The About window's opening width: the version rows and a release sentence read whole, at Apple's About panel width." }
+aboutHeight = { value = 460, why = "The About window's opening height: the icon, the copy's numbers, the update row and the three links without scrolling." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }
