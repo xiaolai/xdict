@@ -170,6 +170,15 @@ final class LookupAnywhere {
             MenuBarActions.showDictionaries(id)
         }
         state = made
+        // **Every event the lookup path already tells an instrument goes into the reader's log too** (owner, 2026-10-29):
+        // an instrument keeps its own, and a reader's log is what can be handed back.
+        if observe == nil {
+            observe = { event, fields in
+                Diagnostics.shared.record("lookup.\(event)",
+                                          fields.mapValues { "\($0)" })
+            }
+        }
+        Diagnostics.shared.record("hover.started", ["enabled": "\(hover.isEnabled)"])
         hover.watcher.sink = self
         // A hover that read nothing, or needed a grant, says so by the pointer (owner's report, 2026-10-19).
         hover.showBriefNotice = { [weak self] notice in

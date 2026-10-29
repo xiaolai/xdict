@@ -217,7 +217,8 @@ struct XDictApp: App {
                              sync: XDictApp.sync)
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
-                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
+                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
+                            library: library)
         case .ai:
             AISettings()
         case .setup:

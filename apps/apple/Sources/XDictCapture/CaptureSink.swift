@@ -170,7 +170,11 @@ public final class CaptureRequests: Sendable {
             return (true, state.endBelow(request.number))
         }
         tell(endings)
-        guard claimed else { return .refused }
+        guard claimed else {
+            Diagnostics.shared.record("request.refused", ["request": "\(request.number)",
+                                                          "trigger": request.trigger.rawValue])
+            return .refused
+        }
         return deliver(term, for: request, to: sink)
     }
 

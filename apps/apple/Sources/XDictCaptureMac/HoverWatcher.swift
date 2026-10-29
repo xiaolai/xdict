@@ -198,6 +198,7 @@ public final class HoverWatcher {
             found.removeValue(forKey: intent.serial)?.discard()
             finishOrigin(intent.origin)
             log.debug("hover dropped: \(why.rawValue, privacy: .public)")
+            Diagnostics.shared.record("hover.dropped", ["why": why.rawValue, "serial": "\(intent.serial)"])
         }
     }
 
@@ -288,6 +289,7 @@ public final class HoverWatcher {
             case .notice(let notice, let request):
                 // Nothing is presented for a notice: its request ends, and the consumer tells the reader.
                 requests.cancel(request)
+                Diagnostics.shared.record("hover.notice", ["kind": notice.rawValue, "request": "\(request.number)"])
                 onNotice?(notice)
                 return
             }
@@ -301,8 +303,13 @@ public final class HoverWatcher {
         guard requests.present(term, for: word.request, to: sink) == .accepted else {
             word.discard()
             log.debug("hover dropped: a later request has the presentation")
+            Diagnostics.shared.record("hover.refused", ["why": "a later request has the presentation",
+                                                        "request": "\(word.request.number)"])
             return
         }
+        Diagnostics.shared.record("hover.delivered", ["request": "\(word.request.number)",
+                                                      "word": Diagnostics.shared.word(term.term),
+                                                      "source": String(describing: term.source)])
         // Remembered on delivery, so a rest on the same word does not ask again while it comes up — and **forgotten if
         // its presentation never draws**, by the consumer's acknowledgement (`ended`).
         reader.remember(key)

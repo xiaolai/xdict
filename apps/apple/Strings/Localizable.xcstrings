@@ -4388,6 +4388,22 @@
         }
       }
     },
+    "Diagnostics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断"
+          }
+        }
+      }
+    },
     "Dictionaries": {
       "localizations": {
         "en": {
@@ -6556,6 +6572,22 @@
         }
       }
     },
+    "Include the words I look up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include the words I look up"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录我查询的词"
+          }
+        }
+      }
+    },
     "Included: a Spotlight search for a headword finds it, and Return opens it in XDict. The index holds the words only, and stays on this Mac.": {
       "localizations": {
         "en": {
@@ -8712,6 +8744,22 @@
         }
       }
     },
+    "Off, the log says how long a word was, never what it was. It never leaves this Mac unless you save it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off, the log says how long a word was, never what it was. It never leaves this Mac unless you save it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时，日志只记录词的长度，不记录词本身。除非你保存，日志不会离开这台 Mac。"
+          }
+        }
+      }
+    },
     "Off. A three-finger tap does not look a word up.": {
       "localizations": {
         "en": {
@@ -10633,6 +10681,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存"
+          }
+        }
+      }
+    },
+    "Save Diagnostics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存诊断信息"
+          }
+        }
+      }
+    },
+    "Save Diagnostics…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Diagnostics…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存诊断信息…"
           }
         }
       }
@@ -16088,6 +16168,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "XDict 无法从文件名判断这部词典的语言。它们是什么语言？"
+          }
+        }
+      }
+    },
+    "XDict diagnostics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 诊断信息"
           }
         }
       }

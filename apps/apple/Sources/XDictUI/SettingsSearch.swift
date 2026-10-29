@@ -12,7 +12,7 @@ public enum SettingsSearch {
         case dictionaryList, dictionaryImport, wordData
         case readingWidth, readingAccent, readingChineseFace, readingPhrases, speechVoice
         case history, reviewReminders, syncFolder
-        case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
+        case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap, diagnostics
         case aiSource, aiEntryText, aiLanguage, aiTranslationLanguage, aiPrompt
         case setupBoard
         case about
@@ -56,6 +56,7 @@ public enum SettingsSearch {
         .interfaceLanguage: ["界面", "语言", "中文", "英文"],
         .lookupShortcut: ["快捷键", "键盘"],
         .hover: ["悬停", "鼠标", "手势", "屏幕录制"],
+        .diagnostics: ["诊断", "日志", "报告", "问题"],
         .popupAppearance: ["弹窗", "背景", "玻璃"],
         .meaningPaneGap: ["面板", "间隔", "间距", "右侧"],
         .aiSource: ["人工智能", "模型", "来源", "登录", "本地", "云端"],
@@ -100,6 +101,8 @@ public enum SettingsSearch {
              keywords: ["hover", "pointer", "mouse", "rest", "time", "gesture", "screen", "recording", "never"]),
         Item(.general, .popupAppearance, "Lookup popup",
              keywords: ["popup", "panel", "appearance", "dark", "light", "glass", "background"]),
+        Item(.general, .diagnostics, "Diagnostics",
+             keywords: ["diagnostics", "log", "report", "bug", "problem", "hover", "save", "support"]),
         Item(.general, .meaningPaneGap, "Answer Pane",
              keywords: ["pane", "panel", "gap", "space", "margin", "separation", "right", "width", "animation",
                         "opening", "shortcut", "keys", "toggle", "show", "hide"]),

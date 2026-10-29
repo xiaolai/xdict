@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictAnywhere
+import XDictCapture
 import XDictTokens
 
 /// **General, in Settings** (⌘,; plan-macos-v1 WI-9, ADR-0012 d.1): launch at login, with what the system says of it, the
@@ -30,11 +31,19 @@ public struct GeneralSettings: View {
     private let hover: HoverControl
 
 
+    /// The library, for the diagnostics export's header (how many dictionaries, how many enabled); nil in a host that
+    /// has none.
+    private let library: (any DiagnosticsLibrary)?
+    /// The reader's words in their own diagnostics log (owner, 2026-10-29): off, and the log says how much text there was
+    /// without saying what it was.
+    @AppStorage(Diagnostics.includeTextKey) private var includeWordsInDiagnostics = false
+
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, registrar: ShortcutRegistrar,
-                hover: HoverControl) {
+                hover: HoverControl, library: (any DiagnosticsLibrary)? = nil) {
         self.login = login
         self.registrar = registrar
         self.hover = hover
+        self.library = library
         self.defaults = defaults
         self.domain = domain
         _language = State(initialValue: InterfaceLanguage.current(in: defaults, domain: domain))
@@ -97,6 +106,22 @@ public struct GeneralSettings: View {
                 .settingsAnchor(.lookupShortcut)
             Section { HoverSettings(hover: hover) } header: { Text("Hover") }
                 .settingsAnchor(.hover)
+            Section {
+                Button {  // placement: form-row
+                    DiagnosticsExport.save(DiagnosticsExport.text(hover: hover, library: library))
+                } label: {
+                    Text("Save Diagnostics…")
+                }
+                .accessibilityIdentifier("save-diagnostics")
+                Toggle(isOn: $includeWordsInDiagnostics) {
+                    Text("Include the words I look up")
+                    Text("Off, the log says how long a word was, never what it was. It never leaves this Mac unless you save it.")
+                }
+                .accessibilityIdentifier("diagnostics-include-words")
+            } header: {
+                Text("Diagnostics")
+            }
+            .settingsAnchor(.diagnostics)
             Section {
                 Picker(selection: $shade) {
                     Text("Follow System").tag(PanelAppearance.Shade.system)

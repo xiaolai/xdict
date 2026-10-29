@@ -153,6 +153,7 @@ public final class HoverControl {
     /// A notice for a hover that still stands: kept for Settings where it is the grant's, and shown by the pointer unless
     /// the same kind was shown a moment ago.
     private func told(_ notice: CaptureNotice) {
+        Diagnostics.shared.record("hover.told", ["kind": notice.rawValue])
         if notice == .screenRecordingNeeded { neededScreenRecording = true }
         guard briefs.allows(notice, at: now()) else { return }
         showBriefNotice?(notice)
