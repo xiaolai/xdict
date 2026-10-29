@@ -53,7 +53,7 @@ readonly FONTS=Resources/Fonts
 # Every third-party notice (Tools/notices.py, held to the lockfile by `make test`), shown by XDict ▸ Acknowledgments.
 readonly NOTICES=Resources/Acknowledgments.txt
 # The word pack's pinned sources, one copy for the builder and the app (`WORD_LEXICON.md`).
-readonly WORD_PACK_MANIFEST=../core/xdict-core/tools/word_lexicon_sources.json
+readonly WORD_PACK_MANIFEST=../../core/xdict-core/tools/word_lexicon_sources.json
 readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 # `--timestamp` asks Apple's server and fails the way network calls fail (XiaolaiDict lost a release to it); a
 # development build signs offline and succeeds or fails on its first try.
