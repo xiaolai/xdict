@@ -8,7 +8,7 @@ import XDictTokens
 /// document. A page ends only between lines of text.
 enum EntryPrintPlan {
     /// The band holding a dictionary's name above its entry, in points.
-    static let header: Double = 28
+    static let header = Double(Tokens.Print.headerBand)
 
     struct Section: Equatable {
         let name: String

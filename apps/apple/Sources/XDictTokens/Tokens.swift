@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "ee404403b33f7f67487d2b6f4beb44d8203969bd5a8bec1ddb2c9a875a398334"
+    public static let sourceDigest = "4bac5cd874c79ea6bf89b545f96095dd2382a264887f557f96237f19900e2b25"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -122,6 +122,10 @@ public enum Tokens {
         public static let removalUndoSeconds: Double = 8
         /// How long the drawer's state change fades under Reduce Motion: a fade, not a cut, which reads as a glitch (XiaolaiDict's value, kept).
         public static let reducedFade: Double = 0.15
+        /// The answer pane's opening time on a fresh install, and the Settings slider's middle: quick enough to feel attached to the click, slow enough to read as sliding.
+        public static let meaningPaneOpen: Double = 0.5
+        /// The slowest opening Settings offers for the answer pane: at three times the default, a reader who wants the move to be seen can have it.
+        public static let meaningPaneOpenMax: Double = 1.5
     }
 
     /// Alpha values a surface is drawn at: a card's tint and its shadow.
@@ -264,6 +268,8 @@ public enum Tokens {
         public static let aboutWidth: CGFloat = 460
         /// The About window's opening height: the icon, the copy's numbers, the update row and the three links without scrolling.
         public static let aboutHeight: CGFloat = 460
+        /// The widest air Settings offers between the window and the answer pane: past it the pane reads as another window rather than an aside.
+        public static let paneGapMax: CGFloat = 40
     }
 
     /// Corner radii.
@@ -408,12 +414,20 @@ public enum Tokens {
         public static let popoverGap: CGFloat = 8
     }
 
+    /// The All page's own lengths: the height a dictionary's frame is laid out at before its document lands, so the page's length and its scroller are roughly right.
+    public enum Page {
+        /// A frame's height before its document lands: an entry's usual first screen, so the page's length and its scroller are roughly right while the frames below are still to be made. A page that never says what its empty band is leaves it blank (owner, 2026-10-29).
+        public static let estimate: CGFloat = 240
+    }
+
     /// The printed entry page's section names.
     public enum Print {
         /// A printed section's name sits this far into its header band, as Apple's prints.
         public static let nameOffset: CGFloat = 6
         /// A printed section name's line: its 12 pt text and leading.
         public static let nameHeight: CGFloat = 16
+        /// A printed section's header band: its name at the 6 pt offset, its 16 pt line, and the same air under it, as Apple's prints.
+        public static let headerBand: CGFloat = 28
     }
 
     /// The picture a blocked image becomes (SVG px): its host's name in a dashed box.

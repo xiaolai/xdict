@@ -31,6 +31,7 @@ reading = { kind = "number", swift = "Reading", doc = "The reading text's own me
 colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's semantic colours first; a literal only where Apple's page was measured." }
 entryText = { kind = "string", swift = "EntryText", doc = "Values the entry view writes into CSS, SVG or a script as text: the reading inset, glyph strokes, the blocked image's placeholder, the popover glass measured." }
 divider = { kind = "length", swift = "PageDivider", doc = "The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41)." }
+page = { kind = "length", swift = "Page", doc = "The All page's own lengths: the height a dictionary's frame is laid out at before its document lands, so the page's length and its scroller are roughly right." }
 print = { kind = "length", swift = "Print", doc = "The printed entry page's section names." }
 placeholder = { kind = "length", swift = "Placeholder", doc = "The picture a blocked image becomes (SVG px): its host's name in a dashed box." }
 instrumentFrame = { kind = "rect", swift = "InstrumentFrame", doc = "Window frames of development instruments (the lab, the E2E instruments): never in front of a reader." }
@@ -142,6 +143,7 @@ explorePopoverWidth = { value = 640, why = "The Explore panel: seven one-word ta
 aboutIconSize = { value = 64, why = "About's app icon, at Apple's About panel proportion: the largest mark in the panel, over the name and the version." }
 aboutWidth = { value = 460, why = "The About window's opening width: the version rows and a release sentence read whole, at Apple's About panel width." }
 aboutHeight = { value = 460, why = "The About window's opening height: the icon, the copy's numbers, the update row and the three links without scrolling." }
+paneGapMax = { value = 40, why = "The widest air Settings offers between the window and the answer pane: past it the pane reads as another window rather than an aside." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }
@@ -150,6 +152,8 @@ drawerCloseResponse = { value = 0.26, why = "XiaolaiDict's drawer spring, kept: 
 drawerCloseDamping = { value = 0.95, why = "XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back." }
 removalUndoSeconds = { value = 8, why = "How long a removed history card's Undo stays offered: long enough to notice the mistake, short enough not to sit there." }
 reducedFade = { value = 0.15, why = "How long the drawer's state change fades under Reduce Motion: a fade, not a cut, which reads as a glitch (XiaolaiDict's value, kept)." }
+meaningPaneOpen = { value = 0.5, why = "The answer pane's opening time on a fresh install, and the Settings slider's middle: quick enough to feel attached to the click, slow enough to read as sliding." }
+meaningPaneOpenMax = { value = 1.5, why = "The slowest opening Settings offers for the answer pane: at three times the default, a reader who wants the move to be seen can have it." }
 
 [opacity]
 cardBorder = { value = 0.38, why = "A history card's tinted border: visible as a tint, never as a rule." }
@@ -246,6 +250,7 @@ popoverGap = { value = 8, source = "P41" }
 [print]
 nameOffset = { value = 6, why = "A printed section's name sits this far into its header band, as Apple's prints." }
 nameHeight = { value = 16, why = "A printed section name's line: its 12 pt text and leading." }
+headerBand = { value = 28, why = "A printed section's header band: its name at the 6 pt offset, its 16 pt line, and the same air under it, as Apple's prints." }
 
 [instrumentFrame]
 labWindow = { x = 100, y = 120, width = 900, height = 700, why = "The lab's entry window: a main window's size, clear of the menu bar." }
@@ -433,3 +438,6 @@ tileHoleSlack = { value = 16, why = "In band pixels: how much ink a dropped run 
 frameDrift = { value = 1, why = "How far two readings of one window's frame, the compositor's and ScreenCaptureKit's, may disagree and still be the same frame: the two round independently (XiaolaiDict ScreenTextRecogniser)." }
 labelShift = { value = 12, why = "How far from its frame's centre a control's label is assumed it may be drawn, pushed aside by an icon, a radio circle or a chevron: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume labels up to this far aside, and no control was measured), so a title's word is taken only where every placement up to this far aside agrees." }
 labelSmaller = { value = 2, why = "How much smaller than the system's size for its kind a control's label is assumed it may be drawn: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume it); larger fonts are bounded by the frame the text must fit." }
+
+[page]
+estimate = { value = 240, why = "A frame's height before its document lands: an entry's usual first screen, so the page's length and its scroller are roughly right while the frames below are still to be made. A page that never says what its empty band is leaves it blank (owner, 2026-10-29)." }

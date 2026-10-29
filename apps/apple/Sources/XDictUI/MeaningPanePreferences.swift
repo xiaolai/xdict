@@ -14,14 +14,14 @@ public enum MeaningPanePreferences {
 
     public static let defaultGap = Double(Tokens.Window.paneGap)
     public static let defaultWidth = Double(Tokens.Window.meaningPaneIdeal)
-    public static let defaultAnimation = 0.5
+    public static let defaultAnimation = Double(Tokens.Motion.meaningPaneOpen)
     public static let defaultShortcutKey = "i"
     public static let defaultShortcutModifiers = Int(NSEvent.ModifierFlags.command.rawValue)
 
-    public static let gapRange: ClosedRange<Double> = 0...40
+    public static let gapRange: ClosedRange<Double> = 0...Double(Tokens.Window.paneGapMax)
     public static let widthRange: ClosedRange<Double> =
         Double(Tokens.Window.meaningPaneMin) ... Double(Tokens.Window.meaningPaneMax)
-    public static let animationRange: ClosedRange<Double> = 0...1.5
+    public static let animationRange: ClosedRange<Double> = 0...Double(Tokens.Motion.meaningPaneOpenMax)
 
     /// The air between the main window and the pane, in points.
     public static func gap(_ defaults: UserDefaults = .standard) -> CGFloat {

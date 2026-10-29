@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **One dictionary's part of the All page** (Apple Dictionary parity P15; ADR-0010 amendment of 2026-10-18): its entry,
 /// from its own content, in a frame of its own. `id` is the window's name for the dictionary (the library's), handed
@@ -76,7 +77,7 @@ public enum EntryPageStyle: Sendable {
 enum EntryPagePlan {
     /// The height a frame not yet made is laid out at, in points: an entry's usual first screen, so the page's length
     /// and its scroller are roughly right before the frames below are made.
-    static let estimatedHeight: Double = 240
+    static let estimatedHeight = Double(Tokens.Page.estimate)
     /// How far below the visible part of the page frames are made ahead of the reader, in viewports.
     static let lookahead: Double = 1
 
