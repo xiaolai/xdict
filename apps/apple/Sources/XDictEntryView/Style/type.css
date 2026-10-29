@@ -1,4 +1,8 @@
-body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}
+body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important;
+/* **Chinese beside Latin** (owner, 2026-10-29): the automatic space between an ideograph and a Latin letter or
+   digit that every Chinese text sets by hand, and the break rules that keep ，。、 off the start of a line. Both
+   are inert in an entry with no Han character; `text-spacing-trim` is not supported here (measured on 27). */
+text-autospace:normal;line-break:strict}
 [data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}
 /* The browser's defaults, at zero specificity, so a dictionary's own (normalized) rule still wins. */
 :where(h1){font-size:var(--xdict-fs-xxl);line-height:var(--xdict-leading-tight)}
