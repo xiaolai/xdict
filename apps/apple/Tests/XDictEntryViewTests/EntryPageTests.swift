@@ -39,6 +39,13 @@ struct EntryPageTests {
         #expect(EntryPagePlan.hasDivider(at: 1, collapsed: false))
         #expect(EntryPagePlan.hasDivider(at: 5, collapsed: true))
         #expect(EntryPagePlan.hasDivider(at: 0, collapsed: false, style: .popover), "the popover names every section")
+        // **A first section without an entry keeps its name** (owner, 2026-10-29): otherwise a dictionary that could not
+        // answer is a tall blank band with nothing on screen to say whose it is.
+        #expect(EntryPagePlan.hasDivider(at: 0, collapsed: false, failed: true))
+        #expect(EntryPagePlan.hasDivider(at: 0, collapsed: true, failed: true))
+        #expect(!EntryPagePlan.hasDivider(at: 0, collapsed: false, failed: false), "the rule is Apple's again once the entry is there")
+        #expect(EntryPagePlan.hasDivider(at: 3, collapsed: false, failed: true) == EntryPagePlan.hasDivider(at: 3, collapsed: false),
+                "a later section is named already, failing or not")
     }
 
     /// 24 dictionaries at the estimated height in a 600 pt viewport: the frames on screen and one screen below, never
@@ -201,7 +208,8 @@ struct EntryPageTests {
 
     // MARK: - The page
 
-    private func page(_ names: [String], collapsed: Set<String> = [], ruleList: Bool = true, popover: Bool = false)
+    private func page(_ names: [String], collapsed: Set<String> = [], ruleList: Bool = true, popover: Bool = false,
+                      failing: Set<String> = [])
         async throws -> (EntryViewController, [FakeContent], UserDefaults, String) {
         let suite = "xdict.page.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -224,6 +232,7 @@ struct EntryPageTests {
         let contents = names.map { name in
             let content = FakeContent(name)
             content.documents[name] = EntryDocument(html: Data("<b>\(name)</b>".utf8), policy: "default-src 'none'")
+            content.failing = failing.contains(name)
             return content
         }
         let items = zip(names, contents).map { name, content in
@@ -231,6 +240,50 @@ struct EntryPageTests {
         }
         _ = await controller.showPage(items, primary: items.first?.id)
         return (controller, contents, defaults, suite)
+    }
+
+    /// **A dictionary that cannot give its entry says so, and is asked again** (owner, 2026-10-29: a page opened on a
+    /// word whose first dictionary could not answer showed a tall blank where the entry belongs — and, the first
+    /// section carrying no divider, nothing on screen named it). The band names itself, the section regains its divider,
+    /// and showing the page again builds a fresh frame instead of keeping the empty one.
+    @Test func aDictionaryThatCannotShowItsEntrySaysSoAndIsRetried() async throws {
+        let (controller, contents, defaults, suite) = try await page(["alpha", "beta"], failing: ["alpha"])
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        let alpha = sections[0]
+        try await settle(alpha, to: .failed)
+        #expect(alpha.standing == .failed)
+        #expect(alpha.hasDivider, "a first section without an entry keeps its dictionary's name")
+        #expect(!alpha.notice.isHidden, "the band says what it is")
+        #expect(alpha.notice.stringValue == String(localized: EntrySentences.entryFailed))
+        #expect(sections[1].standing != .failed, "one dictionary's failure is not the next one's")
+
+        // The reader's second look, the dictionary answering now: the page asks it again rather than keeping the blank.
+        contents[0].failing = false
+        let ids = sections.map(\.id)
+        let items = [
+            EntryPageItem(id: ids[0], name: "Alpha", content: contents[0], reference: EntryReference(key: "alpha")),
+            EntryPageItem(id: ids[1], name: "Beta", content: contents[1], reference: EntryReference(key: "beta")),
+        ]
+        _ = await controller.showPage(items, primary: ids[0])
+        let retried = try #require(controller.pageSections)
+        #expect(retried[0] !== alpha, "the frame that could not show its entry was kept")
+        try await settle(retried[0], to: .shown)
+        #expect(retried[0].standing == .shown)
+        #expect(retried[0].notice.isHidden, "with its entry there, the band says nothing")
+        #expect(!retried[0].hasDivider, "the first section is Apple's again")
+    }
+
+    /// Waits for a section's band to reach `standing`: its frame is asked in a task of the page's own.
+    private func settle(_ section: EntryPageSection, to standing: EntryPageSection.Standing,
+                        timeout: Duration = .seconds(10)) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while section.standing != standing, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
     }
 
     /// Reader's order, one section each, the first with no divider, each divider named by its dictionary.

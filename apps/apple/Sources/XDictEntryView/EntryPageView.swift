@@ -255,12 +255,32 @@ final class EntryPageSourceLabel: NSVisualEffectView {
 /// first needed, sized to its document so it never scrolls inside.
 @MainActor
 final class EntryPageSection {
+    /// **What the section holds while its frame has no entry in it** (owner, 2026-10-29). A frame keeps its estimated
+    /// height until its document lands, so a dictionary that cannot answer leaves a tall blank where its entry belongs —
+    /// and if it is the page's first section, with no divider by Apple's rule, nothing on screen names it. The band
+    /// therefore says what it is: `loading` until the document arrives, `failed` when the dictionary could not give the
+    /// entry at all, which the page retries the next time it is shown.
+    enum Standing: Equatable {
+        /// No frame has been made for it yet (it is off screen).
+        case pending
+        /// Its frame exists and its document is on its way.
+        case loading
+        /// Its document loaded and took its height.
+        case shown
+        /// The dictionary could not give the entry.
+        case failed
+    }
+
     let item: EntryPageItem
     let divider: EntryPageDivider
     /// What the frame's web view sits in, at the document's height.
     let holder = NSView()
+    /// The band's sentence while the frame has no entry to show; empty and hidden once the entry is there.
+    let notice = NSTextField(wrappingLabelWithString: "")
     private let height: NSLayoutConstraint
     private(set) var pane: EntryPane?
+    /// What the band holds now; see [`Standing`].
+    private(set) var standing: Standing = .pending
     var collapsed: Bool { didSet { apply() } }
     var hasDivider = true { didSet { apply() } }
     /// The frame's document has loaded at least once, and the frame has taken its height.
@@ -270,6 +290,8 @@ final class EntryPageSection {
 
     var id: UUID { item.id }
     var name: String { item.name }
+    /// Whether the dictionary could not give this entry: the page names the section and retries it when shown again.
+    var failed: Bool { standing == .failed }
 
     init(item: EntryPageItem, collapsed: Bool, zoom: Double = 1, style: EntryPageStyle = .window) {
         self.item = item
@@ -279,7 +301,26 @@ final class EntryPageSection {
         height = holder.heightAnchor.constraint(equalToConstant: CGFloat(EntryPagePlan.estimatedHeight))
         height.priority = .required
         height.isActive = true
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        notice.font = Tokens.TextRole.callout.nsFont
+        notice.textColor = .secondaryLabelColor
+        notice.alignment = .center
+        notice.isHidden = true
+        holder.addSubview(notice)
+        NSLayoutConstraint.activate([
+            notice.centerYAnchor.constraint(equalTo: holder.centerYAnchor),
+            notice.centerXAnchor.constraint(equalTo: holder.centerXAnchor),
+            notice.leadingAnchor.constraint(greaterThanOrEqualTo: holder.leadingAnchor, constant: Tokens.Space.xl),
+            notice.trailingAnchor.constraint(lessThanOrEqualTo: holder.trailingAnchor, constant: -Tokens.Space.xl),
+        ])
         apply()
+    }
+
+    /// Says what the band is, or — with no sentence — that it is nothing but the entry: the notice leaves the view.
+    func stand(_ standing: Standing, saying sentence: String?) {
+        self.standing = standing
+        notice.stringValue = sentence ?? ""
+        notice.isHidden = sentence == nil
     }
 
     /// The frame's height in points, as laid out now.
@@ -307,6 +348,9 @@ final class EntryPageSection {
         view.passesScrollToPage = true
         view.scrollsInternally = frameHeight >= EntryPage.maximumFrameHeight - 0.5
         holder.addSubview(view)
+        // **The band's sentence stays on top of the frame** (owner, 2026-10-29): a window-style frame draws its own
+        // paper, which would hide a notice underneath it, and the notice is exactly what shows while that paper is empty.
+        holder.addSubview(notice, positioned: .above, relativeTo: view)
         NSLayoutConstraint.activate([
             view.topAnchor.constraint(equalTo: holder.topAnchor),
             view.bottomAnchor.constraint(equalTo: holder.bottomAnchor),
@@ -441,7 +485,10 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         var kept: Set<ObjectIdentifier> = []
         var next: [EntryPageSection] = []
         for item in items {
-            if let section = old[item.identity], !kept.contains(ObjectIdentifier(section)) {
+            // **A section whose dictionary could not give its entry is not kept** (owner, 2026-10-29): keeping it kept
+            // its empty frame for as long as the word stayed on screen, so a dictionary that was still indexing showed a
+            // blank band that never healed. A fresh section asks it again, and the answer of this show is the page's.
+            if let section = old[item.identity], !kept.contains(ObjectIdentifier(section)), !section.failed {
                 kept.insert(ObjectIdentifier(section))
                 next.append(section)
             } else {
@@ -462,7 +509,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         }
         sections = next
         for (index, section) in next.enumerated() {
-            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed, style: style)
+            section.hasDivider = Self.divider(at: index, for: section, style: style)
             section.divider.onToggle = { [weak self, weak section] in
                 guard let self, let section else { return }
                 self.toggle(section)
@@ -470,6 +517,11 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             section.onHeightChange = { [weak self] in
                 self?.onContentHeightChanged?()
                 self?.reportSources()
+            }
+            // A section that has not been asked for its entry yet stands in its band too: it is made on the next
+            // `materialize`, but a page shown with the section already on screen never shows blank paper in between.
+            if section.standing == .pending {
+                section.stand(.pending, saying: String(localized: EntrySentences.pageLoading(section.name)))
             }
         }
         let views = next.flatMap { [$0.divider as NSView, $0.holder] }
@@ -504,10 +556,29 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         section.collapsed.toggle()
         preferences.setCollapsed(section.collapsed, for: section.item.content.binding.dictionary)
         if let index = sections.firstIndex(where: { $0 === section }) {
-            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed, style: style)
+            section.hasDivider = Self.divider(at: index, for: section, style: style)
         }
         onContentHeightChanged?()
         if let refusal = materialize() { onRefusal?(refusal) }
+    }
+
+    /// Whether a section carries a divider, from the plan and from what the section is now: a frame without an entry
+    /// keeps its dictionary's name (owner, 2026-10-29).
+    private static func divider(at index: Int, for section: EntryPageSection, style: EntryPageStyle) -> Bool {
+        EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed, style: style, failed: section.failed)
+    }
+
+    /// **A dictionary that could not give the page its entry** (owner, 2026-10-29): the band says so instead of holding
+    /// blank paper, and the section keeps (or regains) its divider, so the page names what is missing even where Apple's
+    /// rule would leave the first dictionary unnamed. The next `show` of this page builds a fresh frame for it.
+    private func sectionFailed(_ section: EntryPageSection) {
+        section.stand(.failed, saying: String(localized: EntrySentences.entryFailed))
+        if let index = sections.firstIndex(where: { $0 === section }) {
+            section.hasDivider = Self.divider(at: index, for: section, style: style)
+        }
+        onContentHeightChanged?()
+        onFramesChanged?()
+        reportSources()
     }
 
     /// Makes the frames the viewport wants (or every frame, for find); the first refusal stops it.
@@ -538,7 +609,16 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                                                                   name: Self.heightHandler)
                 pane.view.configuration.userContentController.add(self, contentWorld: EntryPane.world,
                                                                   name: Self.scrollHandler)
-                Task { _ = await pane.show(section.item.reference) }
+                section.stand(.loading, saying: String(localized: EntrySentences.pageLoading(section.name)))
+                let reference = section.item.reference
+                Task { @MainActor [weak self, weak section] in
+                    // **A frame that could not be given its entry says so** (owner, 2026-10-29): `show` answers false
+                    // when the dictionary could not produce the entry, and it was discarded — the section kept its
+                    // estimated height, blank, forever. It is named instead, and the next show of the page retries it.
+                    let shown = await pane.show(reference)
+                    guard let self, let section, !shown, section.pane === pane else { return }
+                    self.sectionFailed(section)
+                }
             }
         }
         onFramesChanged?()
@@ -574,6 +654,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                                                                   contentWorld: EntryPane.world) as? Double
             if let height { section.setHeight(height * zoom) }
             section.finished = true
+            section.stand(.shown, saying: nil)
             landIfReady()
             if let refusal = materialize() { onRefusal?(refusal) }
         }

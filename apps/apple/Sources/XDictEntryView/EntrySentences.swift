@@ -34,6 +34,12 @@ public enum EntrySentences {
     public static let accentTagUS = LocalizedStringResource("US", comment: "Accent tag after a speaker: American")
     public static let pictures = LocalizedStringResource("Pictures", comment: "The fold at an entry's end holding the pictures the dictionary hides")
     public static let entryFailed = LocalizedStringResource("This entry could not be shown.")
+    /// **The band a page section stands in before its entry arrives** (owner, 2026-10-29: a page whose first dictionary
+    /// could not answer showed a tall blank where its entry belongs): the frame keeps its estimated height until its
+    /// document lands, so something has to say what the space is and whose it is.
+    public static func pageLoading(_ dictionary: String) -> LocalizedStringResource {
+        LocalizedStringResource("Loading “\(dictionary)”…")
+    }
     public static let ready = LocalizedStringResource("Entries are shown confined: nothing in them reaches the internet.")
 
     // The reader's consent to a remote link (ADR-0009 decision 7).

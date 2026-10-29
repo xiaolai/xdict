@@ -7039,6 +7039,22 @@
         }
       }
     },
+    "Loading “%@”…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading “%@”…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在载入“%@”…"
+          }
+        }
+      }
+    },
     "Locate…": {
       "localizations": {
         "en": {

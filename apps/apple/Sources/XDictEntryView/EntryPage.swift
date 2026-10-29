@@ -82,10 +82,14 @@ enum EntryPagePlan {
 
     /// Apple's page: every section but the first has a divider (the first dictionary is read straight after the
     /// toolbar). A collapsed first section needs its divider back, or nothing could expand it.
+    /// **A first section whose frame could not show its entry keeps its divider too** (owner, 2026-10-29: a page opened
+    /// on a word whose first dictionary could not answer showed a tall blank where the entry belongs, and, with no
+    /// divider, nothing named it). A blank band is never anonymous.
     /// In the lookup popover every section has one: its title row is the headword, so the first dictionary is named
     /// by its divider too, as Apple's popover names each of its stacked dictionaries (P41).
-    static func hasDivider(at index: Int, collapsed: Bool, style: EntryPageStyle = .window) -> Bool {
-        style == .popover || index > 0 || collapsed
+    static func hasDivider(at index: Int, collapsed: Bool, style: EntryPageStyle = .window,
+                           failed: Bool = false) -> Bool {
+        style == .popover || index > 0 || collapsed || failed
     }
 
     /// The sections whose frames should exist for a viewport from `top` to `top + height` (points, the page's
