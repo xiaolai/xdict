@@ -144,7 +144,7 @@ public struct AISettings: View {
                 Image(systemName: "exclamationmark.triangle")
             }
             .font(.caption)
-            .foregroundStyle(.orange)
+            .foregroundStyle(Tokens.Tint.orange.color)
             .accessibilityIdentifier("ai.status.endpoint-invalid")
         } else {
             statusBody
@@ -227,7 +227,7 @@ public struct AISettings: View {
             } icon: {
                 Image(systemName: "exclamationmark.triangle")
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Tokens.Tint.orange.color)
             .accessibilityIdentifier("ai.status.failure")
             // **A failure is not the last word** (audit finding, 2026-10-25): installing the tool or switching a
             // capability on happens outside this pane, so the reader can ask for the check again.
@@ -289,7 +289,7 @@ public struct AISettings: View {
             if model.endpointInvalid {
                 Text("Enter an address that begins http:// or https://, with a host.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Tokens.Tint.red.color)
                     .accessibilityIdentifier("ai.endpoint.invalid")
             } else {
                 Text("An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama.")
@@ -358,7 +358,7 @@ public struct AISettings: View {
         case .failed(let error):
             Text(MeaningSentences.catalogue(error))
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Tokens.Tint.orange.color)
                 .accessibilityIdentifier("ai.models.failure")
         case .loaded(let list) where list.isEmpty:
             Text("This service listed no models; type one above.")
@@ -379,7 +379,7 @@ public struct AISettings: View {
         case .failed(let error): keyRefused(model: model, error: error)
         }
         if let failure = model.keyFailure {
-            Text(failure).foregroundStyle(.red).font(.caption)
+            Text(failure).foregroundStyle(Tokens.Tint.red.color).font(.caption)
         }
     }
 
@@ -417,7 +417,7 @@ public struct AISettings: View {
             } icon: {
                 Image(systemName: "exclamationmark.triangle")
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Tokens.Tint.orange.color)
             keyButtons(model: model)
         }
     }
@@ -497,7 +497,7 @@ public struct AISettings: View {
             if unopenedURL == url {
                 Text("The sign-in page could not be opened. Copy its address and open it in your browser.")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Tokens.Tint.orange.color)
                     .accessibilityIdentifier("ai.codex.open.failure")
                 ActionRow {
                     Text(verbatim: url.absoluteString).font(.caption.monospaced()).textSelection(.enabled)
@@ -794,7 +794,7 @@ public struct AISettings: View {
         case .failure(let error):
             Text(MeaningSentences.compose(error))
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(Tokens.Tint.red.color)
                 .accessibilityIdentifier("ai.prompt.preview.error")
         }
     }

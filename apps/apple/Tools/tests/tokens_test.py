@@ -265,10 +265,34 @@ class Check(unittest.TestCase):
             "CGRect(x: 0, y: 0, width: 1, height: 0)": ("geometry", "1"),
             "static let rowHeight: CGFloat = 28": ("constant", "28"),
             "let minimum: (width: CGFloat, height: CGFloat) = (400, 0)": ("constant", "400"),
+            # The positions added 2026-10-29 (owner: "100% tokenized"): a motion, a shadow, a blur, a stroke width,
+            # tracking, a scale, a window's default size and a margin are design values like any other.
+            "x.animation(.easeOut(duration: 0.2))": ("motion", "0.2"),
+            "withAnimation(.spring(response: 0.3)) { }": ("motion", "0.3"),
+            # Two design values in one call are two findings: each literal is its own.
+            "x.interpolatingSpring(stiffness: 120, damping: 8)": [("motion", "120"), ("motion", "8")],
+            "x.shadow(color: .black, radius: 4, y: 1)": [("shadow", "4"), ("shadow", "1")],
+            "x.blur(radius: 3)": ("blur", "3"),
+            "shape.stroke(.black, lineWidth: 2)": [("line-width", "2"), ("colour", ".black")],
+            "path.lineWidth = 2": ("line-width", "2"),
+            "x.tracking(0.5)": ("tracking", "0.5"),
+            "x.kerning(-1)": ("tracking", "-1"),
+            "x.scaleEffect(1.1)": ("scale", "1.1"),
+            "x.aspectRatio(1.5, contentMode: .fit)": ("scale", "1.5"),
+            "x.minimumScaleFactor(0.8)": ("scale", "0.8"),
+            ".defaultSize(width: 900, height: 600)": [("window-size", "900"), ("window-size", "600")],
+            "x.contentMargins(12)": ("padding", "12"),
+            "x.safeAreaPadding(.top, 8)": ("padding", "8"),
+            # A named hue is a hand-picked colour; the semantic styles are the intent and are not seen.
+            "x.foregroundStyle(.red)": ("colour", ".red"),
+            "x.fill(.white)": ("colour", ".white"),
+            "x.background(.orange)": ("colour", ".orange"),
         }
         for code, expected in cases.items():
             with self.subTest(code=code):
-                self.assertEqual(self.kinds(swift=code + "\n")[0], [expected])
+                # One finding for a call with one design value; a call with two says so as a list.
+                want = expected if isinstance(expected, list) else [expected]
+                self.assertEqual(self.kinds(swift=code + "\n")[0], want)
 
     def test_capture_shaped_distance_comparisons_are_seen(self):
         cases = {
@@ -280,7 +304,9 @@ class Check(unittest.TestCase):
         }
         for code, expected in cases.items():
             with self.subTest(code=code):
-                self.assertEqual(self.kinds(swift=code + "\n")[0], [expected])
+                # One finding for a call with one design value; a call with two says so as a list.
+                want = expected if isinstance(expected, list) else [expected]
+                self.assertEqual(self.kinds(swift=code + "\n")[0], want)
 
     def test_distances_that_are_not_capture_tolerances_are_not_seen(self):
         found, _ = self.kinds(swift="\n".join([

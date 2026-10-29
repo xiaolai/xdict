@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictAnywhere
+import XDictTokens
 
 /// **Lookup from anywhere, in Settings** (plan-macos-v1 WI-8): the lookup shortcut — shown, rebindable by a recorder,
 /// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). Rows, not a
@@ -21,7 +22,7 @@ public struct ShortcutSettings: View {
             }
             if let problem = registrar.problem {
                 Text(AnywhereSentences.problem(problem))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Tokens.Tint.red.color)
                     .accessibilityIdentifier("shortcut.problem")
             }
             Text("""

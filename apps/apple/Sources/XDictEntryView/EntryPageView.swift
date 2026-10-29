@@ -137,7 +137,7 @@ final class EntryPageDivider: NSView {
         guard end > start else { return }
         Self.ruleColour.setStroke()
         let rule = NSBezierPath()
-        rule.lineWidth = 1
+        rule.lineWidth = Tokens.Line.hairline
         rule.move(to: NSPoint(x: start, y: y))
         rule.line(to: NSPoint(x: end, y: y))
         rule.stroke()

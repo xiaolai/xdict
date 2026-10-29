@@ -69,7 +69,7 @@ struct SettingsLibraryStrip: View {
             // R2: the strip's actions small at the trailing edge, Dismiss the primary one, rightmost.
             ActionRow(.strip) {
                 HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Tokens.Tint.orange.color).accessibilityHidden(true)
                     Group {
                         if notices.count == 1, let only = notices.first {
                             Text(LibrarySentences.notice(only))

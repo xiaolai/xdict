@@ -546,7 +546,7 @@ struct PaneSection<Content: View>: View {
             case .failed:
                 Label { Text("The note could not be saved.") } icon: { Image(systemName: "exclamationmark.triangle") }
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Tokens.Tint.orange.color)
                     .accessibilityIdentifier("meaning.note.failed")
                 Button("Try Again") { retryNote() }  // placement: inspector-row
                     .buttonStyle(.borderless)

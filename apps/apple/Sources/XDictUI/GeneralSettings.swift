@@ -70,7 +70,7 @@ public struct GeneralSettings: View {
                         Text("The system did not change whether XDict opens when you log in.")
                         Text(verbatim: failure).font(.caption)
                     }
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Tokens.Tint.red.color)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("launch-at-login.failure")
                 }
@@ -160,7 +160,7 @@ public struct GeneralSettings: View {
                 if let shortcutRejection {
                     // A combination XDict cannot take says why (HIG: a control that refuses explains itself).
                     Text(verbatim: MeaningPanePreferences.sentence(shortcutRejection))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Tokens.Tint.red.color)
                         .accessibilityIdentifier("meaning-pane-shortcut.problem")
                 }
             } header: {

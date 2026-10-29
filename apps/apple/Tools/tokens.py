@@ -24,9 +24,14 @@ hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshn
 
 **What `check` looks for** (Swift under Sources/, CSS under Style/), and what it allows:
   Swift: numeric literals in `.padding(`, `spacing:`, `Spacer(minLength:`, `.frame(`, `.offset(`, `cornerRadius`,
-  `.lineSpacing(`, `.opacity(`, `NSEdgeInsets(`/`EdgeInsets(`, `NSSize(`/`CGSize(`/`NSRect(`/`CGRect(`; font sizes
+  `.lineSpacing(`, `.opacity(`, `NSEdgeInsets(`/`EdgeInsets(`, `NSSize(`/`CGSize(`/`NSRect(`/`CGRect(`; in the design
+  positions this file added on 2026-10-29 — motion (`.animation(`, `withAnimation(`, `.spring(`, `.easeOut(` and its
+  kin, `.interpolatingSpring(`, `.timingCurve(`), `.shadow(`, `.blur(`, `lineWidth:`, `.tracking(`/`.kerning(`,
+  `.scaleEffect(`/`.rotationEffect(`/`.aspectRatio(`/`.minimumScaleFactor(`, `.defaultSize(`, `.contentMargins(`/
+  `.safeAreaPadding(`; font sizes
   (`.system(size:`, `systemFont(ofSize:` and its kin, `NSFont(name:size:`); every colour built from components
-  (`Color(red:/white:/hue:`, `NSColor(red:/white:/calibrated…/srgb…/device…/displayP3…`), one finding per call; and
+  (`Color(red:/white:/hue:`, `NSColor(red:/white:/calibrated…/srgb…/device…/displayP3…`), one finding per call, and a
+  named hue in a colour position (`.foregroundStyle(.red)`, `.fill(.white)`); and
   `let`/`var` of a `CGFloat` type given a literal; and a tolerance compared bare with a distance (`hypot(`, `distance`,
   `dx`/`dy`, `.minX`... `.width`, `.x`/`.y` on the other side of `<`, `<=`, `>`, `>=`), written as a literal or as a
   constant whose type is inferred (`static let horizontal = 3`, reported at its declaration): capture's shape
@@ -693,7 +698,24 @@ SWIFT_CALLS = [
     (r"\.opacity\(", "opacity"),
     (r"\.insetBy\(", "geometry"),
     (r"\.system\(\s*size:|[sS]ystemFont\(ofSize:|\bNSFont\(name:", "font-size"),
+    # The positions added on 2026-10-29 (owner: "no handrolled, hardcoded magic value, 100% tokenized"): each is a design
+    # value the checker had never looked at, so a literal there was invisible.
+    (r"\.animation\(|\bwithAnimation\(|\.interpolatingSpring\(|\.timingCurve\(|\.spring\(|\.easeIn\(|\.easeOut\(|"
+     r"\.easeInOut\(|\.bouncy\(|\.smooth\(|\.snappy\(", "motion"),
+    (r"\.shadow\(", "shadow"),
+    (r"\.blur\(", "blur"),
+    (r"\blineWidth:\s*|\blineWidth\s*=", "line-width"),
+    (r"\.tracking\(|\.kerning\(", "tracking"),
+    (r"\.scaleEffect\(|\.rotationEffect\(|\.aspectRatio\(|\.minimumScaleFactor\(", "scale"),
+    (r"\.defaultSize\(", "window-size"),
+    (r"\.contentMargins\(|\.safeAreaPadding\(", "padding"),
 ]
+# **A named hue in a colour position is a hand-picked colour** (owner, 2026-10-29: "no handrolled, hardcoded magic value,
+# 100% tokenized"): the system's semantic colours — `.secondary`, `.primary`, `.accent`, `.tint`, `.background` — say what
+# they mean and stay; a hue is `Tokens.Colour`'s or `Tokens.Tint`'s, where it has a reason beside it.
+SWIFT_NAMED_COLOUR = re.compile(
+    r"\.(?:foregroundStyle|foregroundColor|tint|background|fill|stroke|border)\(\s*\."
+    r"(red|orange|yellow|green|blue|purple|pink|teal|indigo|brown|gray|white|black)\b")
 # One finding per call, whatever its numbers: a colour built from components.
 SWIFT_COLOUR = re.compile(r"\b(?:Color|NSColor)\(\s*(?:\.sRGB\s*,\s*)?(?:red|white|hue|calibratedRed|calibratedWhite|"
                           r"calibratedHue|srgbRed|deviceRed|deviceWhite|deviceHue|displayP3Red|genericGamma22White):")
@@ -716,6 +738,9 @@ KIND_GROUPS = {
     "radius": ["radius"], "line-spacing": ["space"], "font-size": ["text"], "opacity": [],
     "colour": ["colour"], "css-length": ["css", "density", "fill"], "css-colour": ["css", "palette"],
     "distance": ["space", "inset", "size"],
+    "motion": ["motion"], "shadow": ["card", "opacity", "colour"], "blur": ["card"],
+    "line-width": ["line"], "tracking": ["text", "reading"], "scale": ["text"],
+    "window-size": ["window"],
 }
 
 
@@ -937,6 +962,8 @@ def scan_swift(rel, text, modules=None):
     for m in SWIFT_COLOUR.finditer(clean):
         end = span(clean, clean.index("(", m.start()) + 1)
         add("colour", m.start(), " ".join(clean[m.start():end].split()))
+    for m in SWIFT_NAMED_COLOUR.finditer(clean):
+        add("colour", m.start(), "." + m.group(1))
     for rx, kind in SWIFT_LABELS:
         for m in rx.finditer(clean):
             value = numeric_value(m.group(1)) if re.fullmatch(r"-?\d[\d.]*", m.group(1)) else None
