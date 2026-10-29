@@ -4404,6 +4404,22 @@
         }
       }
     },
+    "Dictionaries in the Hover Popup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionaries in the Hover Popup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取词弹窗中的词典"
+          }
+        }
+      }
+    },
     "Dictionaries on This Page": {
       "localizations": {
         "en": {
@@ -6074,6 +6090,22 @@
         }
       }
     },
+    "Hover Popup…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hover Popup…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取词弹窗…"
+          }
+        }
+      }
+    },
     "Hover found no word to read under the pointer.": {
       "localizations": {
         "en": {
@@ -6456,6 +6488,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "这句话"
+          }
+        }
+      }
+    },
+    "In the popup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the popup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在弹窗中"
           }
         }
       }
@@ -8270,6 +8318,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚未设置。"
+          }
+        }
+      }
+    },
+    "Not shown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not shown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不显示"
           }
         }
       }
@@ -12009,6 +12073,22 @@
         }
       }
     },
+    "The Hover Popup has its own dictionaries, in its own order.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Hover Popup has its own dictionaries, in its own order."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取词弹窗有自己的词典，也有自己的顺序。"
+          }
+        }
+      }
+    },
     "The Keychain refused to remove the key (status %d).": {
       "localizations": {
         "en": {
@@ -13079,6 +13159,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法读取笔记。"
+          }
+        }
+      }
+    },
+    "The popover shows these, in this order; the window keeps its own list in Settings ▸ Dictionaries.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The popover shows these, in this order; the window keeps its own list in Settings ▸ Dictionaries."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹窗按此顺序显示这些词典；窗口自己的列表在“设置 ▸ 词典”中。"
           }
         }
       }

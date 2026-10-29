@@ -263,7 +263,8 @@ struct XDictApp: App {
         let entry = EntryViewController(environment: environment)
         let state = SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
                                       speech: SystemOutput(volume: setup.speechVolume),
-                                      speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
+                                      speechPreferences: SpeechPreferences(defaults: setup.speechDefaults),
+                                      panel: panel)
         // **The pane's Save as Note** (plan-companion WI-9; owner, 2026-10-25): the app's study model, behind the reader's
         // explicit tap; a note already on the entry is replaced only after the pane asks.
         // **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): the pane no longer asks first, so a note

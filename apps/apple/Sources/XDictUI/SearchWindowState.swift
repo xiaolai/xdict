@@ -106,12 +106,17 @@ public final class SearchWindowState {
     /// **Explore** (plan-word-exploration WI-3): the panel's model, one per window.
     public let explore: ExploreModel
 
+    /// **`panel` is the hover popup's state** (owner, 2026-10-29): its page takes `HoverPopupPreferences`' own list and
+    /// order, where a window's takes the library's.
+    public let isPanel: Bool
+
     public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String,
                 speech: any PronunciationOutput = SystemOutput(),
-                speechPreferences: SpeechPreferences = SpeechPreferences()) {
+                speechPreferences: SpeechPreferences = SpeechPreferences(), panel: Bool = false) {
         self.library = library
         self.backend = backend
         self.entry = entry
+        isPanel = panel
         let model = SearchModel(backend: backend, window: window) { [library] in
             library.searchSources
         }
@@ -775,13 +780,20 @@ public final class SearchWindowState {
     }
 
     private func pageItems(_ results: [ResultID]) -> [EntryPageItem] {
-        results.compactMap { result in
+        let items: [EntryPageItem] = results.compactMap { result -> EntryPageItem? in
             guard let source = model.source(result.dictionary),
                   let content = ServiceEntryContent(source: source, backend: backend, preferences: entry.preferences)
             else { return nil }
             return EntryPageItem(id: source.id, name: source.name, content: content,
                                  reference: EntryReference(key: result.entry.key, occurrence: result.entry.occurrence))
         }
+        guard isPanel else { return items }
+        // **The hover popup's own list and order** (owner, 2026-10-29; ADR-0012's amendment): its frames and no other,
+        // in the order the reader put them, whatever the window's list says.
+        let order = HoverPopupPreferences.ordered(items.map { $0.id })
+        var rank: [UUID: Int] = [:]
+        for (index, id) in order.enumerated() { rank[id] = index }
+        return items.filter { rank[$0.id] != nil }.sorted { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }
     }
 
     /// **Whether this window's reading column is an All page now** (owner, 2026-10-27): the answer decides both the

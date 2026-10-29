@@ -12,6 +12,8 @@ public enum SettingsPresentation: Equatable, Sendable {
     case appleImport
     /// Choosing the word data's file (plan-word-exploration WI-5).
     case wordPack
+    /// The hover popup's own dictionaries and order (owner, 2026-10-29).
+    case hoverPopup
 }
 
 /// **Opening Settings on a dictionary is routed, not hoped for** (ADR-0012 d.4): the pane to show, the dictionary to

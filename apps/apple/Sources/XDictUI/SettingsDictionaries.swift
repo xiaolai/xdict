@@ -178,6 +178,7 @@ public struct SettingsDictionaries: View {
             SettingsAddRemoveBar(canAdd: library.unreadable == nil, canRemove: selection != nil,
                                  add: { item in add(item) }, remove: { removeSelected() })
                 .settingsAnchor(.dictionaryImport)
+            hoverPopupRow
             options
             if let wordData {
                 SettingsWordData(model: wordData, choose: { route.request(.wordPack) })
@@ -209,12 +210,29 @@ public struct SettingsDictionaries: View {
         // The open panel's button says what happens (UI review L-19).
         .fileDialogConfirmationLabel(Text("Add"))
         .sheet(isPresented: detailsShown) { detailsSheet }
+        .sheet(isPresented: presented(.hoverPopup)) {
+            HoverPopupSheet(library: library, size: Self.detailsSheetSize(paneHeight: paneHeight),
+                            done: { route.dismiss(.hoverPopup) })
+        }
         .sheet(isPresented: presented(.appleImport), onDismiss: { appleImport?.importer.clearFinished() }) {
             if let appleImport {
                 AppleImportSheet(library: library, host: appleImport, size: Self.detailsSheetSize(paneHeight: paneHeight),
                                  done: { route.dismiss(.appleImport) })
             }
         }
+    }
+
+    /// **The hover popup's own list** (owner, 2026-10-29): a line saying it has one, and the sheet that edits it.
+    private var hoverPopupRow: some View {
+        HStack(spacing: Tokens.Space.sm) {
+            Text("The Hover Popup has its own dictionaries, in its own order.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button { route.request(.hoverPopup) } label: { Text("Hover Popup…") }  // placement: form-row
+                .disabled(library.entries.allSatisfy { !$0.enabled })
+                .accessibilityIdentifier("settings.dictionaries.hoverPopup")
+        }
+        .font(Tokens.TextRole.callout.font)
     }
 
     // MARK: - The table
