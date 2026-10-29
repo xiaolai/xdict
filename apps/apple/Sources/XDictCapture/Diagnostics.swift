@@ -71,8 +71,31 @@ public final class Diagnostics: @unchecked Sendable {
             }
             let whole = pieces.joined()
             guard whole.utf8.count > limit else { return whole }
-            let tail = String(whole.suffix(limit / 4 * 3))
-            return "… the log was longer; its last part follows\n" + tail
+            // **The bound is bytes, and a line is the unit** (audit 2026-10-29 finding 4): `suffix` counted grapheme
+            // clusters, so the tail could be several times the limit in UTF-8, and it could start inside a line. Whole
+            // lines from the end keep it under the bound and keep every line whole — and a `String` is always valid
+            // UTF-8, so no scalar is split.
+            let marker = "… the log was longer; its last part follows\n"
+            guard limit >= marker.utf8.count else {
+                // **The bound outranks the sentence** (verify 2026-10-29): a limit below the marker's own bytes used to
+                // return the marker whole, over the bound it claims. The marker is cut to what fits, character by
+                // character, so even this answer is valid UTF-8 within `limit`.
+                var fits = ""
+                for character in marker {
+                    guard fits.utf8.count + character.utf8.count <= limit else { break }
+                    fits.append(character)
+                }
+                return fits
+            }
+            var budget = limit - marker.utf8.count
+            var tail: [String] = []
+            for line in whole.split(separator: "\n", omittingEmptySubsequences: false).reversed() {
+                let piece = String(line) + "\n"
+                guard piece.utf8.count <= budget else { break }
+                tail.append(piece)
+                budget -= piece.utf8.count
+            }
+            return marker + tail.reversed().joined()
         }
     }
 

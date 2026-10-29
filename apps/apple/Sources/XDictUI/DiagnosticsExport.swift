@@ -23,7 +23,7 @@ public enum DiagnosticsExport {
     public static func text(hover: HoverControl?, library: (any DiagnosticsLibrary)?, now: Date = Date(),
                             diagnostics: Diagnostics = .shared) -> String {
         var lines = [
-            "XDict diagnostics",
+            String(localized: "XDict diagnostics"),
             "written: \(ISO8601DateFormatter().string(from: now))",
             "app: \(bundle("CFBundleShortVersionString")) (\(bundle("CFBundleVersion")))",
             "bundle: \(Bundle.main.bundleIdentifier ?? "—")",
@@ -44,25 +44,33 @@ public enum DiagnosticsExport {
         return lines.joined(separator: "\n") + "\n" + diagnostics.exportText()
     }
 
-    /// Writes `text` where the reader said, and shows it in Finder. Answers the file written, or nil when cancelled.
+    /// What Save Diagnostics… came to: the file written, the reader's cancellation, or why it failed. **A failure is
+    /// never silent** (audit 2026-10-29 finding 7): the reader chose to save, and a refusal has to be answered where they
+    /// can try again.
+    public enum SaveResult: Equatable {
+        case saved(URL)
+        case cancelled
+        case failed(String)
+    }
+
+    /// Writes `text` where the reader said, and shows it in Finder.
     @MainActor
-    @discardableResult
-    public static func save(_ text: String, name: String = fileName()) -> URL? {
+    public static func save(_ text: String, name: String = fileName()) -> SaveResult {
         let panel = NSSavePanel()
         panel.title = String(localized: "Save Diagnostics")
         panel.nameFieldStringValue = name
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        guard panel.runModal() == .OK, let url = panel.url else { return .cancelled }
         do {
             try text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             Diagnostics.shared.record("diagnostics.exportFailed", ["reason": String(describing: error)])
-            return nil
+            return .failed(error.localizedDescription)
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
         Diagnostics.shared.record("diagnostics.exported", ["bytes": "\(text.utf8.count)"])
-        return url
+        return .saved(url)
     }
 
     private static func bundle(_ key: String) -> String {

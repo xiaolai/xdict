@@ -174,8 +174,7 @@ final class LookupAnywhere {
         // an instrument keeps its own, and a reader's log is what can be handed back.
         if observe == nil {
             observe = { event, fields in
-                Diagnostics.shared.record("lookup.\(event)",
-                                          fields.mapValues { "\($0)" })
+                Diagnostics.shared.record("lookup.\(event)", Self.logged(fields))
             }
         }
         Diagnostics.shared.record("hover.started", ["enabled": "\(hover.isEnabled)"])
@@ -454,7 +453,7 @@ final class LookupAnywhere {
         guard isTrusted() else { return .read(nil) }
         let outcome = await selectionRead(app, under, hover.policy)
         guard !Task.isCancelled else { return .cancelled }
-        observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
+        observe?("serviceSelection", ["outcome": Self.lookupDescription(outcome)])
         return .read(outcome)
     }
 
@@ -782,6 +781,38 @@ final class LookupAnywhere {
 
     static var primaryHeight: CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
 
+    /// The fields a lookup event carries the reader's words in: `logged` redacts every one of them.
+    nonisolated static let wordFields: Set<String> = ["text", "query", "key"]
+
+    /// **A lookup event's fields as the log may carry them** (audit 2026-10-29 finding 1): the reader's own words stay out
+    /// unless they let them in — every field in `wordFields` goes through `Diagnostics.word`, which withholds it unless
+    /// "Include the words I look up" is on. Kinds, counts, names and frames pass as they are.
+    nonisolated static func logged(_ fields: [String: Any], diagnostics: Diagnostics = .shared) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: fields.map { key, value in
+            guard wordFields.contains(key), let text = value as? String else { return (key, "\(value)") }
+            return (key, diagnostics.word(text))
+        })
+    }
+
+    /// **A selection read's outcome as metadata** (audit 2026-10-29 finding 1): `String(describing:)` printed the
+    /// selection itself, its sentence included; a case, the app, counts and whether there is a box are what the log needs.
+    nonisolated static func lookupDescription(_ outcome: SelectionOutcome?) -> String {
+        switch outcome {
+        case nil: return "none"
+        case .selected(let selected, let box):
+            return "selected(app=\(selected.app.bundleID ?? selected.app.name) chars=\(selected.text.count)"
+                + " box=\(box == nil ? "no" : "yes"))"
+        case .nothing(.nothingSelected(let app)): return "nothingSelected(\(app))"
+        case .nothing(.searchLimitReached(let app, let limit)): return "searchLimitReached(\(app) limit=\(limit))"
+        case .nothing(.noWord(let app)): return "noWord(\(app))"
+        case .nothing(.tooLong(let app, let characters)): return "tooLong(\(app) chars=\(characters))"
+        case .nothing(.failed(let error, let app)): return "failed(\(error) \(app))"
+        case .nothing(.notTrusted): return "notTrusted"
+        case .nothing(.noApp): return "noApp"
+        case .nothing(.tooLongToRead(let app)): return "tooLongToRead(\(app))"
+        }
+    }
+
     static func describe(_ rect: CGRect) -> [String: Double] {
         ["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height]
     }
@@ -846,7 +877,13 @@ enum MainWindows {
     static func made(_ state: SearchWindowState) {
         states.removeAll { $0.state == nil }
         states.append(WeakState(state: state))
-        if pending != nil { _ = deliver() }
+        guard let place = pending else { return }
+        // **The window being made takes the place** (audit 2026-10-29 finding 2): with no window open, `deliver` has
+        // nothing to choose — this state was registered before its entry view held a window — and nothing woke the place
+        // afterwards. `made` runs only for a window SwiftUI is creating, so that window is the one to hand it to, and
+        // adoption works before the view exists (the search window draws `model.shown` at mount, `initial: true`).
+        // **Never a window that has closed**: no state is chosen here but this one, the window just made.
+        if !deliver() { adopt(place, into: state, window: state.entry.view.window) }
     }
 
     static func hand(_ place: Visit, meaning: MeaningHandoff? = nil, asking: Bool = false) {
@@ -862,14 +899,24 @@ enum MainWindows {
         guard let place = pending else { return false }
         // **One window adopts the place and comes forward** (audit round 4, 2026-10-26): the place went to the last state
         // made while the first visible window was activated, so with two windows open a lookup landed behind the
-        // reader's back. The frontmost window that is open is the one that takes it.
-        let open = states.compactMap { entry -> (SearchWindowState, NSWindow)? in
-            guard let state = entry.state, let window = state.entry.view.window else { return nil }
-            return (state, window)
+        // reader's back. The frontmost window that is open is the one that takes it. `adopter` owns the choice, and its
+        // tests. **A window the reader can see is the only candidate** (verify 2026-10-29): a closed window may stay
+        // allocated with its content view attached, so `view.window` alone counts a window that is gone — the place would
+        // be handed to it and no new window would open. A window being created has no window here yet; `made` handles it.
+        let open = states.compactMap {
+            entry -> (state: SearchWindowState, window: NSWindow, key: Bool, main: Bool, visible: Bool)? in
+            guard let state = entry.state, let window = state.entry.view.window,
+                  window.isVisible || window.isMiniaturized else { return nil }
+            return (state, window, window.isKeyWindow, window.isMainWindow, window.isVisible)
         }
-        let chosen = open.first { $0.1.isKeyWindow } ?? open.first { $0.1.isMainWindow } ?? open.first { $0.1.isVisible }
-            ?? open.last
-        guard let (state, window) = chosen else { return false }
+        guard let index = adopter(open: open.map { (key: $0.key, main: $0.main, visible: $0.visible) }),
+              index < open.count else { return false }
+        adopt(place, into: open[index].state, window: open[index].window)
+        return true
+    }
+
+    /// Takes the pending place. `window` is nil for a window SwiftUI has made but not attached yet: it shows itself.
+    private static func adopt(_ place: Visit, into state: SearchWindowState, window: NSWindow?) {
         pending = nil
         let meaning = pendingMeaning
         let ask = pendingAsk
@@ -892,8 +939,14 @@ enum MainWindows {
             state.model.adopt(place)
         }
         state.focusSearch()
-        window.makeKeyAndOrderFront(nil)
-        return true
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// **Which open window takes a handed place**: the frontmost — key, then main, then visible, then the last.
+    static func adopter(open: [(key: Bool, main: Bool, visible: Bool)]) -> Int? {
+        guard !open.isEmpty else { return nil }
+        return open.firstIndex { $0.key } ?? open.firstIndex { $0.main }
+            ?? open.firstIndex { $0.visible } ?? open.count - 1
     }
 
     /// The main window holding a state, and what it shows: for the instruments.

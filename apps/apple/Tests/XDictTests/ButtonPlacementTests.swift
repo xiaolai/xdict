@@ -45,7 +45,7 @@ struct ButtonPlacementTests {
         "P38": "the Help menu: XDict Help",
         "P39": "Settings ▸ Dictionaries' table: its checkbox column and the + menu and − button under it",
         "P41": "the lookup popover: the speaker in its title row, its two footer rows and its phrase row",
-        "system-alert": "an NSAlert: AppKit puts the default rightmost with Return and Cancel left of it with Escape (R3)",
+        "system-alert": "an NSAlert or a SwiftUI `.alert`: the system puts the default rightmost with Return and Cancel left of it with Escape (R3)",
         "glyph": "an icon-only button at its symbol's own size, beside what it acts on (a notice's close, Copy)",
         "spinner": "a small spinner while a pane loads, not a button",
         "shortcut-field": "the shortcut recorder, a field drawn as a button, placed by its container",

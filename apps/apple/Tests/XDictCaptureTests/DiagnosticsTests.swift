@@ -34,6 +34,29 @@ struct DiagnosticsTests {
         #expect(diagnostics.exportText().contains("why=one\\ntwo"))
     }
 
+    /// **The bound is bytes, and a line is the unit** (audit 2026-10-29 finding 4): the old tail counted grapheme clusters,
+    /// so Chinese lines — three bytes a character — could exceed the limit it claimed, and the tail could begin inside a
+    /// line.
+    @Test func theExportedTailIsBoundedInBytesAndWholeLines() throws {
+        let (diagnostics, _, _) = try made()
+        for index in 0..<400 {
+            diagnostics.record("word", ["n": "\(index)", "text": String(repeating: "词", count: 10)])
+        }
+        let text = diagnostics.exportText(limit: 400)
+        #expect(text.utf8.count <= 400, "the tail was \(text.utf8.count) bytes for a 400-byte bound")
+        #expect(text.hasPrefix("… the log was longer; its last part follows\n"))
+        #expect(text.contains("n=399"), "the newest line was not in the tail")
+        // Every line but the marker is a whole record: nothing begins or ends mid-line.
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        for line in lines.dropFirst() where !line.isEmpty {
+            #expect(line.hasSuffix(String(repeating: "词", count: 10)), "a record was cut before its end: \(line)")
+        }
+        // **Even the marker obeys the bound** (verify 2026-10-29): a limit below its own bytes is not answered with more.
+        for tiny in [0, 5, 20] {
+            #expect(diagnostics.exportText(limit: tiny).utf8.count <= tiny, "limit \(tiny) was exceeded")
+        }
+    }
+
     /// The file is bounded: past its size it rotates, and three files are kept — the oldest dropped.
     @Test func theFileRotatesAndKeepsThree() throws {
         let (diagnostics, _, folder) = try made(240)

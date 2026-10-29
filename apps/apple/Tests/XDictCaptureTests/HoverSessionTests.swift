@@ -47,6 +47,11 @@ struct HoverSessionTests {
             for case .ask(let intent) in effects { return intent }
             return nil
         }
+
+        static func reserved(_ effects: [HoverEffect]) -> HoverIntent? {
+            for case .reserve(let intent) in effects { return intent }
+            return nil
+        }
     }
 
     // MARK: - Hold
@@ -145,6 +150,33 @@ struct HoverSessionTests {
             .readEnded(serial: first.serial, .word, pointer: Self.elsewhere, held: []), after: .seconds(2))
         #expect(Driver.asked(ended) == nil, "a tap was served two seconds late")
         #expect(ended.contains { if case .drop(_, .cancelled) = $0 { true } else { false } })
+    }
+
+    /// **A waiting tap that is replaced is ended** (audit 2026-10-29 finding 5): it holds a request reserved when it was
+    /// made, and replacing it without `.drop` left that request open and its origin in the watcher's book for good.
+    @Test func aReplacedWaitingTapIsDropped() throws {
+        let driver = Driver(Self.tap)
+        let first = try #require(Driver.asked(driver.doubleTap(at: Self.word, from: 10)))
+        _ = driver.feed(.modifiers([], at: 10.3, pointer: Self.word))
+        let waiting = try #require(Driver.reserved(driver.doubleTap(at: Self.elsewhere, from: 11)),
+                                   "the second tap was not reserved: the premise")
+        // The key comes up between pairs, or the next press is no press at all (`wasHeld`).
+        _ = driver.feed(.modifiers([], at: 11.3, pointer: Self.elsewhere))
+        let third = driver.doubleTap(at: Self.word, from: 12)
+        #expect(third.contains(.drop(waiting, .superseded)), "the tap it replaced kept its request open: \(third)")
+        #expect(Driver.reserved(third) != nil, "the replacing tap was not reserved")
+        #expect(waiting.serial != first.serial)
+    }
+
+    /// **Stopping ends a tap that still waits** (audit 2026-10-29 finding 5): stopping is a cancellation, and the request
+    /// the waiting tap reserved would otherwise stay open for ever.
+    @Test func stoppingDropsTheWaitingTap() throws {
+        let driver = Driver(Self.tap)
+        _ = try #require(Driver.asked(driver.doubleTap(at: Self.word, from: 10)))
+        _ = driver.feed(.modifiers([], at: 10.3, pointer: Self.word))
+        let waiting = try #require(Driver.reserved(driver.doubleTap(at: Self.elsewhere, from: 11)))
+        let stopped = driver.feed(.stop)
+        #expect(stopped.contains(.drop(waiting, .cancelled)), "the waiting tap's request stayed open: \(stopped)")
     }
 
     // MARK: - Stop
@@ -279,6 +311,11 @@ struct HoverSessionAuditTests {
     private static let origin = ContinuousClock.now
     private static let word = UpPoint(x: 100, y: 100)
 
+    private static func asked(_ effects: [HoverEffect]) -> HoverIntent? {
+        for case .ask(let intent) in effects { return intent }
+        return nil
+    }
+
     /// **A twitch does not re-arm the settle timer**, so a hand that never quite settles is still
     /// served. Red if every pointer event schedules.
     @Test func aTwitchDoesNotRearmTheTimer() {
@@ -315,10 +352,14 @@ struct HoverSessionAuditTests {
             _ = session.handle(.modifiers([], at: at + 0.05, pointer: point), settings: Self.tap, now: Self.origin)
             return session.handle(.modifiers([.option], at: at + 0.1, pointer: point), settings: Self.tap, now: Self.origin)
         }
-        guard case .ask(let first)? = tap(1, Self.word).first else { Issue.record("not asked"); return }
+        guard let first = Self.asked(tap(1, Self.word)) else { Issue.record("not asked"); return }
         _ = session.handle(.readEnded(serial: first.serial, .captureBusy, pointer: Self.word, held: []), settings: Self.tap, now: Self.origin)
         let newer = UpPoint(x: 300, y: 300)
-        guard case .ask(let second)? = tap(2, newer).first else { Issue.record("the newer tap was not asked"); return }
+        let secondTap = tap(2, newer)
+        guard let second = Self.asked(secondTap) else { Issue.record("the newer tap was not asked"); return }
+        // **The tap it replaces is ended**, its request with it (audit 2026-10-29 finding 5): the older tap waited for the
+        // busy capture, and left waiting it would keep an older word owed.
+        #expect(secondTap.first == .drop(first, .superseded))
         _ = session.handle(.readEnded(serial: second.serial, .captureBusy, pointer: newer, held: []), settings: Self.tap, now: Self.origin)
         let released = session.handle(.captureReleased(newer, held: []), settings: Self.tap, now: Self.origin)
         guard case .ask(let served)? = released.first else { Issue.record("nothing served"); return }
@@ -338,10 +379,13 @@ struct HoverSessionAuditTests {
             _ = session.handle(.modifiers([], at: at + 0.05, pointer: point), settings: Self.tap, now: Self.origin)
             return session.handle(.modifiers([.option], at: at + 0.1, pointer: point), settings: Self.tap, now: Self.origin)
         }
-        guard case .ask(let first)? = tap(1, Self.word).first else { Issue.record("not asked"); return }
+        guard let first = Self.asked(tap(1, Self.word)) else { Issue.record("not asked"); return }
         _ = session.handle(.readEnded(serial: first.serial, .captureBusy, pointer: Self.word, held: []), settings: Self.tap, now: Self.origin)
         let newer = UpPoint(x: 300, y: 300)
-        guard case .ask(let second)? = tap(2, newer).first else { Issue.record("the newer tap was not asked"); return }
+        let secondTap = tap(2, newer)
+        guard let second = Self.asked(secondTap) else { Issue.record("the newer tap was not asked"); return }
+        // **The waiting tap is ended by the newer one** (audit 2026-10-29 finding 5), and its request with it.
+        #expect(secondTap.first == .drop(first, .superseded))
         let delivered = session.handle(.readEnded(serial: second.serial, .word, pointer: newer, held: []), settings: Self.tap, now: Self.origin)
         #expect(delivered.first == .deliver(second))
         let released = session.handle(.captureReleased(newer, held: []), settings: Self.tap, now: Self.origin)

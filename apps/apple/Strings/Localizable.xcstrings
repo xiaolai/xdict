@@ -8696,6 +8696,22 @@
         }
       }
     },
+    "OK": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
     "Off": {
       "localizations": {
         "en": {
@@ -12549,6 +12565,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法导出数据。"
+          }
+        }
+      }
+    },
+    "The diagnostics file could not be saved.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The diagnostics file could not be saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断文件无法保存。"
           }
         }
       }

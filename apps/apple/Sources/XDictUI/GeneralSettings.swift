@@ -37,6 +37,8 @@ public struct GeneralSettings: View {
     /// The reader's words in their own diagnostics log (owner, 2026-10-29): off, and the log says how much text there was
     /// without saying what it was.
     @AppStorage(Diagnostics.includeTextKey) private var includeWordsInDiagnostics = false
+    /// Why the last save failed, said in an alert that offers to try again; nil after a save or a cancellation.
+    @State private var diagnosticsFailure: String?
 
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, registrar: ShortcutRegistrar,
                 hover: HoverControl, library: (any DiagnosticsLibrary)? = nil) {
@@ -108,7 +110,7 @@ public struct GeneralSettings: View {
                 .settingsAnchor(.hover)
             Section {
                 Button {  // placement: form-row
-                    DiagnosticsExport.save(DiagnosticsExport.text(hover: hover, library: library))
+                    saveDiagnostics()
                 } label: {
                     Text("Save Diagnostics…")
                 }
@@ -198,6 +200,27 @@ public struct GeneralSettings: View {
         // The reader may have been to Login Items and back.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             login.refresh()
+        }
+        // **A save that fails is answered here** (audit 2026-10-29 finding 7): before, it returned nil into a discarded
+        // result and the reader saw nothing at all.
+        .alert(Text("The diagnostics file could not be saved."),
+               isPresented: Binding(get: { diagnosticsFailure != nil },
+                                    set: { if !$0 { diagnosticsFailure = nil } }),
+               presenting: diagnosticsFailure) { _ in
+            Button("Try Again") { saveDiagnostics() }  // placement: system-alert
+            Button("OK", role: .cancel) {}  // placement: system-alert
+        } message: { reason in
+            Text(verbatim: reason)
+        }
+    }
+
+    /// Writes the export, and keeps why it failed so the alert can say so.
+    private func saveDiagnostics() {
+        switch DiagnosticsExport.save(DiagnosticsExport.text(hover: hover, library: library)) {
+        case .saved, .cancelled:
+            diagnosticsFailure = nil
+        case .failed(let reason):
+            diagnosticsFailure = reason
         }
     }
 }

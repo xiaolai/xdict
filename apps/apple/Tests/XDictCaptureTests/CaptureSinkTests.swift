@@ -153,6 +153,46 @@ struct CaptureSinkTests {
         #expect(requests.terminal(of: request)?.outcome == .notShown)
     }
 
+    /// **A late refusal does not cancel a newer delivery** (audit 2026-10-29 finding 3): the sink is called outside the
+    /// lock, so a newer delivery of the same request can go out while an older one is still inside `deliver`. The older
+    /// one coming back refused used to end the request unconditionally, cancelling the delivery that was still owed.
+    @Test func aLateRefusalLeavesANewerDeliveryOpen() throws {
+        /// Takes the first delivery, sends a newer one of the same request out, and refuses the first one late.
+        final class Racing: CaptureSink {
+            let requests: CaptureRequests
+            let request: CaptureRequest
+            let newer: Consumer
+            let term: CapturedTerm
+            private let ran = Mutex(false)
+            init(requests: CaptureRequests, request: CaptureRequest, newer: Consumer, term: CapturedTerm) {
+                self.requests = requests
+                self.request = request
+                self.newer = newer
+                self.term = term
+            }
+
+            func deliver(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
+                let first = ran.withLock { value -> Bool in
+                    guard !value else { return false }
+                    value = true
+                    return true
+                }
+                guard first else { return .accepted }
+                _ = requests.deliver(term, for: request, to: newer)
+                return .refused
+            }
+        }
+        let requests = CaptureRequests()
+        let request = requests.begin(.pointerGesture)
+        let newer = Consumer(answer: .accepted)
+        let racing = Racing(requests: requests, request: request, newer: newer, term: try term())
+        #expect(requests.deliver(try term(), for: request, to: racing) == .refused)
+        #expect(requests.terminal(of: request) == nil, "a late refusal ended the newer delivery of the same request")
+        let generation = try #require(newer.delivered.withLock { $0.last?.generation })
+        #expect(requests.acknowledge(request, generation: generation, .shown), "the newer delivery was no longer owed")
+        #expect(requests.terminal(of: request)?.outcome == .shown)
+    }
+
     /// **An acknowledgement before any delivery is refused**, and the request stays open to be delivered.
     @Test func anAcknowledgementBeforeDeliveryIsRefused() throws {
         let requests = CaptureRequests(), consumer = Consumer()

@@ -413,6 +413,22 @@ struct HoverWatcherSequenceTests {
         #expect(notices.isEmpty)
     }
 
+    /// **A notice whose request was ended first says nothing** (audit 2026-10-29 finding 6): Escape or a newer lookup
+    /// ended it while the read was in flight, and the reader has moved past the miss. Red if the notice is told whatever
+    /// the cancellation came to.
+    @Test func aNoticeAfterItsRequestEndedIsNotShown() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        let request = rig.reader.asks[0].request
+        rig.requests.close()  // Escape, or the reader's own newer lookup
+        rig.reader.answer(.needsScreenRecording(request: request))
+        await rig.drain()
+        #expect(notices.isEmpty, "a dismissed request's miss was announced")
+        #expect(rig.requests.terminal(of: request)?.outcome == .cancelled)
+    }
+
     /// **A notice for a hover that stands is told once, and its request ends** — nothing is presented for it.
     @Test func aNoticeIsToldAndItsRequestEnds() async {
         let rig = Rig()

@@ -197,16 +197,26 @@ public struct HoverSession: Sendable {
         guard var current = reading else {
             // **The newest tap wins over one still waiting** for a busy capture, too — and over a
             // rest owed an ask, which would otherwise be asked after it under its older number.
-            pendingTap = nil
+            var effects: [HoverEffect] = []
+            replacePendingTap(nil, why: .superseded, &effects)
             owed = false
             owedOrigin = nil
-            return ask(tap)
+            return effects + ask(tap)
         }
         // **The newest request wins.** The read in flight is stopped and this tap waits for it.
-        pendingTap = tap
+        var effects: [HoverEffect] = []
+        replacePendingTap(tap, why: .superseded, &effects)
         if current.dropped == nil { current.dropped = .superseded }
         reading = current
-        return [.cancelRead, .reserve(tap)]
+        return effects + [.cancelRead, .reserve(tap)]
+    }
+
+    /// Sets the waiting tap, ending the one it replaces (audit 2026-10-29 finding 5): a tap that waited holds a request
+    /// numbered when it was asked or reserved, and one replaced or stopped without `.drop` leaves that request open and
+    /// its origin in the watcher's book for good.
+    private mutating func replacePendingTap(_ tap: HoverIntent?, why: HoverRefusal, _ effects: inout [HoverEffect]) {
+        if let replaced = pendingTap, replaced != tap { effects.append(.drop(replaced, why)) }
+        pendingTap = tap
     }
 
     private mutating func pointerMoved(to pointer: UpPoint, held: Set<HoverModifier>, now: ContinuousClock.Instant) -> [HoverEffect] {
@@ -254,11 +264,12 @@ public struct HoverSession: Sendable {
         watching = false
         gestures.reset()
         settleArmed = false
-        pendingTap = nil
+        var effects: [HoverEffect] = [.cancelSettle]
+        // A tap still waiting is ended here too: stopping is a cancellation, and its numbered request must not stay open.
+        replacePendingTap(nil, why: .cancelled, &effects)
         owed = false
         owedOrigin = nil
         waitingForCapture = false
-        var effects: [HoverEffect] = [.cancelSettle]
         if var current = reading {
             if current.dropped == nil { current.dropped = .cancelled }
             current.stopped = true
@@ -297,7 +308,7 @@ public struct HoverSession: Sendable {
             if ended.dropped == nil {
                 // The ended tap is the newest: a tap waiting already was replaced when it was asked.
                 if ended.intent.tapped {
-                    pendingTap = ended.intent
+                    replacePendingTap(ended.intent, why: .superseded, &effects)
                 } else {
                     owed = true
                     owedOrigin = ended.intent.origin

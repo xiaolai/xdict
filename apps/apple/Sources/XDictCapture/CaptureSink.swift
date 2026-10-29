@@ -206,14 +206,25 @@ public final class CaptureRequests: Sendable {
         }
         guard let generation else { return .refused }
         guard let sink else {
-            tell(state.withLock { $0.end(request.number, generation: generation, .cancelled) }.map { [$0] } ?? [])
+            endIfCurrent(request, generation: generation)
             return .refused
         }
         let answer = sink.deliver(CaptureDelivery(term: term, request: request, generation: generation))
         if answer == .refused {
-            tell(state.withLock { $0.end(request.number, generation: generation, .cancelled) }.map { [$0] } ?? [])
+            endIfCurrent(request, generation: generation)
         }
         return answer
+    }
+
+    /// Ends the request cancelled **only while this delivery is still the request's latest** (audit 2026-10-29 finding
+    /// 3): the sink runs outside the lock, so an older delivery's refusal can come back after a newer delivery of the
+    /// same request went out — ending on the old generation would cancel the newer one, which is the one still owed.
+    private func endIfCurrent(_ request: CaptureRequest, generation: Int) {
+        let ended = state.withLock { state -> CaptureAcknowledgement? in
+            guard state.open[request.number] == generation else { return nil }
+            return state.end(request.number, generation: generation, .cancelled)
+        }
+        tell(ended.map { [$0] } ?? [])
     }
 
     /// True where this answer became the request's terminal acknowledgement.

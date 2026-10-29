@@ -287,8 +287,10 @@ public final class HoverWatcher {
                 term = try recognition.capturedTerm(pointer: pointer, context: context.map { .pending($0.handle) })
                 key = read
             case .notice(let notice, let request):
-                // Nothing is presented for a notice: its request ends, and the consumer tells the reader.
-                requests.cancel(request)
+                // Nothing is presented for a notice: its request ends, and the consumer tells the reader — **only while
+                // that request was the one still waiting** (audit 2026-10-29 finding 6): Escape or a newer lookup ends it
+                // first, and a miss the reader has already moved past must not be announced.
+                guard requests.cancel(request) else { return }
                 Diagnostics.shared.record("hover.notice", ["kind": notice.rawValue, "request": "\(request.number)"])
                 onNotice?(notice)
                 return
