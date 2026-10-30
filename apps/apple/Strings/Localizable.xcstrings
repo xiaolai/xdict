@@ -1766,6 +1766,22 @@
         }
       }
     },
+    "A hovered word uses these dictionaries, in this order. Until you change them they follow the dictionaries' own order.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A hovered word uses these dictionaries, in this order. Until you change them they follow the dictionaries' own order."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鼠标取词使用这些词典，按此顺序。在你更改之前，它们沿用词典自身的顺序。"
+          }
+        }
+      }
+    },
     "A local endpoint": {
       "localizations": {
         "en": {
@@ -4452,18 +4468,18 @@
         }
       }
     },
-    "Dictionaries in the Lookup Popup": {
+    "Dictionaries in the Lookup Popup and on Hover": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dictionaries in the Lookup Popup"
+            "value": "Dictionaries in the Lookup Popup and on Hover"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查询弹窗中的词典"
+            "value": "查询弹窗与鼠标取词的词典"
           }
         }
       }
@@ -6524,22 +6540,6 @@
         }
       }
     },
-    "In the popup": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In the popup"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在弹窗中"
-          }
-        }
-      }
-    },
     "In this sentence": {
       "localizations": {
         "en": {
@@ -7119,6 +7119,22 @@
         }
       }
     },
+    "List": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列表"
+          }
+        }
+      }
+    },
     "Load Models": {
       "localizations": {
         "en": {
@@ -7370,23 +7386,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查词弹窗"
-          }
-        }
-      }
-    },
-    "Lookup Popup…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lookup Popup…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "查询弹窗…"
+            "value": "查询弹窗"
           }
         }
       }
@@ -9787,6 +9787,22 @@
         }
       }
     },
+    "Popup and Hover…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Popup and Hover…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹窗与鼠标取词…"
+          }
+        }
+      }
+    },
     "Press Twice": {
       "comment": "Hover gesture: press the key twice quickly",
       "localizations": {
@@ -11637,6 +11653,22 @@
         }
       }
     },
+    "Shown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示"
+          }
+        }
+      }
+    },
     "Sign In with Codex…": {
       "localizations": {
         "en": {
@@ -12281,18 +12313,34 @@
         }
       }
     },
-    "The Lookup Popup has its own dictionaries, in its own order — the same list whether hover or the shortcut opened it.": {
+    "The Lookup Popup has its own dictionaries, in its own order; a hover has its own, and follows the dictionaries' order until you change it.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Lookup Popup has its own dictionaries, in its own order — the same list whether hover or the shortcut opened it."
+            "value": "The Lookup Popup has its own dictionaries, in its own order; a hover has its own, and follows the dictionaries' order until you change it."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查询弹窗有自己的一套词典和顺序——无论鼠标取词还是快捷键打开，用的都是这一套。"
+            "value": "查询弹窗有自己的一套词典和顺序；鼠标取词也有自己的一套，在你更改之前沿用词典自身的顺序。"
+          }
+        }
+      }
+    },
+    "The Lookup Popup shows these, in this order — the shortcut, the Service and the menu. The window keeps its own list in Settings ▸ Dictionaries.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lookup Popup shows these, in this order — the shortcut, the Service and the menu. The window keeps its own list in Settings ▸ Dictionaries."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查询弹窗按此顺序显示这些词典——快捷键、服务菜单和菜单栏都使用它。主窗口在设置 ▸ 词典里另有一套。"
           }
         }
       }
@@ -13415,22 +13463,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法读取笔记。"
-          }
-        }
-      }
-    },
-    "The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "弹窗按这个顺序显示这些词典，鼠标取词与快捷键共用；主窗口在设置 ▸ 词典里另有一套。"
           }
         }
       }

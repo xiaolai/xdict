@@ -70,7 +70,7 @@ public struct LookupPanelView: View {
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
         // **The reader's popup list, edited in Settings while the popover is open** (audit 2026-10-29): the model's
         // sources are the popup's own list, so a change to it is a change to what this panel may ask.
-        .onReceive(NotificationCenter.default.publisher(for: HoverPopupPreferences.changed)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: PopupPreferences.changed)) { _ in
             state.model.sourcesDidChange()
             state.lookupDidChange()
         }

@@ -529,6 +529,10 @@ final class LookupAnywhere {
         }
         acks.delivered(delivery.request, generation: delivery.generation, term: term.term)
         if drawnQuery != term.term { drawnQuery = nil }
+        // **Which list this lookup asks in** (owner, 2026-10-30: "hover's own order, default to inherit from dictionary
+        // order"): a pointer hover uses its own; the shortcut, the Service and the menu use the popup's. The model reads
+        // it when the term is submitted, just below.
+        state.popupList.list = delivery.request.trigger == .pointerGesture ? .hover : .popup
         show(.none, query: term.term, near: PanelAnchor.rect(for: term.box, primaryHeight: Self.primaryHeight),
              source: Source(delivery.request.trigger))
         observe?("presented", ["request": delivery.request.number, "generation": delivery.generation,

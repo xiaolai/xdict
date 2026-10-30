@@ -3,19 +3,22 @@ import SwiftUI
 import XDictLibrary
 import XDictTokens
 
-/// **The lookup popup's dictionaries, chosen and ordered where the reader chooses everything else** (owner, 2026-10-29:
-/// "鼠标取词 popup 里词典的选择与顺序, 是不是应该在 settings 里有设置啊？"; called the Lookup Popup since 2026-10-30 — one
-/// list serves both its triggers, hover and the shortcut, and the row's old name said hover only). The window keeps its list and order in the pane
-/// behind this sheet; the popover has its own (`HoverPopupPreferences`), and this is where it is edited.
+/// **The lookup popup's dictionaries and hover's, chosen and ordered where the reader chooses everything else** (owner,
+/// 2026-10-29: "鼠标取词 popup 里词典的选择与顺序, 是不是应该在 settings 里有设置啊？"; split in two, owner, 2026-10-30:
+/// "hover's own order (default to inherite from dictionary order, and users can change it for popup)" — the popup's list
+/// and a hover's own, which until edited follows the dictionaries' order). The window keeps its list and order in the
+/// pane behind this sheet; the popup and hover have theirs (`PopupPreferences`), and this is where they are edited.
 ///
-/// Two lists, one meaning each: what the popup shows (drag to order, untick to take out) and what it does not. A
-/// dictionary unticked stays here, so it is one click to bring back; a new import joins the popup at the end of its
-/// library order, and is named here from the first moment.
+/// Two lists, one meaning each: what the chosen list shows (drag to order, untick to take out) and what it does not. A
+/// dictionary unticked stays here, so it is one click to bring back; a new import joins at the end of its library order,
+/// and is named here from the first moment.
 public struct HoverPopupSheet: View {
     private let library: Library
     private let size: CGSize
     private let done: () -> Void
-    /// The popup's dictionaries, in its order.
+    /// **Which list is being edited**: hover opens first — it is the one this sheet was asked for.
+    @State private var editing: PopupPreferences.List = .hover
+    /// The chosen list's dictionaries, in its order.
     @State private var shown: [UUID] = []
     /// The rest of the library's enabled dictionaries, in the library's order.
     @State private var hidden: [UUID] = []
@@ -29,9 +32,20 @@ public struct HoverPopupSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text("Dictionaries in the Lookup Popup")
+                Text("Dictionaries in the Lookup Popup and on Hover")
                     .font(Tokens.TextRole.title3.font)
-                Text("The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries.")
+                Picker(selection: $editing) {
+                    Text("Hover").tag(PopupPreferences.List.hover)
+                    Text("Lookup Popup").tag(PopupPreferences.List.popup)
+                } label: {
+                    Text("List")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityIdentifier("popupList.picker")
+                Text(editing == .hover
+                     ? "A hovered word uses these dictionaries, in this order. Until you change them they follow the dictionaries' own order."
+                     : "The Lookup Popup shows these, in this order — the shortcut, the Service and the menu. The window keeps its own list in Settings ▸ Dictionaries.")
                     .font(Tokens.TextRole.callout.font)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -48,7 +62,7 @@ public struct HoverPopupSheet: View {
                         save()
                     }
                 } header: {
-                    Text("In the popup")
+                    Text("Shown")
                 }
                 if !hidden.isEmpty {
                     Section {
@@ -69,6 +83,7 @@ public struct HoverPopupSheet: View {
         .frame(width: size.width, height: size.height)
         .onAppear(perform: load)
         .onChange(of: library.entries.map(\.id)) { load() }
+        .onChange(of: editing) { load() }
     }
 
     /// One dictionary: a tick for whether the popup shows it, its name for what it is.
@@ -103,11 +118,11 @@ public struct HoverPopupSheet: View {
 
     private func load() {
         let all = enabled
-        shown = HoverPopupPreferences.ordered(all)
+        shown = PopupPreferences.ordered(all, list: editing)
         hidden = all.filter { !shown.contains($0) }
     }
 
     private func save() {
-        HoverPopupPreferences.set(shown, available: enabled)
+        PopupPreferences.set(shown, available: enabled, list: editing)
     }
 }

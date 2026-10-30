@@ -106,9 +106,22 @@ public final class SearchWindowState {
     /// **Explore** (plan-word-exploration WI-3): the panel's model, one per window.
     public let explore: ExploreModel
 
-    /// **`panel` is the hover popup's state** (owner, 2026-10-29): its page takes `HoverPopupPreferences`' own list and
+    /// **`panel` is the lookup popup's state** (owner, 2026-10-29): its page takes `PopupPreferences`' own list and
     /// order, where a window's takes the library's.
     public let isPanel: Bool
+    /// **Which list the popup's next lookup asks in** (owner, 2026-10-30: hover has its own order, defaulting to the
+    /// dictionaries'): the presenter sets it from the request's trigger before the term is submitted, and the model's
+    /// sources closure reads it, so a hover and a shortcut over the same popup ask different lists.
+    public let popupList: PopupList
+
+    /// **A plain box, not a lock** (ModuleBoundaryTests keeps `Synchronization` out of this module): `SearchModel`'s
+    /// sources closure is `@MainActor`, the write happens on the main actor before the submit, and so does the read — one
+    /// isolation, so one value needs no synchronising.
+    @MainActor
+    public final class PopupList {
+        public init() {}
+        public var list: PopupPreferences.List = .popup
+    }
 
     public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String,
                 speech: any PronunciationOutput = SystemOutput(),
@@ -117,13 +130,16 @@ public final class SearchWindowState {
         self.backend = backend
         self.entry = entry
         isPanel = panel
-        let model = SearchModel(backend: backend, window: window) { [library] in
+        let popupList = PopupList()
+        self.popupList = popupList
+        let model = SearchModel(backend: backend, window: window) { [library, popupList] in
             let sources = library.searchSources
             guard panel else { return sources }
             // **The popover asks the dictionaries it shows, and only those** (audit 2026-10-29): filtering the drawn
             // frames alone left the lookups, the selection and the pronunciation pointing at a dictionary the reader
-            // had taken out of the popup — a blank panel over a hit the model still reported.
-            let order = HoverPopupPreferences.ordered(sources.filter(\.enabled).map(\.id))
+            // had taken out of the popup — a blank panel over a hit the model still reported. **And in the list the
+            // last trigger asked in** (owner, 2026-10-30): a hover's own order, the popup's for everything else.
+            let order = PopupPreferences.ordered(sources.filter(\.enabled).map(\.id), list: popupList.list)
             var rank: [UUID: Int] = [:]
             for (index, id) in order.enumerated() { rank[id] = index }
             return sources.filter { rank[$0.id] != nil }.sorted { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }
@@ -796,9 +812,10 @@ public final class SearchWindowState {
                                  reference: EntryReference(key: result.entry.key, occurrence: result.entry.occurrence))
         }
         guard isPanel else { return items }
-        // **The hover popup's own list and order** (owner, 2026-10-29; ADR-0012's amendment): its frames and no other,
-        // in the order the reader put them, whatever the window's list says.
-        let order = HoverPopupPreferences.ordered(items.map { $0.id })
+        // **The popup's own list and order, in the list this lookup asked in** (owner, 2026-10-29; split for hover's own
+        // order 2026-10-30; ADR-0012's amendment): its frames and no other, in the order the reader put them, whatever
+        // the window's list says.
+        let order = PopupPreferences.ordered(items.map { $0.id }, list: popupList.list)
         var rank: [UUID: Int] = [:]
         for (index, id) in order.enumerated() { rank[id] = index }
         return items.filter { rank[$0.id] != nil }.sorted { (rank[$0.id] ?? 0) < (rank[$1.id] ?? 0) }

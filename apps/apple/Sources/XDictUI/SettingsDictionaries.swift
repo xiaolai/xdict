@@ -222,15 +222,15 @@ public struct SettingsDictionaries: View {
         }
     }
 
-    /// **The popup's own list** (owner, 2026-10-29; named for both its triggers 2026-10-30): the popup is one window with
-    /// one dictionary list, whether a hover or the lookup shortcut opened it — the row says so, and opens the sheet that
-    /// edits it.
+    /// **The popup's list and hover's own** (owner, 2026-10-29, split 2026-10-30): the popup's dictionaries serve the
+    /// shortcut, the Service and the menu; a hover has its own, following the dictionaries' order until the reader
+    /// changes it. The row opens the sheet that edits both.
     private var hoverPopupRow: some View {
         HStack(spacing: Tokens.Space.sm) {
-            Text("The Lookup Popup has its own dictionaries, in its own order — the same list whether hover or the shortcut opened it.")
+            Text("The Lookup Popup has its own dictionaries, in its own order; a hover has its own, and follows the dictionaries' order until you change it.")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button { route.request(.hoverPopup) } label: { Text("Lookup Popup…") }  // placement: form-row
+            Button { route.request(.hoverPopup) } label: { Text("Popup and Hover…") }  // placement: form-row
                 .disabled(library.entries.allSatisfy { !$0.enabled })
                 .accessibilityIdentifier("settings.dictionaries.hoverPopup")
         }
