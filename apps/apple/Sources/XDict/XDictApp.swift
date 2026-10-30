@@ -193,32 +193,35 @@ struct XDictApp: App {
         .defaultSize(width: Tokens.Window.reviewWidth, height: Tokens.Window.reviewHeight)
 
         Settings {
-            // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
-            // dictionary list (parity P39). The other two are XDict's own, at Apple's width. The pane in front is
-            // `SettingsRoute`'s, so every way in can choose it (d.4).
+            // Every pane in `SettingsTab`'s order (ADR-0012 d.1; nine since the owner's audit of 2026-10-30). Dictionaries
+            // first: Apple's Settings opens on its dictionary list (parity P39). The rest are XDict's own, at Apple's
+            // width. The pane in front is `SettingsRoute`'s, so every way in can choose it (d.4).
             SettingsContent(route: .shared)
         }
 
     }
 
-    /// One Settings pane's content (ADR-0012 d.1): the lookup shortcut sits in General, the speech rows in Reading &
-    /// Speech.
+    /// One Settings pane's content (ADR-0012 d.1, reorganized by the owner's audit of 2026-10-30): Reading and Speech are
+    /// their own panes, and **Lookup** holds the lookup surface — the shortcut, hover, the popup's appearance.
     @MainActor @ViewBuilder static func settings(_ pane: SettingsTab) -> some View {
         switch pane {
         case .dictionaries:
             SettingsDictionaries(library: library, route: .shared, appleImport: appleImport, study: study,
                                  wordData: wordData)
                 .task { await LibraryLaunch.once() }
-        case .readingAndSpeech:
+        case .reading:
             ReadingSettings()
+        case .speech:
+            SpeechSettings()
+        case .lookup:
+            LookupSettings(registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
         case .learning:
             // The library's declared search languages: the values the recording filter and the drawer offer (ADR-0023).
             LearningSettings(declared: { library.declaredSearchLanguages }, study: study, reminders: reminders,
                              sync: XDictApp.sync)
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
-                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
-                            library: library)
+                            hover: LookupAnywhere.shared.hover, library: library)
         case .ai:
             AISettings()
         case .setup:

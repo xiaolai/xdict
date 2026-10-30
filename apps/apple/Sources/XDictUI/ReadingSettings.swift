@@ -2,9 +2,10 @@ import SwiftUI
 import XDictEntryView
 import XDictTokens
 
-/// **Reading & Speech, in Settings** (⌘,; ADR-0012 d.1): the reading style's accent, the one colour a dictionary's
-/// coloured text is drawn in (owner, 2026-10-16), an open entry taking a new choice at once; then the speech rows
-/// (`SpeechSettings`), in one form.
+/// **Reading, in Settings** (⌘,; ADR-0012 d.1; a pane of its own since the owner's audit of 2026-10-30, which split
+/// Speech out): how the text looks — its width, the phrases, the accent colour a dictionary's coloured text is drawn in
+/// (owner, 2026-10-16), and the face Chinese words are set in — with an open entry taking a new choice at once. The two
+/// palettes are menus, not radio lists: one row each, the colour drawn in the row itself.
 public struct ReadingSettings: View {
     @AppStorage(EntryPreferences.accentKey) private var accent: EntryReadingFrame.Accent = .teal
     /// **The face Chinese text is drawn in** (owner, 2026-10-29): the reading style's own Songti SC unless chosen, and only
@@ -45,7 +46,7 @@ public struct ReadingSettings: View {
                 Text("Accent color")
                 Text("The color a dictionary's colored words are drawn in.")
             }
-            .pickerStyle(.radioGroup)
+            .pickerStyle(.menu)
             .accessibilityIdentifier("accent-colour")
             .settingsAnchor(.readingAccent)
             Picker(selection: $chineseFace) {
@@ -60,11 +61,9 @@ public struct ReadingSettings: View {
                     Text(Self.missingSentence)
                 }
             }
-            .pickerStyle(.radioGroup)
+            .pickerStyle(.menu)
             .accessibilityIdentifier("reading.chinese-face")
             .settingsAnchor(.readingChineseFace)
-            Section { SpeechSettings() }
-                .settingsAnchor(.speechVoice)
         }
         // As tall as its rows: a grouped form scrolls and would take the window's height, leaving it mostly empty.
         .settingsPane()

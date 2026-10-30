@@ -28,7 +28,7 @@ struct PronunciationBanner: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // Once only (the pronunciation decides): a better voice than the compact one that spoke.
-                    // The tip and its way on as Settings ▸ Reading & Speech shows them (R1, R4): the sentence leads, the
+                    // The tip and its way on as Settings ▸ Speech shows them (R1, R4): the sentence leads, the
                     // button trails at regular size.
                     if let tip = shown.tip {
                         ActionRow {

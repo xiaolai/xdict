@@ -3150,6 +3150,22 @@
         }
       }
     },
+    "Best available": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best available"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最佳可用"
+          }
+        }
+      }
+    },
     "Bigger Text": {
       "localizations": {
         "en": {
@@ -4788,6 +4804,22 @@
         }
       }
     },
+    "Dock": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "程序坞"
+          }
+        }
+      }
+    },
     "Does not fit": {
       "localizations": {
         "en": {
@@ -4816,6 +4848,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "完成"
+          }
+        }
+      }
+    },
+    "Download another voice, or check this one, in System Settings.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download another voice, or check this one, in System Settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在系统设置中下载其他语音，或检查当前语音。"
           }
         }
       }
@@ -5766,18 +5814,18 @@
         }
       }
     },
-    "Gap beside the answer pane": {
+    "Gap beside the window": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gap beside the answer pane"
+            "value": "Gap beside the window"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "释义面板旁的间隔"
+            "value": "窗口旁的间隔"
           }
         }
       }
@@ -6668,22 +6716,6 @@
         }
       }
     },
-    "Its shade, apart from the rest of XDict.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Its shade, apart from the rest of XDict."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "弹窗自己的深浅，不随 XDict 其余部分。"
-          }
-        }
-      }
-    },
     "Japanese kana": {
       "comment": "A writing system hover looks up: hiragana and katakana",
       "localizations": {
@@ -7391,6 +7423,22 @@
         }
       }
     },
+    "Lookup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lookup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查词"
+          }
+        }
+      }
+    },
     "Lookup Popup": {
       "localizations": {
         "en": {
@@ -7697,6 +7745,22 @@
         }
       }
     },
+    "More voices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More voices"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多语音"
+          }
+        }
+      }
+    },
     "Name": {
       "localizations": {
         "en": {
@@ -7709,6 +7773,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "名称"
+          }
+        }
+      }
+    },
+    "Narrow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Narrow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窄"
           }
         }
       }
@@ -9208,6 +9288,22 @@
         }
       }
     },
+    "Open Read & Speak Settings…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Read & Speak Settings…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开“朗读内容”设置…"
+          }
+        }
+      }
+    },
     "Open Sign-In Page": {
       "localizations": {
         "en": {
@@ -9787,6 +9883,22 @@
         }
       }
     },
+    "Popup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Popup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹窗"
+          }
+        }
+      }
+    },
     "Popup and Hover…": {
       "localizations": {
         "en": {
@@ -10108,22 +10220,6 @@
         }
       }
     },
-    "Reading & Speech": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reading & Speech"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "阅读与语音"
-          }
-        }
-      }
-    },
     "Reading History": {
       "localizations": {
         "en": {
@@ -10248,6 +10344,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "已记录，但尚未写入磁盘。"
+          }
+        }
+      }
+    },
+    "Recordings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recordings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录音"
           }
         }
       }
@@ -11312,6 +11424,22 @@
         }
       }
     },
+    "Shade": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shade"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观"
+          }
+        }
+      }
+    },
     "Shift": {
       "localizations": {
         "en": {
@@ -11341,6 +11469,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shift %@"
+          }
+        }
+      }
+    },
+    "Shortcut": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
           }
         }
       }
@@ -11573,6 +11717,22 @@
         }
       }
     },
+    "Show or hide the answer pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show or hide the answer pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示或隐藏回答面板"
+          }
+        }
+      }
+    },
     "Show phrases while reading": {
       "localizations": {
         "en": {
@@ -11717,6 +11877,22 @@
         }
       }
     },
+    "Slow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "慢"
+          }
+        }
+      }
+    },
     "Smaller Text": {
       "localizations": {
         "en": {
@@ -11777,6 +11953,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "源代码"
+          }
+        }
+      }
+    },
+    "Speech": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音"
           }
         }
       }
@@ -13259,18 +13451,18 @@
         }
       }
     },
-    "The keys that show or hide the answer pane.": {
+    "The keys that show or hide the pane beside the window.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The keys that show or hide the answer pane."
+            "value": "The keys that show or hide the pane beside the window."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "用于显示或隐藏释义面板的按键。"
+            "value": "用于显示或隐藏窗口旁面板的按键。"
           }
         }
       }
@@ -13463,6 +13655,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法读取笔记。"
+          }
+        }
+      }
+    },
+    "The popup's shade, apart from the rest of XDict.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The popup's shade, apart from the rest of XDict."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹窗的外观，独立于 XDict 其余部分。"
           }
         }
       }
@@ -14270,6 +14478,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "系统的解读 — %@"
+          }
+        }
+      }
+    },
+    "The voice installed on this Mac that reads a word aloud.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The voice installed on this Mac that reads a word aloud."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朗读单词所用的、安装在这台 Mac 上的语音。"
           }
         }
       }
@@ -15380,22 +15604,6 @@
         }
       }
     },
-    "Toggle the pane": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toggle the pane"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示或隐藏面板"
-          }
-        }
-      }
-    },
     "Trackpad": {
       "localizations": {
         "en": {
@@ -15943,6 +16151,22 @@
         }
       }
     },
+    "Wide": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽"
+          }
+        }
+      }
+    },
     "Width": {
       "localizations": {
         "en": {
@@ -16068,6 +16292,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "任何文字的词"
+          }
+        }
+      }
+    },
+    "Words read aloud from an English dictionary are spoken in it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Words read aloud from an English dictionary are spoken in it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "英语词典中朗读的单词使用该口音。"
           }
         }
       }
@@ -16380,18 +16620,18 @@
         }
       }
     },
-    "XDict is free software under the ISC licence.": {
+    "XDict is free software.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "XDict is free software under the ISC licence."
+            "value": "XDict is free software."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "XDict 是自由软件，采用 ISC 许可协议。"
+            "value": "XDict 是自由软件。"
           }
         }
       }

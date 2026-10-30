@@ -5,7 +5,8 @@ import XDictTokens
 
 /// **Lookup from anywhere, in Settings** (plan-macos-v1 WI-8): the lookup shortcut — shown, rebindable by a recorder,
 /// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). Rows, not a
-/// form: they sit in the General pane (`GeneralSettings`; ADR-0012 d.1).
+/// form: they sit in the Lookup pane (`LookupSettings`; ADR-0012 d.1 as reorganized 2026-10-30), beside the answer
+/// pane's own key.
 public struct ShortcutSettings: View {
     let registrar: ShortcutRegistrar
 

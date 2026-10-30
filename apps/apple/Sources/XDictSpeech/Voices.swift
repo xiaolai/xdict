@@ -85,8 +85,21 @@ public enum Voices {
         return nil
     }
 
+    /// **Every voice that can speak one of `tags`, the best first** — the menu the reader chooses from (owner's settings
+    /// audit, 2026-10-30). Novelty and personal voices are out, as in `best`.
+    public static func speaking(_ tags: [String], among voices: [VoiceInfo]) -> [VoiceInfo] {
+        let usable = voices.filter { !$0.isNovelty && !$0.isPersonal }
+        var out: [VoiceInfo] = []
+        for tag in tags {
+            for voice in usable where speaks(voice.language, tag) && !out.contains(where: { $0.identifier == voice.identifier }) {
+                out.append(voice)
+            }
+        }
+        return out.sorted { rankedBelow($1, $0) }
+    }
+
     /// Whether a voice of `language` speaks `tag`.
-    static func speaks(_ language: String, _ tag: String) -> Bool {
+    public static func speaks(_ language: String, _ tag: String) -> Bool {
         let language = language.lowercased(), tag = tag.lowercased()
         return language == tag || (!tag.contains("-") && language.hasPrefix(tag + "-"))
     }

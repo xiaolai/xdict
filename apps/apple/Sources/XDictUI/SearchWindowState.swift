@@ -366,7 +366,7 @@ public final class SearchWindowState {
         return .asked(PhraseTerm(location: UInt64(range.location), length: UInt64(range.length)))
     }
 
-    /// **Settings ▸ Reading & Speech's “Show phrases while reading”** (owner Q2, 2026-10-26; plan-context-tools D3),
+    /// **Settings ▸ Reading's “Show phrases while reading”** (owner Q2, 2026-10-26; plan-context-tools D3),
     /// stored beside the reading style's own choices. On unless the reader turned it off: the row is the reminder, and
     /// off means the sentence is never sent to the dictionary service for matching.
     public static let phrasesShownKey = "reading.show-phrases"

@@ -272,7 +272,8 @@ ROUTES = [
                          ("press", "Meaning"), ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
      [("type", "apple"), ("key", "cmd+a"), ("key", "ctrl+opt+d"), ("wait", 2)]),
-    # Settings. Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General. The Dictionaries pane is the only
+    # Settings. Nine panes since the owner's audit of 2026-10-30 (ADR-0012 d.1): Dictionaries, Reading, Speech, Lookup,
+    # Learning, AI, General, Setup, About. The Dictionaries pane is the only
     # dictionary list (d.2); its routes are the Library window's, moved by what they drive (d.7,
     # dev-docs/settings-library-inventory.md).
     ("settings.dictionaries.empty", "empty", "⌘, ▸ Dictionaries over an empty library", "'No Dictionaries Yet' with "
@@ -311,20 +312,22 @@ ROUTES = [
      "notice in the strip", DICTIONARIES + [("drop", "refused/regcode/regcode.mdx"), ("wait", 3)]),
     ("settings.dictionaries.dropImported", "empty", "Drag a good .mdx onto the empty table", "The new dictionary "
      "imported, listed and selected", DICTIONARIES + [("drop", "file/single.mdx"), ("wait", 4)]),
-    # Settings ▸ General holds every row on screen at once (the window is as tall as its form), so a route scrolled to
-    # a section would capture the same picture: one route shows the pane, and only a route that changes a row's state
-    # is another (2026-10-19: settings.general.screenRecording and settings.lookup were dropped, both the same walk as
-    # this one; the Screen Recording row shows here, in the state macOS holds for XDict.app on the touring Mac).
-    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Keep XDict in the menu bar, Language; "
-     "Look up the selection: the shortcut recorder, its sentence; hover's rows: 'Look up the word under the pointer' "
-     "on (the tour's launch deletes XDict's preferences), Hover key (Option ⌥), Gesture (Hold | Press Twice), Rest "
-     "time, Looks up (the writing systems of the enabled dictionaries, shown and not chosen), Password managers: "
-     "Always, Never look up in with Add an App…, Never look up on with its bordered field (example.com) and Add Site, "
-     "its sentence two lines at most (P53), then Screen Recording in the state macOS holds for XDict.app on this Mac: "
-     "not set up with Allow…, allowed, not allowed with where System Settings keeps the switch and Check Again, or "
-     "could not tell with Check Again; showing it asks for nothing, so no system prompt (P50, P52; ADR-0014 decision "
-     "7); Lookup popup; Background with Glass and Solid, said once; Show Setup…",
+    # A settings pane holds every row on screen at once (the window is as tall as its form), so a route scrolled to a
+    # section would capture the same picture: one route shows the pane, and only a route that changes a row's state is
+    # another (2026-10-19; the panes were split in the owner's audit of 2026-10-30, and the Screen Recording row shows
+    # in settings.lookup in the state macOS holds for XDict.app on the touring Mac).
+    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in with the system's sentence; Dock: Show "
+     "XDict in the Dock off; Language; Diagnostics: Save Diagnostics… and Include the words I look up off. **Lookup "
+     "moved to its own pane on 2026-10-30** — see settings.lookup.",
      [SETTINGS, ("wait", 1), ("click", "General")]),
+    ("settings.lookup", "full", "⌘, ▸ Lookup", "Shortcut: Look up the selection with its recorder and sentence, Show or "
+     "hide the answer pane with its recorder; Hover: 'Look up the word under the pointer' on (the tour's launch "
+     "deletes XDict's preferences), Hover key (Option ⌥), Gesture (Hold | Press Twice), Rest time, Looks up (the "
+     "writing systems of the enabled dictionaries, shown and not chosen), Password managers: Always, Never look up in "
+     "with Add an App…, Never look up on with its bordered field and Add Site, its sentence two lines at most (P53), "
+     "then Screen Recording in the state macOS holds for XDict.app on this Mac (P50, P52; ADR-0014 decision 7); "
+     "Popup: Shade and Background with Glass and Solid, said once",
+     [SETTINGS, ("wait", 1), ("click", "Lookup")]),
     ("settings.ai", "full", "⌘, ▸ AI", "The sources in setup order — Off, Apple Intelligence, A local endpoint, A "
      "cloud endpoint, Codex, Claude — each selected row with its caveat, the live status line, the disclosure switch "
      "off with its one-rule sentence, and the prompt: answer language, question kind, the grounded template in its "
@@ -345,17 +348,20 @@ ROUTES = [
      "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice: no 'locked' row, as "
      "the fixtures' registration-code file is refused at import, the notice naming why (ADR-0005 decision 4, "
      "5b19fbd; this was settings.dictionaries.locked, the same walk, dropped 2026-10-19)", DICTIONARIES),
-    ("settings.readingSpeech", "full", "⌘, ▸ Reading & Speech", "Accent colour with its sentence; English accent, "
-     "Voice, Open Read & Speak Settings, Use the dictionary's recordings",
-     [SETTINGS, ("wait", 1), ("click", "Reading & Speech")]),
-    ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
-     [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
-    # Hover (plan-capture WI-3, WI-4; defined by WI-5): its rows in Settings ▸ General (settings.general) and the
+    ("settings.reading", "full", "⌘, ▸ Reading", "Comfortable reading width, Show phrases while reading, Accent color "
+     "as one row with its colour, Chinese text as one row",
+     [SETTINGS, ("wait", 1), ("click", "Reading")]),
+    ("settings.speech", "full", "⌘, ▸ Speech", "English accent as a menu, Voice as a menu (Best available and the "
+     "voices installed), Open Read & Speak Settings…, Use the dictionary's recordings with its sentence",
+     [SETTINGS, ("wait", 1), ("click", "Speech")]),
+    ("settings.recording", "full", "⌘, ▸ Lookup, click the recorder", "'Type the new shortcut'",
+     [SETTINGS, ("wait", 1), ("click", "Lookup"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
+    # Hover (plan-capture WI-3, WI-4; defined by WI-5): its rows in Settings ▸ Lookup (settings.lookup) and the
     # menu-bar pause group. The tour's launch deletes XDict's preferences, so hover is on, with the Option key and Hold.
     # The menu shows the reader's setting, not whether the driven run watches (it never does: HoverControl.isOn).
-    ("settings.general.hover", "full", "⌘, ▸ General, click Never look up on's field, type a site", "The field in use: "
+    ("settings.lookup.hover", "full", "⌘, ▸ Lookup, click Never look up on's field, type a site", "The field in use: "
      "its border and focus ring, 'example.org' in it, Add Site enabled; the sentence beside it two lines at most (P53)",
-     [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.8), ("click", "hover.site.field"), ("wait", 0.4),
+     [SETTINGS, ("wait", 1), ("click", "Lookup"), ("wait", 0.8), ("click", "hover.site.field"), ("wait", 0.4),
       ("type", "example.org")]),
     ("menubar.hoverPause", "full", "Click XDict's menu-bar item, then Pause Hover", "Pause Hover's lengths: For 15 "
      "minutes, For 1 hour, For 8 hours, between Dictionaries… and Settings… (P51)",
@@ -383,15 +389,15 @@ ROUTES = [
     ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Accessibility Is Off for XDict' and 'Open "
      "Accessibility Settings'", None),
     ("sound.recording", "full", "A sound:// link in an entry", "The recording plays, or a notice says why not", None),
-    ("settings.general.screenRecordingNotSetUp", "full", "The Screen Recording row before XDict ever asked",
+    ("settings.lookup.screenRecordingNotSetUp", "full", "The Screen Recording row before XDict ever asked",
      "'Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once.' "
      "and Allow… (P52)", None),
-    ("settings.general.screenRecordingAllowed", "full", "The Screen Recording row with the grant given", "'Hover reads "
+    ("settings.lookup.screenRecordingAllowed", "full", "The Screen Recording row with the grant given", "'Hover reads "
      "words from the screen where an app does not share its text.' and 'Allowed', no button (P52)", None),
-    ("settings.general.screenRecordingNotAllowed", "full", "The Screen Recording row with the grant refused", "'Not "
+    ("settings.lookup.screenRecordingNotAllowed", "full", "The Screen Recording row with the grant refused", "'Not "
      "allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check "
      "again.' and Check Again (P52)", None),
-    ("settings.general.screenRecordingCouldNotTell", "full", "The Screen Recording row when macOS gave no answer",
+    ("settings.lookup.screenRecordingCouldNotTell", "full", "The Screen Recording row when macOS gave no answer",
      "'Could not tell whether Screen Recording is allowed. Check again in a moment.' and Check Again (P52)", None),
     ("hover.popover", "full", "Hold Option with the pointer resting on a word in another app (TextEdit)", "XDict's "
      "lookup popover beside the word (P41, P50); released and moved away, it stays until dismissed", None),
@@ -410,12 +416,12 @@ NOT_DRIVEN_WHY = {
                                           "E2E library.apple stage converts a synthetic one and changes it",
     "settings.dictionaries.appleRemoved": "needs an imported Apple dictionary whose installed bundle then goes; the "
                                           "E2E library.apple stage removes its synthetic one",
-    "settings.general.screenRecordingNotSetUp": "only the state macOS holds for XDict.app on this Mac is shown "
-                                                "(settings.general), and grants are never changed by "
+    "settings.lookup.screenRecordingNotSetUp": "only the state macOS holds for XDict.app on this Mac is shown "
+                                                "(settings.lookup), and grants are never changed by "
                                                 "script",
-    "settings.general.screenRecordingAllowed": "as settings.general.screenRecordingNotSetUp",
-    "settings.general.screenRecordingNotAllowed": "as settings.general.screenRecordingNotSetUp",
-    "settings.general.screenRecordingCouldNotTell": "macOS answers on this Mac; there is no way to make it not answer",
+    "settings.lookup.screenRecordingAllowed": "as settings.lookup.screenRecordingNotSetUp",
+    "settings.lookup.screenRecordingNotAllowed": "as settings.lookup.screenRecordingNotSetUp",
+    "settings.lookup.screenRecordingCouldNotTell": "macOS answers on this Mac; there is no way to make it not answer",
     "hover.popover": "needs the hover key held over another app's text; the tour drives XDict alone, whose own windows "
                      "hover never reads (ADR-0014 decision 6); the E2E hover.popover sub-stage does it",
 }

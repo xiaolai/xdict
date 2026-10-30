@@ -11,9 +11,9 @@ struct SettingsSearchTests {
     }
 
     @Test func conceptsFindTheirPanes() {
-        #expect(Self.panes("shortcut").contains(.general))
-        #expect(Self.panes("hover").first == .general)
-        #expect(Self.panes("voice").first == .readingAndSpeech)
+        #expect(Self.panes("shortcut").contains(.lookup))
+        #expect(Self.panes("hover").first == .lookup)
+        #expect(Self.panes("voice").first == .speech)
         #expect(Self.panes("history").first == .learning)
         #expect(Self.panes("AI source").first == .ai)
         #expect(Self.panes("privacy").contains(.ai))
@@ -58,8 +58,8 @@ struct SettingsSearchTests {
     @Test func commonChineseConceptsAreSearchable() {
         #expect(Self.panes("隐私").contains(.learning))
         #expect(Self.panes("隐私").contains(.ai))
-        #expect(Self.panes("语音").contains(.readingAndSpeech))
-        #expect(Self.panes("快捷键").contains(.general))
+        #expect(Self.panes("语音").contains(.speech))
+        #expect(Self.panes("快捷键").contains(.lookup))
         #expect(Self.panes("提示词").contains(.ai))
     }
 

@@ -14,10 +14,51 @@ public struct AISettings: View {
     /// The sign-in page the system refused to open, if any: its address stays on screen to copy.
     @State private var unopenedURL: URL?
     private let route: SettingsRoute
+    @AppStorage(MeaningPanePreferences.gapKey) private var paneGap = MeaningPanePreferences.defaultGap
+    @AppStorage(MeaningPanePreferences.widthKey) private var paneWidth = MeaningPanePreferences.defaultWidth
+    @AppStorage(MeaningPanePreferences.animationKey) private var paneAnimation = MeaningPanePreferences.defaultAnimation
 
     public init(route: SettingsRoute = .shared) {
         self.route = route
     }
+
+    /// The pane's gap, width and opening — words at the sliders' ends, not raw numbers (owner's settings audit,
+    /// 2026-10-30).
+    @ViewBuilder private var answerPaneSection: some View {
+        Section {
+            Slider(value: $paneGap, in: MeaningPanePreferences.gapRange) {
+                Text("Gap beside the window")
+                Text("The air between XDict’s window and the pane that opens beside it.")
+            } minimumValueLabel: {
+                Text("Narrow")
+            } maximumValueLabel: {
+                Text("Wide")
+            }
+            .accessibilityIdentifier("meaning-pane-gap")
+            Slider(value: $paneWidth, in: MeaningPanePreferences.widthRange) {
+                Text("Width")
+                Text("How wide the pane opens beside the window.")
+            } minimumValueLabel: {
+                Text("Narrow")
+            } maximumValueLabel: {
+                Text("Wide")
+            }
+            .accessibilityIdentifier("meaning-pane-width")
+            Slider(value: $paneAnimation, in: MeaningPanePreferences.animationRange, step: 0.05) {
+                Text("Opening")
+                Text("How long the pane takes to slide out. Off shows it at once.")
+            } minimumValueLabel: {
+                Text("Off")
+            } maximumValueLabel: {
+                Text("Slow")
+            }
+            .accessibilityIdentifier("meaning-pane-animation")
+        } header: {
+            Text("Answer Pane")
+        }
+        .settingsAnchor(.meaningPaneGap)
+    }
+
 
     /// A model of its own: a test must not read the reader's Keychain or write their preferences.
     init(model: AISettingsModel, route: SettingsRoute) {
@@ -41,6 +82,10 @@ public struct AISettings: View {
             }
             disclosureSection(model: model)
             promptSection(model: model)
+            // **The answer pane's own presentation** (owner's settings audit, 2026-10-30: it was the last section of
+            // General, four panes from the feature that opens it): its gap from the window, its width, its opening time.
+            // The keys that toggle it are a shortcut, and live in Lookup's Shortcut section beside the lookup key.
+            answerPaneSection
         }
         .settingsPane()
         // **A corrected address, service, model or key re-runs the check** (audit finding, 2026-10-20): the same identity

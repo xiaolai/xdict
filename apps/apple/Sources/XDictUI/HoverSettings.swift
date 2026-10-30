@@ -5,8 +5,8 @@ import XDictAnywhere
 import XDictCapture
 import XDictTokens
 
-/// **Hover, in Settings ▸ General** (plan-capture WI-3; ADR-0012 d.1: General holds how a lookup starts, beside the
-/// lookup shortcut): the switch, the key and the gesture, the writing systems hover looks up — derived from the enabled
+/// **Hover, in Settings ▸ Lookup** (plan-capture WI-3; the owner's audit of 2026-10-30 gave the lookup surface its own
+/// pane, this section beside the shortcut): the switch, the key and the gesture, the writing systems hover looks up — derived from the enabled
 /// dictionaries' languages, shown and not chosen — the apps hover never reads, Screen Recording for the apps that share no
 /// text (plan-capture WI-4), and why hover cannot read now, when it cannot. Rows, not a form: they sit in the General
 /// pane's form.

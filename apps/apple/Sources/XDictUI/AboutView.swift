@@ -57,7 +57,7 @@ public struct AboutView: View {
                 Link(destination: Self.repository) { Text("Source Code") }  // placement: form-pane
                 Button { acknowledge() } label: { Text("Acknowledgments") }  // placement: form-pane
             } header: {
-                Text("XDict is free software under the ISC licence.")
+                Text("XDict is free software.")
             }
         }
         .formStyle(.grouped)

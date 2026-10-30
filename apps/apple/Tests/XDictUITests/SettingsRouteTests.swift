@@ -74,7 +74,7 @@ struct SettingsRouteTests {
     @Test func anImportRequestOpensTheImporter() {
         var opened = 0
         let route = SettingsRoute(open: { opened += 1 })
-        route.pane = .readingAndSpeech
+        route.pane = .reading
         route.requestImport()
         #expect(opened == 1)
         #expect(route.pane == .dictionaries)

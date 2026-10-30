@@ -1,16 +1,21 @@
 import Foundation
 
-/// **Settings' panes, in order** (ADR-0012 d.1, amended 2026-10-20): Dictionaries first, as Apple's Settings opens on its
-/// list (parity P39); then Reading & Speech; then General; then AI (ADR-0021 d.12); then Setup — the board that used to
-/// have a window of its own, now a pane like the rest; and last About (owner, 2026-10-29). The scene's sidebar iterates
-/// these cases, so a test of the enum is a test of the panes.
+/// **Settings' panes, in order**: Dictionaries first, as Apple's Settings opens on its list (parity P39); then Reading and
+/// Speech, one pane each; then **Lookup** — the shortcut, hover and the popup's appearance, one surface in one place
+/// (owner's audit, 2026-10-30) — then Learning, AI (which holds the answer pane's own presentation), General (the app's
+/// behaviour and its diagnostics), Setup and About. The scene's sidebar iterates these cases, so a test of the enum is a
+/// test of the panes.
 public enum SettingsTab: CaseIterable, Hashable, Sendable {
     case dictionaries
-    case readingAndSpeech
+    case reading
+    case speech
+    /// **How looking up behaves** (owner's audit, 2026-10-30: it was four sections in General and the popup's list in a
+    /// third pane): the shortcut and the pane's key, hover and its permission, the popup's shade and background.
+    case lookup
     /// The reading history's switch and its two language sets (ADR-0023).
     case learning
-    case general
     case ai
+    case general
     case setup
     /// What this copy is, its licence and its source, and the one update check (owner, 2026-10-29).
     case about
@@ -18,10 +23,12 @@ public enum SettingsTab: CaseIterable, Hashable, Sendable {
     public var title: LocalizedStringResource {
         switch self {
         case .dictionaries: "Dictionaries"
-        case .readingAndSpeech: "Reading & Speech"
+        case .reading: "Reading"
+        case .speech: "Speech"
+        case .lookup: "Lookup"
         case .learning: "Learning"
-        case .general: "General"
         case .ai: "AI"
+        case .general: "General"
         case .setup: "Setup"
         case .about: "About"
         }
@@ -30,10 +37,12 @@ public enum SettingsTab: CaseIterable, Hashable, Sendable {
     public var symbol: String {
         switch self {
         case .dictionaries: "books.vertical"
-        case .readingAndSpeech: "book"
+        case .reading: "book"
+        case .speech: "speaker.wave.2"
+        case .lookup: "magnifyingglass"
         case .learning: "clock.arrow.circlepath"
-        case .general: "gearshape"
         case .ai: "sparkles"
+        case .general: "gearshape"
         case .setup: "checkmark.seal"
         case .about: "info.circle"
         }

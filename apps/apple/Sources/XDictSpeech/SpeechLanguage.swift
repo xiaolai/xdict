@@ -49,6 +49,9 @@ public struct SpeechPreferences: @unchecked Sendable {
     }
 
     public static let useRecordingsKey = "speech.useRecordings"
+    /// **The voice the reader chose** (owner's settings audit, 2026-10-30): a `VoiceInfo.identifier`, or none for the best
+    /// a language offers — which is what every read did before the choice existed.
+    public static let voiceKey = "speech.voice"
     static let voiceTipKey = "speech.voiceTipShown"
 
     /// "Use the dictionary's recordings" (ADR-0010 Q5): off, the system voice speaks every sound link.
@@ -61,6 +64,12 @@ public struct SpeechPreferences: @unchecked Sendable {
     public var voiceTipShown: Bool {
         get { defaults.bool(forKey: Self.voiceTipKey) }
         nonmutating set { defaults.set(newValue, forKey: Self.voiceTipKey) }
+    }
+
+    /// The chosen voice, where it still speaks the words being said; nil reads as "best available".
+    public var voiceIdentifier: String? {
+        get { defaults.string(forKey: Self.voiceKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.voiceKey) }
     }
 
     public var accent: Accent {

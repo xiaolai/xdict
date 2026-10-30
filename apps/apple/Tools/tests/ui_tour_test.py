@@ -95,12 +95,13 @@ assert len(ids) == len(set(ids)), "route ids repeat"
 assert all(r[1] in ("full", "empty", "reader") for r in ROUTES)
 undriven = {r[0] for r in ROUTES if r[4] is None}
 assert undriven == set(NOT_DRIVEN_WHY), undriven ^ set(NOT_DRIVEN_WHY)
-# Hover's routes (plan-capture WI-5): the General rows and the Screen Recording row as this Mac's grant leaves them,
-# driven; the row's other states and the hover popover, which need a grant changed or another app's text, not.
-hover_driven = {"settings.general", "settings.general.hover", "menubar.hoverPause", "menubar.hoverPaused",
+# Hover's routes (plan-capture WI-5): the Lookup pane's rows and the Screen Recording row as this Mac's grant leaves
+# them, driven; the row's other states and the hover popover, which need a grant changed or another app's text, not. The
+# hover rows moved from General to Lookup in the owner's Settings audit of 2026-10-30.
+hover_driven = {"settings.lookup", "settings.lookup.hover", "menubar.hoverPause", "menubar.hoverPaused",
                 "menubar.hoverOff"}
-hover_undriven = {"settings.general.screenRecordingNotSetUp", "settings.general.screenRecordingNotAllowed",
-                  "settings.general.screenRecordingAllowed", "settings.general.screenRecordingCouldNotTell",
+hover_undriven = {"settings.lookup.screenRecordingNotSetUp", "settings.lookup.screenRecordingNotAllowed",
+                  "settings.lookup.screenRecordingAllowed", "settings.lookup.screenRecordingCouldNotTell",
                   "hover.popover"}
 assert hover_driven <= set(ids) - undriven, hover_driven - (set(ids) - undriven)
 assert hover_undriven <= undriven, hover_undriven - undriven
@@ -163,7 +164,7 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tou
 assert "defaults_commands(DOMAIN, preferences)" in tour_source and "prefs(steps)" in tour_source, \
     "tour.py does not store a route's preferences through routes.defaults_commands"
 # The site field is the hover route's own state (P53): reached by its identifier, which the row no longer takes over.
-assert ("click", "hover.site.field") in by_id["settings.general.hover"][4], by_id["settings.general.hover"][4]
+assert ("click", "hover.site.field") in by_id["settings.lookup.hover"][4], by_id["settings.lookup.hover"][4]
 # The menu-bar item's menu is not one of the app's windows: a press on Pause Hover finds it only if press and click
 # also look in the open menu-bar extra (`ax.swift`'s `roots`).
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "ax.swift"), encoding="utf-8") as f:

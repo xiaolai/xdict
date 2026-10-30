@@ -144,7 +144,20 @@ public final class Pronunciation {
 
     /// The voice that would speak `language` now: for the speak button's help and the settings.
     public func voice(for language: String?) -> VoiceInfo? {
-        tags(language).flatMap { Voices.best(for: $0, among: voices()) }
+        tags(language).flatMap { chosenVoice(for: $0) }
+    }
+
+    /// **The reader's chosen voice where it still speaks the language, else the best installed** (owner's settings audit,
+    /// 2026-10-30): the choice is a voice identifier, and one that no longer speaks — the accent changed, the voice was
+    /// removed from macOS — falls back instead of failing.
+    private func chosenVoice(for tags: [String]) -> VoiceInfo? {
+        let all = voices()
+        if let identifier = preferences.voiceIdentifier,
+           let chosen = all.first(where: { $0.identifier == identifier }),
+           tags.contains(where: { Voices.speaks(chosen.language, $0) }) {
+            return chosen
+        }
+        return Voices.best(for: tags, among: all)
     }
 
     /// What is worth saying about that voice, if anything; nil when no language is declared.
@@ -169,7 +182,7 @@ public final class Pronunciation {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .nothingToSay }
         guard let tags = tags(language), let language else { return .noLanguage }
-        guard let voice = Voices.best(for: tags, among: voices()), output.speak(text, with: voice) else {
+        guard let voice = chosenVoice(for: tags), output.speak(text, with: voice) else {
             return .noVoice(language: language)
         }
         // The one-time tip: a compact voice spoke, and a better one may be a download away (not for a language macOS
