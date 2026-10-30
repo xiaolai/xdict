@@ -74,6 +74,12 @@ public final class HoverWatcher {
     /// Inputs that arrived while effects were being carried out, handled in arrival order.
     private var queued: [HoverSession.Input] = []
     private var handling = false
+    /// **The reader's log**, injectable so a test reads what was written without the app's own file (owner's report,
+    /// 2026-10-30: hover did nothing over a terminal and a browser, and the log said nothing at all).
+    private let diagnostics: Diagnostics
+    /// When each quiet refusal was last written: one line per reason per `quietReprise`, not one per rest.
+    private var quietSaid: [String: ContinuousClock.Instant] = [:]
+    private static let quietReprise: Duration = .seconds(5)
 
     /// Where a word goes: the consumer. Weak: the app owns the watcher.
     public weak var sink: (any CaptureSink)?
@@ -86,8 +92,10 @@ public final class HoverWatcher {
         policy: @escaping @MainActor () -> HoverPolicy, requests: CaptureRequests, restTolerance: CGFloat,
         primaryHeight: @escaping @MainActor () -> CGFloat?, events: any HoverEventSource,
         pointer: @escaping @MainActor () -> (UpPoint, Set<HoverModifier>), schedule: @escaping Schedule,
-        now: @escaping @MainActor () -> ContinuousClock.Instant, reader: any HoverReading
+        now: @escaping @MainActor () -> ContinuousClock.Instant, reader: any HoverReading,
+        diagnostics: Diagnostics = .shared
     ) {
+        self.diagnostics = diagnostics
         self.policy = policy
         self.requests = requests
         self.primaryHeight = primaryHeight
@@ -198,7 +206,7 @@ public final class HoverWatcher {
             found.removeValue(forKey: intent.serial)?.discard()
             finishOrigin(intent.origin)
             log.debug("hover dropped: \(why.rawValue, privacy: .public)")
-            Diagnostics.shared.record("hover.dropped", ["why": why.rawValue, "serial": "\(intent.serial)"])
+            diagnostics.record("hover.dropped", ["why": why.rawValue, "serial": "\(intent.serial)"])
         }
     }
 
@@ -233,6 +241,15 @@ public final class HoverWatcher {
         requests.cancel(asked.request)
     }
 
+    /// One line per reason per five seconds: a reader resting the pointer with the key held would otherwise write one at
+    /// every rest, and a reason written once says what happened just as well as a thousand.
+    private func noteQuiet(_ why: HoverRefusal, _ intent: HoverIntent) {
+        let at = now()
+        if let said = quietSaid[why.rawValue], at - said < Self.quietReprise { return }
+        quietSaid[why.rawValue] = at
+        diagnostics.record("hover.quiet", ["why": why.rawValue, "tapped": "\(intent.tapped)"])
+    }
+
     private func finish(_ intent: HoverIntent, _ outcome: HoverReader.Outcome) {
         if session.inFlight?.serial == intent.serial { readTask = nil }
         let end: HoverSession.ReadEnd
@@ -259,11 +276,17 @@ public final class HoverWatcher {
                 end = .word
             } else {
                 end = .nothing
+                diagnostics.record("hover.nothing", ["why": String(describing: why)])
             }
         case .quiet(.captureInFlight):
             end = .captureBusy
-        case .quiet:
+        case .quiet(let why):
             end = .nothing
+            // **The commonest reason a hover does not appear, in the reader's log** (owner's report, 2026-10-30: "option+
+            // hovering no response on ghostty/chrome", and the log held only `hover.started` — a quiet refusal was the one
+            // thing it never wrote). `notTapped` under the double-tap gesture is the ordinary case: the key was held, not
+            // tapped.
+            noteQuiet(why, intent)
         }
         let (at, held) = pointer()
         feed(.readEnded(serial: intent.serial, end, pointer: at, held: held))
@@ -291,7 +314,7 @@ public final class HoverWatcher {
                 // that request was the one still waiting** (audit 2026-10-29 finding 6): Escape or a newer lookup ends it
                 // first, and a miss the reader has already moved past must not be announced.
                 guard requests.cancel(request) else { return }
-                Diagnostics.shared.record("hover.notice", ["kind": notice.rawValue, "request": "\(request.number)"])
+                diagnostics.record("hover.notice", ["kind": notice.rawValue, "request": "\(request.number)"])
                 onNotice?(notice)
                 return
             }
@@ -305,12 +328,12 @@ public final class HoverWatcher {
         guard requests.present(term, for: word.request, to: sink) == .accepted else {
             word.discard()
             log.debug("hover dropped: a later request has the presentation")
-            Diagnostics.shared.record("hover.refused", ["why": "a later request has the presentation",
+            diagnostics.record("hover.refused", ["why": "a later request has the presentation",
                                                         "request": "\(word.request.number)"])
             return
         }
-        Diagnostics.shared.record("hover.delivered", ["request": "\(word.request.number)",
-                                                      "word": Diagnostics.shared.word(term.term),
+        diagnostics.record("hover.delivered", ["request": "\(word.request.number)",
+                                                      "word": diagnostics.word(term.term),
                                                       "source": String(describing: term.source)])
         // Remembered on delivery, so a rest on the same word does not ask again while it comes up — and **forgotten if
         // its presentation never draws**, by the consumer's acknowledgement (`ended`).

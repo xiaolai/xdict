@@ -18,6 +18,7 @@ struct HoverWatcherSequenceTests {
         let reader = ScriptedHoverReader()
         let requests = CaptureRequests()
         let sink = RecordingSink()
+        let diagnostics: Diagnostics
         let watcher: HoverWatcher
         /// The monotonic clock the watcher reads, which the test moves.
         let clock = TestClock()
@@ -31,10 +32,15 @@ struct HoverWatcherSequenceTests {
             var policy = HoverPolicy.shipped
             policy.gesture = gesture
             let pointer = pointer, timer = timer, clock = clock
+            // **The log this rig writes to is its own** (owner's report, 2026-10-30): a test reads what the watcher wrote
+            // without touching the app's file, or racing the app that is running beside it.
+            diagnostics = Diagnostics(
+                defaults: UserDefaults(suiteName: "ai.xdict.watcher.\(UUID().uuidString)") ?? .standard,
+                directory: FileManager.default.temporaryDirectory.appending(path: "watcher-\(UUID().uuidString)"))
             watcher = HoverWatcher(
                 policy: { policy }, requests: requests, restTolerance: HoverFixtures.rest,
                 primaryHeight: { 1_000 }, events: events, pointer: { pointer.read() },
-                schedule: { timer.schedule($0, $1) }, now: { clock.now }, reader: reader)
+                schedule: { timer.schedule($0, $1) }, now: { clock.now }, reader: reader, diagnostics: diagnostics)
             watcher.sink = sink
             watcher.start()
         }
@@ -54,6 +60,40 @@ struct HoverWatcherSequenceTests {
         }
 
         func drain() async { await HoverFixtures.drain() }
+    }
+
+    // MARK: - The reader's log
+
+    /// **A quiet refusal reaches the reader's log** (owner, 2026-10-30: "option+hovering no response on ghostty/chrome", and
+    /// the log — built for exactly this report — held only `hover.started`, because the quiet refusals were the one thing it
+    /// never wrote). A held key under the double-tap gesture is the commonest of them. Red before the fix: no line at all.
+    @Test func aQuietRefusalIsWrittenToTheLog() async {
+        let rig = Rig(gesture: .doubleTap)
+        await rig.rest()
+        rig.reader.answer(.quiet(.notTapped))
+        await rig.drain()
+        let text = rig.diagnostics.exportText()
+        #expect(text.contains("hover.quiet"), "a quiet refusal was not written: \(text)")
+        #expect(text.contains("why=notTapped"), "the reason was not written: \(text)")
+        #expect(text.contains("tapped=false"), "whether it was a tap was not written: \(text)")
+    }
+
+    /// One line per reason per five seconds, not one per rest: a day of reading with the key held would otherwise fill the
+    /// log with the same sentence, and the reason written once says what happened just as well.
+    @Test func aQuietRefusalIsWrittenOncePerReprise() async {
+        let rig = Rig(gesture: .doubleTap)
+        for _ in 0..<3 {
+            await rig.rest()
+            rig.reader.answer(.quiet(.notTapped))
+            await rig.drain()
+        }
+        let lines = { rig.diagnostics.exportText().components(separatedBy: "hover.quiet").count - 1 }
+        #expect(lines() == 1, "the same refusal was written \(lines()) times in five seconds")
+        rig.clock.now += .seconds(6)
+        await rig.rest()
+        rig.reader.answer(.quiet(.notTapped))
+        await rig.drain()
+        #expect(lines() == 2, "the refusal was never written again after the reprise")
     }
 
     // MARK: - The gesture rule's wire
