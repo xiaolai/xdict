@@ -5,7 +5,7 @@ members = ["xdict-mdx", "xdict-mdx-writer", "xdict-core", "xdict-conformance", "
 [workspace.package]
 version = "0.5.1"
 edition = "2024"
-license = "ISC"
+license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/xiaolai/xdict"
 rust-version = "1.99"
 

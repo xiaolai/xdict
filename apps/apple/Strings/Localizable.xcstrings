@@ -6428,22 +6428,6 @@
         }
       }
     },
-    "ISC": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ISC"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ISC"
-          }
-        }
-      }
-    },
     "If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You can change your mind afterwards.": {
       "localizations": {
         "en": {
@@ -9879,6 +9863,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "指针手势"
+          }
+        }
+      }
+    },
+    "PolyForm Noncommercial 1.0.0": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PolyForm Noncommercial 1.0.0"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PolyForm 非商业许可 1.0.0"
           }
         }
       }
@@ -16620,18 +16620,18 @@
         }
       }
     },
-    "XDict is free software.": {
+    "XDict is free for noncommercial use; commercial use needs a license.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "XDict is free software."
+            "value": "XDict is free for noncommercial use; commercial use needs a license."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "XDict 是自由软件。"
+            "value": "XDict 供非商业用途免费使用；商业用途需要许可。"
           }
         }
       }

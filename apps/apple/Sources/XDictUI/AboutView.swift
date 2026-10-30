@@ -40,7 +40,7 @@ public struct AboutView: View {
                 LabeledContent { Text(verbatim: model.build).textSelection(.enabled) } label: { Text("Build") }
                 LabeledContent { Text(verbatim: ProcessInfo.processInfo.operatingSystemVersionString)
                     .textSelection(.enabled) } label: { Text("macOS") }
-                LabeledContent { Text("ISC") } label: { Text("Licence") }
+                LabeledContent { Text("PolyForm Noncommercial 1.0.0") } label: { Text("Licence") }
             } header: {
                 Text("This copy")
             }
@@ -57,7 +57,7 @@ public struct AboutView: View {
                 Link(destination: Self.repository) { Text("Source Code") }  // placement: form-pane
                 Button { acknowledge() } label: { Text("Acknowledgments") }  // placement: form-pane
             } header: {
-                Text("XDict is free software.")
+                Text("XDict is free for noncommercial use; commercial use needs a license.")
             }
         }
         .formStyle(.grouped)
