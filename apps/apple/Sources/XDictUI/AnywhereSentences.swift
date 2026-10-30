@@ -38,6 +38,63 @@ public enum AnywhereSentences {
         }
     }
 
+    /// **The reader's own hover gesture, as a sentence may name it** (owner, 2026-10-30: "Nothing to Look Up" is "an
+    /// ugly and stupid tip … suggest users use hovering"): the modifier's symbol, and whether the gesture is a double
+    /// press rather than holding the key. Built from the stored policy, so the suggestion matches what the app does.
+    public struct HoverHint: Sendable, Equatable {
+        public let symbol: String
+        public let tapped: Bool
+
+        public init(symbol: String, tapped: Bool) {
+            self.symbol = symbol
+            self.tapped = tapped
+        }
+    }
+
+    /// **The panel's title says what is missing**, not one blanket "Nothing to Look Up" (owner, 2026-10-30): a refused
+    /// selection that is really an Accessibility restriction read as the app having nothing to offer.
+    public static func refusalTitle(_ refusal: SelectionRefusal) -> LocalizedStringResource {
+        switch refusal {
+        case .notTrusted, .failed(.accessibilityDisabled, _):
+            LocalizedStringResource("Accessibility Is Off for XDict")
+        case .tooLong, .tooLongToRead:
+            LocalizedStringResource("The Selection Is Too Long")
+        case .failed(.cancelled, _):
+            LocalizedStringResource("The Lookup Was Replaced")
+        case .nothingSelected, .noWord:
+            LocalizedStringResource("No Word Selected")
+        case .searchLimitReached, .failed, .noApp:
+            LocalizedStringResource("The Selection Could Not Be Read")
+        }
+    }
+
+    /// Whether the only thing in the way is the Accessibility grant — the case the panel offers a button for.
+    public static func refusalNeedsAccessibility(_ refusal: SelectionRefusal) -> Bool {
+        switch refusal {
+        case .notTrusted, .failed(.accessibilityDisabled, _): true
+        default: false
+        }
+    }
+
+    /// Whether a hover suggestion makes sense for this refusal: the reader selected nothing (or nothing with a word in
+    /// it), and hover looks a word up without a selection.
+    public static func refusalSuggestsHover(_ refusal: SelectionRefusal) -> Bool {
+        switch refusal {
+        case .nothingSelected, .noWord: true
+        default: false
+        }
+    }
+
+    /// **The way out that needs no selection** (owner, 2026-10-30): the reader's own gesture and key, not a generic
+    /// "try hovering" that may not be what their setting does.
+    public static func hoverAlternative(_ hint: HoverHint) -> LocalizedStringResource {
+        if hint.tapped {
+            LocalizedStringResource("Or double-press \(hint.symbol) on a word: XDict looks it up without a selection.")
+        } else {
+            LocalizedStringResource("Or hold \(hint.symbol) and rest the pointer on a word: XDict looks it up without a selection.")
+        }
+    }
+
     /// What went wrong with the lookup shortcut.
     public static func problem(_ problem: ShortcutProblem) -> LocalizedStringResource {
         switch problem {

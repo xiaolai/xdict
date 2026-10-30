@@ -1975,6 +1975,22 @@
         }
       }
     },
+    "Accessibility Is Off for XDict": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility Is Off for XDict"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 的辅助功能权限未开启"
+          }
+        }
+      }
+    },
     "Acknowledgments": {
       "localizations": {
         "en": {
@@ -4436,18 +4452,18 @@
         }
       }
     },
-    "Dictionaries in the Hover Popup": {
+    "Dictionaries in the Lookup Popup": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dictionaries in the Hover Popup"
+            "value": "Dictionaries in the Lookup Popup"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "取词弹窗中的词典"
+            "value": "查询弹窗中的词典"
           }
         }
       }
@@ -6122,22 +6138,6 @@
         }
       }
     },
-    "Hover Popup…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hover Popup…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取词弹窗…"
-          }
-        }
-      }
-    },
     "Hover found no word to read under the pointer.": {
       "localizations": {
         "en": {
@@ -7375,6 +7375,22 @@
         }
       }
     },
+    "Lookup Popup…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lookup Popup…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查询弹窗…"
+          }
+        }
+      }
+    },
     "Lookup Shortcut": {
       "localizations": {
         "en": {
@@ -7917,6 +7933,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "可用词典中没有结果"
+          }
+        }
+      }
+    },
+    "No Word Selected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Word Selected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有选中词语"
           }
         }
       }
@@ -8628,22 +8660,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ 中没有选中内容，或 %1$@ 不共享其选中内容。请选中一个词后再试。"
-          }
-        }
-      }
-    },
-    "Nothing to Look Up": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nothing to Look Up"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有可查询的内容"
           }
         }
       }
@@ -9477,6 +9493,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "可选。要查找其他 App 中选中的单词，XDict 需要辅助功能权限和查词快捷键。"
+          }
+        }
+      }
+    },
+    "Or double-press %@ on a word: XDict looks it up without a selection.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or double-press %@ on a word: XDict looks it up without a selection."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或者在一个词上连按两下 %@：无需选中，XDict 也会查询它。"
+          }
+        }
+      }
+    },
+    "Or hold %@ and rest the pointer on a word: XDict looks it up without a selection.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or hold %@ and rest the pointer on a word: XDict looks it up without a selection."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或者按住 %@，把指针停在一个词上：无需选中，XDict 也会查询它。"
           }
         }
       }
@@ -12201,22 +12249,6 @@
         }
       }
     },
-    "The Hover Popup has its own dictionaries, in its own order.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The Hover Popup has its own dictionaries, in its own order."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取词弹窗有自己的词典，也有自己的顺序。"
-          }
-        }
-      }
-    },
     "The Keychain refused to remove the key (status %d).": {
       "localizations": {
         "en": {
@@ -12245,6 +12277,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "钥匙串拒绝保存密钥（状态 %d）。"
+          }
+        }
+      }
+    },
+    "The Lookup Popup has its own dictionaries, in its own order — the same list whether hover or the shortcut opened it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lookup Popup has its own dictionaries, in its own order — the same list whether hover or the shortcut opened it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查询弹窗有自己的一套词典和顺序——无论鼠标取词还是快捷键打开，用的都是这一套。"
+          }
+        }
+      }
+    },
+    "The Lookup Was Replaced": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lookup Was Replaced"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查询已被更新的一次取代"
+          }
+        }
+      }
+    },
+    "The Selection Could Not Be Read": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Selection Could Not Be Read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取选中的内容"
+          }
+        }
+      }
+    },
+    "The Selection Is Too Long": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Selection Is Too Long"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中的内容太长"
           }
         }
       }
@@ -13323,18 +13419,18 @@
         }
       }
     },
-    "The popover shows these, in this order; the window keeps its own list in Settings ▸ Dictionaries.": {
+    "The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The popover shows these, in this order; the window keeps its own list in Settings ▸ Dictionaries."
+            "value": "The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "弹窗按此顺序显示这些词典；窗口自己的列表在“设置 ▸ 词典”中。"
+            "value": "弹窗按这个顺序显示这些词典，鼠标取词与快捷键共用；主窗口在设置 ▸ 词典里另有一套。"
           }
         }
       }

@@ -31,6 +31,49 @@ struct AnywhereSentencesTests {
         #expect(texts[9].contains(PrivacySettings.accessibility()), "\(texts[9])")
     }
 
+    /// **The refusal's title says what is missing** (owner, 2026-10-30: "Nothing to Look Up" was "an ugly and stupid
+    /// tip"): one blanket title read an Accessibility restriction as the app having nothing to offer.
+    @Test func eachRefusalFamilyHasItsOwnTitle() {
+        let families: [(SelectionRefusal, String)] = [
+            (.nothingSelected(app: "Notes"), "No Word Selected"),
+            (.noWord(app: "Notes"), "No Word Selected"),
+            (.tooLong(app: "Notes", characters: 300), "The Selection Is Too Long"),
+            (.tooLongToRead(app: "Notes"), "The Selection Is Too Long"),
+            (.notTrusted, "Accessibility Is Off for XDict"),
+            (.failed(.accessibilityDisabled, app: "Notes"), "Accessibility Is Off for XDict"),
+            (.noApp, "The Selection Could Not Be Read"),
+            (.searchLimitReached(app: "Notes", limit: 400), "The Selection Could Not Be Read"),
+            (.failed(.cancelled, app: "Notes"), "The Lookup Was Replaced"),
+        ]
+        for (refusal, title) in families {
+            #expect(String(localized: AnywhereSentences.refusalTitle(refusal)) == title, "\(refusal)")
+        }
+        #expect(!String(localized: AnywhereSentences.refusalTitle(.notTrusted)).contains("Nothing to Look Up"))
+    }
+
+    /// The Accessibility button is offered exactly where the grant is the obstacle.
+    @Test func theAccessibilityFamilyIsTheOneTheButtonServes() {
+        #expect(AnywhereSentences.refusalNeedsAccessibility(.notTrusted))
+        #expect(AnywhereSentences.refusalNeedsAccessibility(.failed(.accessibilityDisabled, app: "Notes")))
+        #expect(!AnywhereSentences.refusalNeedsAccessibility(.nothingSelected(app: "Notes")))
+        #expect(!AnywhereSentences.refusalNeedsAccessibility(.failed(.notResponding, app: "Notes")))
+    }
+
+    /// **The hover sentence is the reader's own gesture** (owner, 2026-10-30: "suggest users use hovering"): holding the
+    /// key says hold, the double-tap setting says double-press, and neither is offered where hover cannot help.
+    @Test func aHoverSuggestionSpeaksTheReadersOwnGesture() {
+        let hold = AnywhereSentences.HoverHint(symbol: "⌥", tapped: false)
+        let tap = AnywhereSentences.HoverHint(symbol: "⌥", tapped: true)
+        let held = String(localized: AnywhereSentences.hoverAlternative(hold))
+        let tapped = String(localized: AnywhereSentences.hoverAlternative(tap))
+        #expect(held.contains("hold ⌥") && tapped.contains("double-press ⌥"), "\(held) / \(tapped)")
+        #expect(held != tapped)
+        #expect(AnywhereSentences.refusalSuggestsHover(.nothingSelected(app: "Notes")))
+        #expect(AnywhereSentences.refusalSuggestsHover(.noWord(app: "Notes")))
+        #expect(!AnywhereSentences.refusalSuggestsHover(.notTrusted))
+        #expect(!AnywhereSentences.refusalSuggestsHover(.tooLong(app: "Notes", characters: 300)))
+    }
+
     @Test func aClashSaysWhoHoldsItAndWhatStillWorks() {
         let chosen = Shortcut(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(controlKey | optionKey))
         let kept = String(localized: AnywhereSentences.problem(.refused(chosen, .takenByAnotherApp,

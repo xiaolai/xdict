@@ -23,17 +23,21 @@ public struct LookupPanelView: View {
     let state: SearchWindowState
     let notice: PanelNotice
     let shortcut: String?
+    /// What to suggest instead of a selection, in the reader's own gesture; nil while hover is off (owner, 2026-10-30).
+    let hoverHint: AnywhereSentences.HoverHint?
     let expand: () -> Void
     let showDictionaries: () -> Void
     /// **"Meaning here"** (ADR-0021 d.1): the panel is too small for an answer, so it hands the sentence to the window it
     /// expands into, which asks there. A capture with no sentence offers no ask.
     let askMeaning: () -> Void
 
-    public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?, expand: @escaping () -> Void,
+    public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?,
+                hoverHint: AnywhereSentences.HoverHint? = nil, expand: @escaping () -> Void,
                 showDictionaries: @escaping () -> Void = {}, askMeaning: @escaping () -> Void = {}) {
         self.state = state
         self.notice = notice
         self.shortcut = shortcut
+        self.hoverHint = hoverHint
         self.expand = expand
         self.showDictionaries = showDictionaries
         self.askMeaning = askMeaning
@@ -263,12 +267,25 @@ public struct LookupPanelView: View {
         case .reading:
             ProgressView().controlSize(.small).coversPane()  // placement: spinner
         case .refused(let refusal):
+            // **The title says what is missing, and the way out is named** (owner, 2026-10-30: "Nothing to Look Up" was
+            // "an ugly and stupid tip"; an Accessibility refusal read as the app having nothing, and a reader who
+            // selected nothing was told nothing about hover).
             ContentUnavailableView {
-                Label("Nothing to Look Up", systemImage: "text.cursor")
+                Label {
+                    Text(AnywhereSentences.refusalTitle(refusal))
+                } icon: {
+                    Image(systemName: AnywhereSentences.refusalNeedsAccessibility(refusal)
+                          ? "accessibility" : "text.cursor")
+                }
             } description: {
-                Text(AnywhereSentences.refusal(refusal))
+                VStack {
+                    Text(AnywhereSentences.refusal(refusal))
+                    if let hoverHint, AnywhereSentences.refusalSuggestsHover(refusal) {
+                        Text(AnywhereSentences.hoverAlternative(hoverHint))
+                    }
+                }
             } actions: {
-                if refusal == .notTrusted {
+                if AnywhereSentences.refusalNeedsAccessibility(refusal) {
                     EmptyStateActions {
                         Button("Open Accessibility Settings") { NSWorkspace.shared.open(Self.accessibilityPane) }
                             .accessibilityIdentifier("panel.openAccessibility")

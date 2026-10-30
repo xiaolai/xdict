@@ -380,7 +380,7 @@ ROUTES = [
     ("settings.dictionaries.changed", "full", "A dictionary's file replaced", "Beneath the table, 'Is it still the "
      "same dictionary?' with Same / A Different Dictionary, then Undo", None),
     ("services.otherApp", "full", "Services ▸ Look Up in XDict from another app", "The panel over that app", None),
-    ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Nothing to Look Up' and 'Open "
+    ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Accessibility Is Off for XDict' and 'Open "
      "Accessibility Settings'", None),
     ("sound.recording", "full", "A sound:// link in an entry", "The recording plays, or a notice says why not", None),
     ("settings.general.screenRecordingNotSetUp", "full", "The Screen Recording row before XDict ever asked",

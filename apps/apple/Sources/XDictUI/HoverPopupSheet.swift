@@ -3,8 +3,9 @@ import SwiftUI
 import XDictLibrary
 import XDictTokens
 
-/// **The hover popup's dictionaries, chosen and ordered where the reader chooses everything else** (owner, 2026-10-29:
-/// "鼠标取词 popup 里词典的选择与顺序, 是不是应该在 settings 里有设置啊？"). The window keeps its list and order in the pane
+/// **The lookup popup's dictionaries, chosen and ordered where the reader chooses everything else** (owner, 2026-10-29:
+/// "鼠标取词 popup 里词典的选择与顺序, 是不是应该在 settings 里有设置啊？"; called the Lookup Popup since 2026-10-30 — one
+/// list serves both its triggers, hover and the shortcut, and the row's old name said hover only). The window keeps its list and order in the pane
 /// behind this sheet; the popover has its own (`HoverPopupPreferences`), and this is where it is edited.
 ///
 /// Two lists, one meaning each: what the popup shows (drag to order, untick to take out) and what it does not. A
@@ -28,9 +29,9 @@ public struct HoverPopupSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text("Dictionaries in the Hover Popup")
+                Text("Dictionaries in the Lookup Popup")
                     .font(Tokens.TextRole.title3.font)
-                Text("The popover shows these, in this order; the window keeps its own list in Settings ▸ Dictionaries.")
+                Text("The popup shows these, in this order, whether hover or the shortcut opened it; the window keeps its own list in Settings ▸ Dictionaries.")
                     .font(Tokens.TextRole.callout.font)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

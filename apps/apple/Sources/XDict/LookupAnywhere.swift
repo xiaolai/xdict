@@ -186,6 +186,14 @@ final class LookupAnywhere {
         hover.startAtLaunch(Self.launch)
     }
 
+    /// **What the panel may suggest instead of a selection** (owner, 2026-10-30): the reader's own hover gesture and key,
+    /// or nil while hover is off — suggesting a gesture the app will not honour would be worse than saying nothing.
+    var hoverHint: AnywhereSentences.HoverHint? {
+        guard hover.isEnabled else { return nil }
+        return AnywhereSentences.HoverHint(symbol: hover.policy.modifier.symbol,
+                                           tapped: hover.policy.gesture == .doubleTap)
+    }
+
     // MARK: - Asking
 
     /// The shortcut: the selection of the app in front, or — with the panel showing that very lookup — expansion, the
@@ -826,6 +834,7 @@ private struct PanelRoot: View {
     var body: some View {
         LookupPanelView(state: state, notice: anywhere.notice,
                         shortcut: anywhere.registrar.isRegistered ? anywhere.registrar.current.label() : nil,
+                        hoverHint: anywhere.hoverHint,
                         expand: { anywhere.expand() },
                         showDictionaries: {
                             anywhere.close(why: "showDictionaries")
