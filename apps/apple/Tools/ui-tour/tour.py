@@ -82,8 +82,14 @@ def as_json(done):
         return {}
 
 
+def matching(executable=exe):
+    """The processes whose command line holds `executable` — empty when the bundle is not running."""
+    found = subprocess.run(["pgrep", "-f", executable], capture_output=True, text=True).stdout.split()
+    return found
+
+
 def running(executable=exe):
-    return subprocess.run(["pgrep", "-f", executable], capture_output=True).returncode == 0
+    return bool(matching(executable))
 
 
 def translated(title, lang):
@@ -206,6 +212,10 @@ class Session:
                 return
             if front.get("displayAsleep"):
                 run("caffeinate", "-u", "-t", "1", check=False)
+            # **A user's activation, not a program's** (2026-10-30: XDict has been an accessory app since the menu-bar
+            # home, and `NSApp.activate()` from its own instrument is refused while another app holds the front — Apple's
+            # rule, not a bug to route around inside the app). The Apple Event is the same activation a click gives it.
+            run("osascript", "-e", 'tell application id "ai.xdict.app" to activate', check=False)
             if time.time() > deadline:
                 raise Failed(f"before {why!r} XDict could not have the front: {front.get('name')!r} "
                              f"(pid {front.get('pid')}) holds it")
@@ -512,7 +522,11 @@ def main():
     if [p for p in others if int(p) != os.getpid()]:
         raise SystemExit("tour: another UI tour is running on this Mac; wait for it")
     if running():
-        raise SystemExit("tour: XDict is already running; the tour does not quit a reader's XDict")
+        # **Which process, by number and command line**: a refused start that cannot say what it saw sends the next reader
+        # hunting (2026-10-30: it refused on a Mac where nothing seemed to run).
+        pids = matching()
+        lines = subprocess.run(["ps", "-o", "pid=,command=", "-p", ",".join(pids)], capture_output=True, text=True).stdout
+        raise SystemExit(f"tour: XDict is already running; the tour does not quit a reader's XDict:\n{lines}")
     if subprocess.run(["pgrep", "-f", "xctest"], capture_output=True).returncode == 0:
         raise SystemExit("tour: an xctest run holds this Mac; wait for it")
     if subprocess.run(["pgrep", "-f", "XDictEntryLab.app/"], capture_output=True).returncode == 0:

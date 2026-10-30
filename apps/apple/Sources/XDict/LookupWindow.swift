@@ -223,6 +223,11 @@ final class LookupWindowRun: LookupStage {
             case "pageFocus":
                 Task { self.write(await self.pageFocus(), to: out) }
             case "front":
+                // **An accessory app may not take the front by asking** (2026-10-30): `NSApp.activate()` is refused while
+                // another app holds the front — Apple's rule since the menu-bar home — and a policy flip for the length of
+                // one activation was tried and did not lift it. **The tour activates by Apple Event instead** (tour.py's
+                // `hold`), the same activation a click gives the app; this command stays for a session where the app is in
+                // front already or the system lets it through.
                 NSApp.activate()
                 mainWindow?.makeKeyAndOrderFront(nil)
                 write(["asked": true], to: out)

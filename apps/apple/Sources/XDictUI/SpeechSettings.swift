@@ -44,13 +44,11 @@ public struct SpeechSettings: View {
                 .pickerStyle(.menu)
                 .accessibilityIdentifier("speech.voice")
                 if let caveat = Voices.caveat(for: tags, among: Voices.installed) {
-                    // R1, R4: the caveat leads, its way on trails at regular size, as on the pronunciation notice.
-                    ActionRow {
-                        Text(SpeechSentences.caveat(caveat))
-                            .foregroundStyle(.secondary)
-                    } actions: {
-                        Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }
-                    }
+                    // **The sentence only** (owner's settings audit, 2026-10-30: the rendered pane showed this row's button
+                    // beside "More voices" doing the same thing): the one action is the row below, and the sentence still
+                    // names the path it takes.
+                    Text(SpeechSentences.caveat(caveat))
+                        .foregroundStyle(.secondary)
                 }
                 LabeledContent {
                     Button("Open Read & Speak Settings…") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }  // placement: form-row
