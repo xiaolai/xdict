@@ -34,6 +34,11 @@ public protocol AccessibilityReading {
     /// The element at `point` (Accessibility's space, y down) under `root`: a hit test, **one request like any other**,
     /// inside the read's budget (XDict ADR-0014 decision 6). Nil where nothing is there.
     func hitTest(_ root: AXUIElement, at point: CGPoint) throws(CaptureError) -> AXUIElement?
+    /// **What an element advertises** (`AXUIElementCopyAttributeNames`), or nil where the client cannot tell — the
+    /// default below, for a test's client that scripts values and not capability. One selection read asks it to tell
+    /// "this app shares no selection" apart from "nothing is selected" (owner, 2026-10-30: a selection in Ghostty was
+    /// answered "no word selected"; upstream Ghostty exposes its screen but no selected text).
+    func attributeNames(_ element: AXUIElement) throws(CaptureError) -> [String]?
 }
 
 extension AccessibilityReading {
@@ -42,6 +47,8 @@ extension AccessibilityReading {
     public func enhance(_ application: AXUIElement) throws(CaptureError) {}
     /// A test's client that scripts no hit test has nothing at any point.
     public func hitTest(_ root: AXUIElement, at point: CGPoint) throws(CaptureError) -> AXUIElement? { nil }
+    /// A test's client scripts values, not capability: unknown, which reads as "shared" — the old behaviour exactly.
+    public func attributeNames(_ element: AXUIElement) throws(CaptureError) -> [String]? { nil }
 
     func element(_ element: AXUIElement, _ name: String, ofApplication: Bool = false) throws(CaptureError) -> AXUIElement? {
         cast(try attribute(element, name, ofApplication: ofApplication), AXUIElementGetTypeID(), as: AXUIElement.self)
@@ -254,6 +261,15 @@ public struct AccessibilitySession: AccessibilityReading {
         case .failure: ofApplication ? .failed(.accessibilityRefused) : .absent
         default: .absent
         }
+    }
+
+    /// **The element's own attribute list**, inside the budget and classified like any request: it answers what the
+    /// element advertises, and an element that has no list is simply absent.
+    public func attributeNames(_ element: AXUIElement) throws(CaptureError) -> [String]? {
+        try checkStillWanted()
+        var names: CFArray?
+        let status = AXUIElementCopyAttributeNames(element, &names)
+        return try settle(status, "attributes", ofApplication: false) ? (names as? [String] ?? []) : nil
     }
 
     public func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {

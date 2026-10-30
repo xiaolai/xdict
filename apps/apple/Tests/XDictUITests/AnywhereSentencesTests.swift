@@ -15,7 +15,7 @@ struct AnywhereSentencesTests {
             .tooLong(app: "Notes", characters: 300), .failed(.notResponding, app: "Notes"),
             .failed(.accessibilityRefused, app: "Notes"), .failed(.deadlineExceeded, app: "Notes"),
             .failed(.accessibilityDisabled, app: "Notes"), .failed(.appUnavailable, app: "Notes"), .notTrusted, .noApp,
-            .tooLongToRead(app: "Notes"),
+            .tooLongToRead(app: "Notes"), .doesNotShareSelections(app: "Notes"),
         ]
         let texts = refusals.map { String(localized: AnywhereSentences.refusal($0)) }
         #expect(Set(texts).count == refusals.count, "\(texts)")
@@ -44,6 +44,7 @@ struct AnywhereSentencesTests {
             (.noApp, "The Selection Could Not Be Read"),
             (.searchLimitReached(app: "Notes", limit: 400), "The Selection Could Not Be Read"),
             (.failed(.cancelled, app: "Notes"), "The Lookup Was Replaced"),
+            (.doesNotShareSelections(app: "Notes"), "Notes Does Not Share Selections"),
         ]
         for (refusal, title) in families {
             #expect(String(localized: AnywhereSentences.refusalTitle(refusal)) == title, "\(refusal)")
@@ -70,6 +71,7 @@ struct AnywhereSentencesTests {
         #expect(held != tapped)
         #expect(AnywhereSentences.refusalSuggestsHover(.nothingSelected(app: "Notes")))
         #expect(AnywhereSentences.refusalSuggestsHover(.noWord(app: "Notes")))
+        #expect(AnywhereSentences.refusalSuggestsHover(.doesNotShareSelections(app: "Notes")))
         #expect(!AnywhereSentences.refusalSuggestsHover(.notTrusted))
         #expect(!AnywhereSentences.refusalSuggestsHover(.tooLong(app: "Notes", characters: 300)))
     }

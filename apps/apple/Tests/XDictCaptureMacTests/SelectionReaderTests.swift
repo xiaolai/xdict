@@ -86,6 +86,35 @@ struct SelectionReaderTests {
 
     /// The panel's query is the selection exactly, Unicode and phrases included — trimmed of nothing but its wrapping
     /// punctuation and whitespace.
+    /// **An app that shares no selection says so** (owner, 2026-10-30: a selection in Ghostty was answered "no word
+    /// selected"): its focused element advertises no selection attribute and nothing under it does either — that is the
+    /// app's answer, not the reader's mistake, and the panel must say which.
+    @Test func anAppThatSharesNoSelectionSaysSo() {
+        let tree = FakeAccessibility()
+        let window = tree.element(1)
+        tree.set(tree.application, kAXFocusedUIElementAttribute, window)
+        tree.set(tree.application, kAXFocusedWindowAttribute, window)
+        tree.set(window, kAXRoleAttribute, "AXWindow" as CFString)
+        tree.advertise(window, ["AXRole", kAXChildrenAttribute])
+        #expect(read(tree) == .nothing(.doesNotShareSelections(app: "Reader")))
+    }
+
+    /// **A terminal's selection lives on a child** (the other half of the same report): the window is focused and
+    /// advertises nothing, but its terminal view advertises `AXSelectedText` and holds the selection — read, not refused.
+    @Test func aSelectionOnAContainerChildIsRead() {
+        let tree = FakeAccessibility()
+        let window = tree.element(1), terminal = tree.element(2)
+        tree.set(tree.application, kAXFocusedUIElementAttribute, window)
+        tree.set(window, kAXRoleAttribute, "AXWindow" as CFString)
+        tree.advertise(window, ["AXRole", kAXChildrenAttribute])
+        tree.set(window, kAXChildrenAttribute, [terminal] as CFArray)
+        tree.advertise(terminal, ["AXRole", kAXSelectedTextAttribute])
+        tree.set(terminal, kAXSelectedTextAttribute, "hold" as CFString)
+        tree.set(terminal, kAXSelectedTextRangeAttribute, rangeValue(0, 4))
+        guard case .selected(let selection, _) = read(tree) else { Issue.record("expected a selection"); return }
+        #expect(selection.text == "hold")
+    }
+
     @Test func aUnicodePhraseIsReadExactly() {
         let tree = FakeAccessibility()
         let field = tree.element(1)
@@ -491,6 +520,20 @@ final class FakeAccessibility: AccessibilityReading {
     func hitTest(_ root: AXUIElement, at point: CGPoint) throws(CaptureError) -> AXUIElement? {
         hitTests.append(point)
         return root == application ? hits["\(point.x) \(point.y)"] : nil
+    }
+
+    /// What each element advertises, once a test has called `advertise`: an element not named then advertises nothing.
+    /// Until then the fake cannot tell, which the reader reads as "shared" — every answer it gave before this existed.
+    private var capabilities: [AXUIElement: [String]]?
+
+    func advertise(_ element: AXUIElement, _ names: [String]) {
+        capabilities = capabilities ?? [:]
+        capabilities?[element, default: []].append(contentsOf: names)
+    }
+
+    func attributeNames(_ element: AXUIElement) throws(CaptureError) -> [String]? {
+        guard let capabilities else { return nil }
+        return capabilities[element] ?? []
     }
 
     func set(_ element: AXUIElement, _ name: String, argument: CFTypeRef? = nil, _ value: CFTypeRef) {

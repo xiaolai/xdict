@@ -15,6 +15,8 @@ public enum AnywhereSentences {
             LocalizedStringResource("\(app)'s window is too large to search for a selection (over \(limit) elements). Select the word again and try once more.")
         case .noWord(let app):
             LocalizedStringResource("The selection in \(app) has no word in it, only spaces or punctuation.")
+        case .doesNotShareSelections(let app):
+            LocalizedStringResource("XDict reads selections through macOS Accessibility, and \(app) does not provide one.")
         case .tooLong(let app, let characters):
             LocalizedStringResource("The selection in \(app) is \(characters) characters long, more than XDict looks up at once. Select a word or a phrase.")
         case .failed(.notResponding, let app):
@@ -61,6 +63,8 @@ public enum AnywhereSentences {
             LocalizedStringResource("The Selection Is Too Long")
         case .failed(.cancelled, _):
             LocalizedStringResource("The Lookup Was Replaced")
+        case .doesNotShareSelections(let app):
+            LocalizedStringResource("\(app) Does Not Share Selections")
         case .nothingSelected, .noWord:
             LocalizedStringResource("No Word Selected")
         case .searchLimitReached, .failed, .noApp:
@@ -80,7 +84,7 @@ public enum AnywhereSentences {
     /// it), and hover looks a word up without a selection.
     public static func refusalSuggestsHover(_ refusal: SelectionRefusal) -> Bool {
         switch refusal {
-        case .nothingSelected, .noWord: true
+        case .nothingSelected, .noWord, .doesNotShareSelections: true
         default: false
         }
     }

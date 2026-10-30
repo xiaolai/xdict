@@ -56,6 +56,9 @@ struct DictionaryTable: NSViewRepresentable {
 
     let rows: [Row]
     @Binding var selection: UUID?
+    /// The table's Accessibility identifier: the Dictionaries pane's is the one the drop instrument finds, and a second
+    /// table (the popup's sheet) must not answer to it.
+    var identifier: String = "settings.dictionaries"
     let name: String
     let checkboxName: String
     let setEnabled: (UUID, Bool) -> Void
@@ -114,7 +117,7 @@ struct DictionaryTable: NSViewRepresentable {
         table.setDraggingSourceOperationMask(.move, forLocal: true)
         table.draggingDestinationFeedbackStyle = .gap
         table.setAccessibilityLabel(name)
-        table.setAccessibilityIdentifier("settings.dictionaries")
+        table.setAccessibilityIdentifier(identifier)
 
         let scroll = NSScrollView()
         scroll.documentView = table

@@ -53,6 +53,10 @@ public struct SelectedText: Hashable, Sendable {
 public enum SelectionRefusal: Hashable, Sendable {
     /// Nothing is selected, or the app does not expose its selection.
     case nothingSelected(app: String)
+    /// **The app does not provide its selection at all** (owner, 2026-10-30: a selection in Ghostty was answered "no word
+    /// selected", which was wrong — upstream Ghostty exposes its screen to Accessibility but no selected text). Said
+    /// apart from `nothingSelected` by asking what the focused element advertises, never by guessing from the app's name.
+    case doesNotShareSelections(app: String)
     /// The focused element had nothing, and the window was too large to search for a page — not the same as knowing
     /// there is no selection.
     case searchLimitReached(app: String, limit: Int)
@@ -275,8 +279,8 @@ public enum SelectionReader {
                                                  limits: limits, ax)
                 return .selected(SelectedText(text: term.text, app: app, acquisition: acquisition, context: context),
                                  box: box)
-            case .nothing:
-                return .nothing(.nothingSelected(app: app.name))
+            case .nothing(let shared):
+                return .nothing(shared ? .nothingSelected(app: app.name) : .doesNotShareSelections(app: app.name))
             case .searchLimitReached:
                 return .nothing(.searchLimitReached(app: app.name, limit: webAreaSearchLimit))
             }
@@ -325,7 +329,8 @@ public enum SelectionReader {
 
     private enum Search {
         case found(Capture)
-        case nothing
+        /// Nothing was selected — or, `shared` false, nothing in the app advertises a selection at all.
+        case nothing(shared: Bool)
         case searchLimitReached
     }
 
@@ -334,28 +339,59 @@ public enum SelectionReader {
     /// frontmost, and focus can sit in its address bar, yet a selection in the page is there. Once the Services menu has
     /// closed, Notes and TextEdit answer with no focused selection while the text view under the click holds it (E2E,
     /// 2026-10-18).
+    /// **Whether an element advertises a selection at all**: `AXSelectedText` or the text-marker dialect among its own
+    /// attributes. A client that cannot say (a test's) reads as "shared", which is every answer the reader gave before
+    /// this distinction existed.
+    private static func shares(_ element: AXUIElement, _ ax: some AccessibilityReading) throws(CaptureError) -> Bool {
+        guard let names = try ax.attributeNames(element) else { return true }
+        return names.contains(kAXSelectedTextAttribute) || names.contains("AXSelectedTextMarkerRange")
+    }
+
     private static func find(in application: AXUIElement, under: AXUIElement?, searchingThePage: Bool,
                              _ ax: some AccessibilityReading) throws(CaptureError) -> Search {
         let focused = try ax.element(application, kAXFocusedUIElementAttribute, ofApplication: true)
         if let focused, let found = try capture(from: focused, ax) { return .found(found) }
+        // **Unknown reads as shared** (an app with no focused element — Safari when it is not frontmost — must still be
+        // answered "no selection", not accused of sharing nothing): only an element that was asked and advertises no
+        // selection attribute at all, with nothing under it that does, makes the app's own answer.
+        var shared = true
+        if let focused { shared = try shares(focused, ax) }
         var current = under
         for _ in 0..<underParents {
             guard let element = current else { break }
             if let found = try capture(from: element, ax) { return .found(found) }
+            if try shares(element, ax) { shared = true }
             guard let parent = try ax.element(element, kAXParentAttribute), parent != element else { break }
             current = parent
         }
-        guard searchingThePage else { return .nothing }
+        // **A container in focus does not mean no selection** (owner, 2026-10-30: a selection in Ghostty — its window in
+        // focus, its terminal view a child — was answered "no word selected"): read the first descendant that advertises
+        // a selection, and record that the app shares one whether or not it holds any now.
+        if !shared, let focused {
+            switch try breadthFirst(
+                from: focused, limit: webAreaSearchLimit,
+                children: { (node) throws(CaptureError) in try ax.elements(node, kAXChildrenAttribute) },
+                matches: { (node) throws(CaptureError) in try shares(node, ax) })
+            {
+            case .found(let node):
+                shared = true
+                if let found = try capture(from: node, ax) { return .found(found) }
+            case .absent: break
+            case .limitReached: return .searchLimitReached
+            }
+        }
+        guard searchingThePage else { return .nothing(shared: shared) }
         var window = try ax.element(application, kAXFocusedWindowAttribute, ofApplication: true)
         if window == nil { window = try ax.element(application, kAXMainWindowAttribute, ofApplication: true) }
-        guard let window else { return .nothing }
+        guard let window else { return .nothing(shared: shared) }
         switch try breadthFirst(
             from: window, limit: webAreaSearchLimit,
             children: { (node) throws(CaptureError) in try ax.elements(node, kAXChildrenAttribute) },
             matches: { (node) throws(CaptureError) in try ax.string(node, kAXRoleAttribute) == "AXWebArea" })
         {
-        case .found(let page) where page != focused: return try capture(from: page, ax).map(Search.found) ?? .nothing
-        case .found, .absent: return .nothing
+        case .found(let page) where page != focused:
+            return try capture(from: page, ax).map(Search.found) ?? .nothing(shared: true)
+        case .found, .absent: return .nothing(shared: shared)
         case .limitReached:
             log.notice("no web area within \(webAreaSearchLimit) elements of the focused window")
             return .searchLimitReached

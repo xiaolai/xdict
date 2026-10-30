@@ -817,6 +817,7 @@ final class LookupAnywhere {
         case .nothing(.nothingSelected(let app)): return "nothingSelected(\(app))"
         case .nothing(.searchLimitReached(let app, let limit)): return "searchLimitReached(\(app) limit=\(limit))"
         case .nothing(.noWord(let app)): return "noWord(\(app))"
+        case .nothing(.doesNotShareSelections(let app)): return "doesNotShareSelections(\(app))"
         case .nothing(.tooLong(let app, let characters)): return "tooLong(\(app) chars=\(characters))"
         case .nothing(.failed(let error, let app)): return "failed(\(error) \(app))"
         case .nothing(.notTrusted): return "notTrusted"

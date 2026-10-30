@@ -9,6 +9,10 @@ import XDictTokens
 /// and a hover's own, which until edited follows the dictionaries' order). The window keeps its list and order in the
 /// pane behind this sheet; the popup and hover have theirs (`PopupPreferences`), and this is where they are edited.
 ///
+/// **Apple's table, as the pane has** (owner, 2026-10-30: "dictionary list order cannot be drag and changed" — a SwiftUI
+/// `List` with `.onMove` reordered by nothing on this macOS): the same `DictionaryTable` the Dictionaries pane uses, so a
+/// drag reorders here exactly as it does there, ⌥⌘↑/⌥⌘↓ move and Space ticks.
+///
 /// Two lists, one meaning each: what the chosen list shows (drag to order, untick to take out) and what it does not. A
 /// dictionary unticked stays here, so it is one click to bring back; a new import joins at the end of its library order,
 /// and is named here from the first moment.
@@ -18,10 +22,10 @@ public struct HoverPopupSheet: View {
     private let done: () -> Void
     /// **Which list is being edited**: hover opens first — it is the one this sheet was asked for.
     @State private var editing: PopupPreferences.List = .hover
-    /// The chosen list's dictionaries, in its order.
-    @State private var shown: [UUID] = []
-    /// The rest of the library's enabled dictionaries, in the library's order.
-    @State private var hidden: [UUID] = []
+    /// Every enabled dictionary: the edited list's own first, in its order, then the rest in the library's.
+    @State private var order: [UUID] = []
+    /// The ones the edited list shows.
+    @State private var ticked: Set<UUID> = []
 
     public init(library: Library, size: CGSize, done: @escaping () -> Void) {
         self.library = library
@@ -52,30 +56,15 @@ public struct HoverPopupSheet: View {
             }
             .padding([.horizontal, .top], Tokens.Space.l)
             .padding(.bottom, Tokens.Space.sm)
-            List {
-                Section {
-                    ForEach(shown, id: \.self) { id in
-                        row(id, inPopup: true)
-                    }
-                    .onMove { from, to in
-                        shown.move(fromOffsets: from, toOffset: to)
-                        save()
-                    }
-                } header: {
-                    Text("Shown")
-                }
-                if !hidden.isEmpty {
-                    Section {
-                        ForEach(hidden, id: \.self) { id in
-                            row(id, inPopup: false)
-                        }
-                    } header: {
-                        Text("Not shown")
-                    }
-                }
-            }
-            .listStyle(.inset)
-            .frame(maxHeight: .infinity)
+            DictionaryTable(
+                rows: rows, selection: .constant(nil), identifier: "popup.list",
+                name: String(localized: "Dictionaries"), checkboxName: String(localized: "Show in this list"),
+                setEnabled: { id, on in take(id, on: on) },
+                move: { dragged, index in move(dragged, to: index) },
+                importFiles: nil,
+                key: { action, id in if action == .toggle { take(id, on: !ticked.contains(id)) } })
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, Tokens.Space.l)
             Divider()
             SheetFooter([FooterAction(.primary, title: Text("Done"), perform: done)], closeOnEscape: done)
                 .padding(Tokens.Space.m)
@@ -86,43 +75,45 @@ public struct HoverPopupSheet: View {
         .onChange(of: editing) { load() }
     }
 
-    /// One dictionary: a tick for whether the popup shows it, its name for what it is.
-    private func row(_ id: UUID, inPopup: Bool) -> some View {
-        Toggle(isOn: Binding(get: { inPopup }, set: { on in take(id, on: on) })) {
-            Text(verbatim: name(of: id))
+    private var rows: [DictionaryTable.Row] {
+        order.compactMap { id in
+            library.entries.first { $0.id == id }.map { entry in
+                DictionaryTable.Row(id: entry.id, name: entry.displayName,
+                                    language: SettingsDictionaries.language(entry.languages.pair, in: .current),
+                                    enabled: ticked.contains(id), usable: true)
+            }
         }
-        .accessibilityIdentifier("hoverPopup.\(id.uuidString)")
     }
 
-    /// A tick adds the dictionary at the end of the popup's order; an untick takes it out and leaves it in the list below.
+    /// A tick puts the dictionary in the list (at its place in the order shown); an untick takes it out and leaves it in
+    /// the order below.
     private func take(_ id: UUID, on: Bool) {
-        if on {
-            guard !shown.contains(id) else { return }
-            shown.append(id)
-            hidden.removeAll { $0 == id }
-        } else {
-            shown.removeAll { $0 == id }
-            guard !hidden.contains(id) else { return }
-            hidden = enabled.filter { $0 == id || hidden.contains($0) }
-        }
+        if on { ticked.insert(id) } else { ticked.remove(id) }
         save()
     }
 
-    private var enabled: [UUID] {
-        library.entries.filter(\.enabled).map(\.id)
-    }
-
-    private func name(of id: UUID) -> String {
-        library.entries.first { $0.id == id }?.displayName ?? ""
+    /// A drag of rows, by the pane's own arithmetic: the dragged ids land at `index` among the others, keeping their order.
+    private func move(_ dragged: [String], to index: Int) {
+        guard let move = SettingsDictionaries.move(dragged: dragged, to: index, in: order) else { return }
+        var ids = order
+        ids.move(fromOffsets: move.offsets, toOffset: move.destination)
+        order = ids
+        save()
     }
 
     private func load() {
         let all = enabled
-        shown = PopupPreferences.ordered(all, list: editing)
-        hidden = all.filter { !shown.contains($0) }
+        let chosen = PopupPreferences.ordered(all, list: editing)
+        ticked = Set(chosen)
+        order = chosen + all.filter { !ticked.contains($0) }
     }
 
     private func save() {
-        PopupPreferences.set(shown, available: enabled, list: editing)
+        // The stored list is the ticked dictionaries, in the order they are shown.
+        PopupPreferences.set(order.filter { ticked.contains($0) }, available: enabled, list: editing)
+    }
+
+    private var enabled: [UUID] {
+        library.entries.filter(\.enabled).map(\.id)
     }
 }

@@ -17,6 +17,22 @@
         }
       }
     },
+    "%@ Does Not Share Selections": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Does Not Share Selections"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 不共享所选内容"
+          }
+        }
+      }
+    },
     "%@ did not answer when asked for its selection. Try again in a moment.": {
       "localizations": {
         "en": {
@@ -8418,22 +8434,6 @@
         }
       }
     },
-    "Not shown": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not shown"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不显示"
-          }
-        }
-      }
-    },
     "Not used in lookups": {
       "localizations": {
         "en": {
@@ -11541,6 +11541,22 @@
         }
       }
     },
+    "Show in this list": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in this list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此列表中显示"
+          }
+        }
+      }
+    },
     "Show only some languages": {
       "localizations": {
         "en": {
@@ -11649,22 +11665,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "按这部词典自带的样式表显示词条，而不用 XDict 的阅读样式。链接和防护在两种样式下都一样。"
-          }
-        }
-      }
-    },
-    "Shown": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shown"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示"
           }
         }
       }
@@ -16472,6 +16472,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "XDict 阅读样式，规则版本 %u。"
+          }
+        }
+      }
+    },
+    "XDict reads selections through macOS Accessibility, and %@ does not provide one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict reads selections through macOS Accessibility, and %@ does not provide one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "XDict 通过 macOS 辅助功能读取所选内容，而 %@ 不提供该内容。"
           }
         }
       }
