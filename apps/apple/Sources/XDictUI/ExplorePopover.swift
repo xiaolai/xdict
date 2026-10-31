@@ -70,29 +70,24 @@ struct ExplorePopover: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("explore.state")
         }
-        List(model.page.rows, id: \.self) { row in
-            Button { open(row) } label: {  // placement: explore-row
-                HStack(spacing: Tokens.Space.s) {
-                    Text(row.word)
-                    Spacer(minLength: 0)
-                    Text(ExploreSentences.reason(row.reason))
-                        .font(Tokens.TextRole.caption.font)
-                        .foregroundStyle(.secondary)
+        // **A row is a list row, not a control's box** (owner, 2026-10-31): the `List` that held the answer drew every
+        // row with its own white fill, a row separator's hairline and square corners, and stretched each row over the
+        // list's height so its text sat at the top of a tall box. The app's list rows are plain text on the surface —
+        // the reading face for the word, the caption role for its reason — in a list row's own line, with a highlight
+        // on hover and on the keyboard's selection. A `ScrollView` and a `LazyVStack` of buttons draw that; a `List`
+        // has no way to be asked for it here.
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(model.page.rows, id: \.self) { row in
+                    ExploreRowView(row: row, open: open, openEntry: openEntry)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            // **The other route** (audit, 2026-10-28): the click looks the row's word up; this opens the entry that
-            // said the relation, which is what a reader wants when they are checking the claim rather than the word.
-            .contextMenu {
-                Button { openEntry(row) } label: { Text(ExploreSentences.openEntry) }  // placement: explore-row
             }
         }
-        .listStyle(.plain)
-        // **The list is given a height, not only a cap** (owner, 2026-10-31: every tab showed exactly one row): a
-        // `List` has no height of its own, and this popover latches its size while the tab is still loading. A
-        // `maxHeight` proposes nothing, so the list kept the leftover space — one row — when the answer's rows
-        // arrived, and every tab answered with many drew one. The token is the eight rows drawn from loading on.
+        // **The list is given a height, not only a cap** (owner, 2026-10-31: every tab showed exactly one row): the
+        // popover latches its size while the tab is still loading, and neither a `List` nor a `ScrollView` takes a
+        // height of its own. A `maxHeight` proposes nothing, so the list kept the leftover space — one row — when the
+        // answer's rows arrived, and every tab answered with many drew one. The token is the eight rows drawn from
+        // loading on.
         .frame(height: Tokens.Window.exploreListHeight)
         .accessibilityIdentifier("explore.rows")
         // **The next page, when there is one** (audit, 2026-10-28): it was discarded, so a long answer stopped at the
@@ -102,6 +97,56 @@ struct ExplorePopover: View {
                 .buttonStyle(.plain)
                 .font(Tokens.TextRole.callout.font)
                 .accessibilityIdentifier("explore.more")
+        }
+    }
+}
+
+/// **One word of an Explore answer** (owner, 2026-10-31): a list row of the app's own — the reading face for the word,
+/// the caption role for its reason, one row of the sidebar's height with both lines centred in it — and none of a
+/// control's chrome. The whole row is the button, so the pointer highlights the line it will open.
+private struct ExploreRowView: View {
+    let row: ExploreRow
+    let open: @MainActor (ExploreRow) -> Void
+    let openEntry: @MainActor (ExploreRow) -> Void
+    /// The pointer is on this row: its hover highlight shows.
+    @State private var hovering = false
+    /// The row holds the keyboard's selection: it shows the same highlight, and its word the accent, as a chosen row
+    /// of the app's lists does.
+    @FocusState private var chosen: Bool
+
+    var body: some View {
+        Button { open(row) } label: {  // placement: explore-row
+            HStack(spacing: Tokens.Space.s) {
+                Text(row.word)
+                    .font(ReadingText.body.font)
+                    .foregroundStyle(chosen ? Tokens.Colour.accent.color : Tokens.Colour.label.color)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text(ExploreSentences.reason(row.reason))
+                    .font(Tokens.TextRole.caption.font)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, Tokens.Space.s)
+            .frame(maxWidth: .infinity, minHeight: Tokens.Row.sidebar, alignment: .leading)
+            .contentShape(Rectangle())
+            .background {
+                if hovering || chosen {
+                    // The sidebar's own selection corner: a list row highlights with a rounded band, never a box.
+                    RoundedRectangle(cornerRadius: Tokens.Radius.sidebarSelection, style: .continuous)
+                        .fill(.quaternary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .focused($chosen)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+        .accessibilityIdentifier("explore.row")
+        // **The other route** (audit, 2026-10-28): the click looks the row's word up; this opens the entry that said
+        // the relation, which is what a reader wants when they are checking the claim rather than the word.
+        .contextMenu {
+            Button { openEntry(row) } label: { Text(ExploreSentences.openEntry) }  // placement: explore-row
         }
     }
 }
