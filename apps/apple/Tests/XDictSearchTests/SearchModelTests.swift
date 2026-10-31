@@ -87,6 +87,27 @@ struct SearchModelTests {
         #expect(results.hits.map(\.headword) == ["new"])
     }
 
+    /// **A superseded answer asks its dictionary again** (owner, 2026-10-31: a dictionary's placeholder never ended):
+    /// the one outcome a call replaced by a newer call of the same lookup gets is `superseded`, and it was dropped as
+    /// having nothing to word — so no answer was stored, no other call was coming, and the dictionary stayed
+    /// `.searching` for ever with its placeholder. The dictionary is asked again instead.
+    @Test func aSupersededAnswerAsksTheDictionaryAgain() async {
+        let backend = Self.apples()
+        await backend.hold(Fixture.handle("A"))
+        let model = Self.model(backend, Sources([Fixture.source(1, "A")]))
+        model.submit("apple")
+        #expect(await eventually { model.sections.first?.status == .searching })
+        // The current lookup's own call superseded: the model did not ask for this, as a newer call of its caller would.
+        await backend.supersede(Caller("search.test"))
+        await backend.release(Fixture.handle("A"))
+        #expect(await eventually { !model.isSearching }, "a superseded answer left its dictionary searching for ever")
+        guard case .results(let results)? = model.sections.first?.status else {
+            Issue.record("the dictionary was never asked again: \(model.sections)")
+            return
+        }
+        #expect(results.hits.map(\.headword) == ["apple"])
+    }
+
     /// The core's order is kept: exact before folded before unmarked (ADR-0007 decision 9). The model never reorders.
     @Test func hitsKeepTheCoresOrder() async {
         let backend = FakeSearchBackend { _, _, _ in

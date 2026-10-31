@@ -378,6 +378,18 @@ private final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
+/// **The page's stack, in the page's own direction** (owner, 2026-10-31: the first dictionary's band said “Loading
+/// “牛津英汉汉英词典”…” for minutes, while that dictionary's own scope drew its entry): an `NSStackView` is not flipped,
+/// so its arranged subviews' `frame.minY` grows *upward* from the stack's bottom, while every reader of those frames —
+/// the viewport that decides which frames to make (`materialize`), the pinned name and the jump list (`starts`), a jump
+/// and an evidence reveal — reads them as points *down* the page, in the scroll view's flipped coordinates. For a page
+/// with more dictionaries than the lookahead holds, the frames it made were the ones at the bottom and the ones the
+/// reader saw were never made: their bands said "Loading …" and nothing ever asked for them until a scroll to the very
+/// bottom. The stack is flipped, as its document view is, so one coordinate system reaches every reader.
+private final class EntryPageStack: NSStackView {
+    override var isFlipped: Bool { true }
+}
+
 /// **The All page** (parity P15): every dictionary's entry for the headword, stacked in the reader's order in one
 /// scrolling page, each in its own frame. Frames are made for the screen and one screen beyond (`EntryPagePlan`), the
 /// rest as the reader scrolls.
@@ -390,7 +402,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
 
     let scroll = NSScrollView()
     private let document = FlippedView()
-    private let stack = NSStackView()
+    private let stack = EntryPageStack()
     private(set) var sections: [EntryPageSection] = []
     private let make: (EntryPageSection) -> Result<EntryPane, EntryRefusal>
     private let preferences: EntryPreferences

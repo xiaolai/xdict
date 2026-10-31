@@ -630,8 +630,15 @@ public final class SearchModel {
         case .success(let page):
             asked[id] = .answered(handle, Results(hits: page.hits, total: page.total, generation: page.generation))
         case .failure(let failure):
+            // **A superseded answer leaves the dictionary unanswered** (owner, 2026-10-31: the first dictionary's
+            // placeholder never ended): the call was replaced by a newer one of the same lookup, and its answer is
+            // gone. Dropping it here left the dictionary `.searching` for ever — no other call was coming for it — and
+            // the window's placeholder with it. The serial guard above keeps a replaced *lookup's* answer out; this is
+            // the one case where the answer is missing and the lookup still current, so the dictionary is asked again.
             guard let why = LookupFailure(failure) else {
-                return
+                asked[id] = nil
+                ask(superseding: false)
+                return  // nothing was stored, so nothing is told as an answer
             }
             asked[id] = .failed(handle, why)
         }

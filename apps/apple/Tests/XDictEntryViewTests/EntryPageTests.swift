@@ -379,6 +379,37 @@ struct EntryPageTests {
         #expect(after.count == 3)
     }
 
+    /// **The page's frames run down the page** (owner, 2026-10-31: the first dictionary's band said “Loading
+    /// “牛津英汉汉英词典”…” for minutes while that dictionary's own scope drew its entry). `NSStackView` is not flipped:
+    /// its arranged subviews' `frame.minY` grows upward from the stack's bottom, while the page's readers — the viewport
+    /// that decides which frames to make, the pinned name, a jump, an evidence reveal — read it as points down the page.
+    /// The page's stack is flipped so one coordinate system reaches every reader.
+    @Test func thePagesFramesRunDownThePage() async throws {
+        let (controller, _, defaults, suite) = try await page((0..<12).map { "d\($0)" })
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        let tops = sections.map { Double($0.holder.frame.minY) }
+        #expect(tops == tops.sorted(), "the page's frames are not laid out top to bottom: \(tops)")
+    }
+
+    /// **A page longer than the lookahead makes the frames its reader sees** (owner, 2026-10-31): a 600×400 view of
+    /// twelve dictionaries holds the first three frames; reading down the page makes the rest. The frames made were the
+    /// ones at the bottom — the first sections, the ones on screen, were never made, and their bands said “Loading …”
+    /// for as long as the page stayed at its top.
+    @Test func aLongPageMakesTheFramesAtItsTop() async throws {
+        let (controller, _, defaults, suite) = try await page((0..<12).map { "d\($0)" })
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        #expect(sections[0].pane != nil, "the page's first dictionary has no frame: its band can only say Loading")
+        #expect(sections[11].pane == nil, "a frame below the screen and its lookahead was made")
+    }
+
     /// One dictionary's page, or a single entry, leaves page mode: the single pane is back, the page gone.
     @Test func aSingleEntryReplacesThePage() async throws {
         let (controller, contents, defaults, suite) = try await page(["alpha", "beta"])
