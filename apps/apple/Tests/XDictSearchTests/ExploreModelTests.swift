@@ -77,6 +77,18 @@ struct ExploreModelTests {
         #expect(model.page.rows.isEmpty)
     }
 
+    /// **An empty collocation answer is answered and empty, never a refusal** (owner, 2026-10-31): the call cannot say
+    /// whether no dictionary in scope carries collocation sections or the word has none in them, so it crosses as
+    /// `answered` with no rows, and the panel's sentence covers both.
+    @Test func anEmptyCollocationAnswerIsAnsweredAndEmpty() async {
+        let backend = await Self.backend { _ in .success(Delivered(answer: .collocations([]), payload: nil)) }
+        let model = ExploreModel(backend: backend, window: "test")
+        model.show(.collocations, word: "decision", dicts: [Self.dict])
+        #expect(await Self.eventually { !model.page.loading && model.page.state == .answered })
+        #expect(model.page.rows.isEmpty)
+        #expect(model.page.failure == nil)
+    }
+
     /// An empty scope asks nothing: there is no dictionary to explore.
     @Test func anEmptyScopeAsksNothing() async {
         let backend = await Self.backend { _ in Self.page(.answered) }

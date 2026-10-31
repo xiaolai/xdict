@@ -72,16 +72,39 @@ enum ExploreSentences {
     /// The page's continuation, when the service says it holds more.
     static let more = LocalizedStringResource("More")
 
+    /// **A tab that reads the word data, with none to read** (owner, 2026-10-31): a capability the system does not
+    /// provide is named where the reader would choose it — what the data is, why XDict does not ship it (it is
+    /// derived on this Mac from sources XDict does not redistribute), and where the reader builds it. The last
+    /// sentence covers the core's second meaning of `noData`: a pack that is installed but holds none of this kind.
+    static let wordDataMissing = LocalizedStringResource("""
+        The word data this tab reads does not come with XDict: it is built on this Mac from its own sources' files, \
+        which XDict does not redistribute. Build it with Build Word Data… in Settings ▸ Dictionaries ▸ Word data, \
+        then choose this tab again. If the pack is installed already, it holds none of this kind of data.
+        """, comment: "Explore: a tab that needs the word data, which is not installed or holds none of this kind")
+
+    /// **The Collocations tab, empty** (owner, 2026-10-31): the collocation call answers an empty list both when no
+    /// dictionary in the scope carries collocation sections and when the word has none in them, and the reply has no
+    /// place to say which (the wire contract is unchanged), so the sentence covers both: what collocations come from,
+    /// that XDict ships no dictionary, where the reader adds one, and what the other case means.
+    static let noCollocations = LocalizedStringResource("""
+        Collocations come from a dictionary's own collocation sections, such as the Oxford Collocations Dictionary. \
+        XDict comes with no dictionaries: add it in Settings ▸ Dictionaries. If it is already in the library, this \
+        word has no collocations.
+        """, comment: "Explore: the Collocations tab came back with no rows")
+
     /// What an empty, an unanswered or a cut page says. **Never a bare blank**: each state names what happened.
     static func state(_ page: ExploreModel.Page, tab: ExploreModel.Tab, word: String) -> LocalizedStringResource? {
         if let failure = page.failure { return Self.failure(failure) }
         if page.loading { return "Looking…" }
         switch page.state {
-        case .noData: return LocalizedStringResource("This needs the word data, which is not installed yet.")
+        case .noData: return Self.wordDataMissing
         case .unknown: return LocalizedStringResource("The word data has nothing for “\(word)”.")
         case .answered: break
         }
-        if page.rows.isEmpty { return LocalizedStringResource("Nothing in this mode for “\(word)”.") }
+        if page.rows.isEmpty {
+            return tab == .collocations ? Self.noCollocations
+                                        : LocalizedStringResource("Nothing in this mode for “\(word)”.")
+        }
         if page.cut { return LocalizedStringResource("Cut short by the work budget: there may be more.") }
         return nil
     }

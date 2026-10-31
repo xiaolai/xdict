@@ -3988,6 +3988,23 @@
         }
       }
     },
+    "Collocations come from a dictionary's own collocation sections, such as the Oxford Collocations Dictionary. XDict comes with no dictionaries: add it in Settings ▸ Dictionaries. If it is already in the library, this word has no collocations.": {
+      "comment": "Explore: the Collocations tab came back with no rows",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collocations come from a dictionary's own collocation sections, such as the Oxford Collocations Dictionary. XDict comes with no dictionaries: add it in Settings ▸ Dictionaries. If it is already in the library, this word has no collocations."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搭配来自词典自己的搭配栏，例如《牛津英语搭配词典》。XDict 不附带任何词典：请在“设置”▸“词典”中添加。若它已在你的词库中，则这个词没有搭配。"
+          }
+        }
+      }
+    },
     "Comfortable reading width": {
       "localizations": {
         "en": {
@@ -14613,6 +14630,23 @@
         }
       }
     },
+    "The word data this tab reads does not come with XDict: it is built on this Mac from its own sources' files, which XDict does not redistribute. Build it with Build Word Data… in Settings ▸ Dictionaries ▸ Word data, then choose this tab again. If the pack is installed already, it holds none of this kind of data.": {
+      "comment": "Explore: a tab that needs the word data, which is not installed or holds none of this kind",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data this tab reads does not come with XDict: it is built on this Mac from its own sources' files, which XDict does not redistribute. Build it with Build Word Data… in Settings ▸ Dictionaries ▸ Word data, then choose this tab again. If the pack is installed already, it holds none of this kind of data."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此标签页读取的词数据不随 XDict 附带：它由本机从各来源自己的文件构建，XDict 不分发这些数据。请在“设置”▸“词典”▸“词数据”中点按“构建词数据…”，再重新选择此标签页。若词数据已经安装，则其中没有这一类数据。"
+          }
+        }
+      }
+    },
     "The word data's %@ arrived at %@ bytes instead of %@, so nothing was installed.": {
       "localizations": {
         "en": {
@@ -15284,22 +15318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "本次查询要读取的内容超出了 XDict 一次能读取的量。"
-          }
-        }
-      }
-    },
-    "This needs the word data, which is not installed yet.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This needs the word data, which is not installed yet."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这需要词数据，目前尚未安装。"
           }
         }
       }
