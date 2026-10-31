@@ -89,7 +89,11 @@ struct ExplorePopover: View {
             }
         }
         .listStyle(.plain)
-        .frame(maxHeight: Tokens.Window.exploreListHeight)
+        // **The list is given a height, not only a cap** (owner, 2026-10-31: every tab showed exactly one row): a
+        // `List` has no height of its own, and this popover latches its size while the tab is still loading. A
+        // `maxHeight` proposes nothing, so the list kept the leftover space — one row — when the answer's rows
+        // arrived, and every tab answered with many drew one. The token is the eight rows drawn from loading on.
+        .frame(height: Tokens.Window.exploreListHeight)
         .accessibilityIdentifier("explore.rows")
         // **The next page, when there is one** (audit, 2026-10-28): it was discarded, so a long answer stopped at the
         // first hundred rows with nothing saying more existed.
