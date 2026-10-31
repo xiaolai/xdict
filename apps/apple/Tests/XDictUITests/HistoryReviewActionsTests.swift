@@ -255,9 +255,53 @@ struct ReviewLayoutTests {
     }
 }
 
-/// **UI45**: a card's border means nothing, so it is the system's neutral separator for every card.
-struct HistoryCardBorderTests {
-    @Test func everyCardHasTheSameNeutralBorder() {
-        #expect(HistoryCardStyle.border.nsColor == Tokens.Colour.separator.nsColor)
+/// **A card's tint** (owner, 2026-10-31; supersedes UI45's neutral hairline): chosen by the card's own identity through
+/// a fixed-seed hash, so it is the same on every redraw, scroll and launch; spread over the group's ten tints; and
+/// always in range.
+struct HistoryCardTintTests {
+    static func reading(_ surface: String = "hold", entryKey: String? = nil,
+                        edition: String = "mdx-sha256-v1:aa") -> LedgerReading {
+        LedgerReading(surface: surface, lemma: surface, sentence: "They \(surface) that view.",
+                      span: LedgerSpan(start: 5, len: UInt32(surface.utf16.count)), cut: 0, quality: "complete",
+                      edition: edition, entryKey: entryKey ?? surface, occurrence: 0, dictionaryName: "Tiny",
+                      language: "en", at: 1_790_641_800, device: "d")
+    }
+
+    @Test func theSameCardAlwaysTakesTheSameIndex() {
+        let reading = Self.reading("hold")
+        let index = HistoryCardTint.index(for: reading)
+        #expect((0..<100).allSatisfy { _ in HistoryCardTint.index(for: reading) == index })
+    }
+
+    @Test func theIndexIsFixedAtLaunchNotReseededPerProcess() {
+        // A golden value: `Hasher` is seeded per process, so a rule built on it would re-roll every card at launch.
+        #expect(HistoryCardTint.index(for: Self.reading("hold")) == 4)
+    }
+
+    @Test func aHundredDifferentCardsSpreadOverMostOfTheTen() {
+        let indices = (0..<100).map {
+            HistoryCardTint.index(for: Self.reading("word\($0)", edition: "edition-\($0)"))
+        }
+        #expect(Set(indices).count >= 9, "\(Set(indices).count) of \(HistoryCardTint.tints.count)")
+    }
+
+    @Test func everyIndexIsInTheGroupsRange() {
+        let edge = [Self.reading(""), Self.reading("😀"), Self.reading("这是一个词")]
+        for reading in (0..<1_000).map({ Self.reading("word\($0)") }) + edge {
+            #expect((0..<HistoryCardTint.tints.count).contains(HistoryCardTint.index(for: reading)))
+        }
+    }
+
+    @Test func eachPartOfTheIdentityTakesPart() {
+        let base = HistoryCardTint.index(for: Self.reading("hold"))
+        #expect(HistoryCardTint.index(for: Self.reading("held", entryKey: "hold")) != base, "the word on screen")
+        #expect(HistoryCardTint.index(for: Self.reading("hold", entryKey: "run")) != base, "the entry key")
+        #expect(HistoryCardTint.index(for: Self.reading("hold", edition: "mdx-sha256-v1:ab")) != base, "the edition")
+    }
+
+    @Test func theTintIsTheIndexedOneOfTheGroupsTen() {
+        let reading = Self.reading("hold")
+        #expect(HistoryCardTint.colour(for: reading).nsColor == HistoryCardTint.tints[4].nsColor)
+        #expect(Set(HistoryCardTint.tints.map(\.nsColor)).count == 10, "ten distinct system colours")
     }
 }

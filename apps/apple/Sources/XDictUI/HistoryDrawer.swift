@@ -280,9 +280,11 @@ public struct HistoryView: View {
         .padding(Tokens.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay {
-            // **Neutral** (UI45): a colour per card meant nothing and could be read as a category or a status.
+            // **A tint from the card's own identity** (owner, 2026-10-31; supersedes UI45's neutral hairline): one of the
+            // system's tints at border opacity — a border, never a fill, and the same one on every redraw and launch.
             RoundedRectangle(cornerRadius: Tokens.Radius.cardShadow, style: .continuous)
-                .stroke(HistoryCardStyle.border.color, lineWidth: Tokens.Line.hairline)
+                .stroke(HistoryCardTint.colour(for: card.reading).color.opacity(Tokens.Opacity.cardBorder),
+                        lineWidth: Tokens.Line.hairline)
         }
         .shadow(color: Tokens.Colour.shadow.color.opacity(Tokens.Opacity.cardShadow),
                 radius: Tokens.Card.shadowRadius, y: Tokens.Card.shadowOffsetY)

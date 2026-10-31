@@ -129,10 +129,47 @@ public struct HistoryEntryLinks {
     }
 }
 
-/// **A history card's frame** (UI45, user-approved 2026-10-23): a neutral hairline. A colour per card meant nothing to
-/// the reader and could be read as a category, a status or a source; the soft shadow stays (owner, 2026-10-21).
-public enum HistoryCardStyle {
-    public static var border: TokenColour { Tokens.Colour.separator }
+/// **A history card's tint** (owner, 2026-10-31; supersedes UI45's neutral hairline): the card's border takes one of the
+/// system's own tints, chosen from the card's identity — its word, entry key and edition — through a fixed-seed hash.
+/// The identity is stored with the reading, so the same card keeps its colour across redraws, scrolling and launches,
+/// and two different cards usually take different tints. Never a fill: the drawer draws the tint at
+/// `Tokens.Opacity.cardBorder`, so the card's ink and the drawer's glass stay in charge.
+public enum HistoryCardTint {
+    /// The group's ten tints, in one list: `index` is always in `0..<tints.count`, and the tests hold that range.
+    /// Computed, as the generated tint tokens are: `TokenColour` carries an `NSColor`, which is not `Sendable`.
+    public static var tints: [TokenColour] {
+        [
+            Tokens.Tint.red, Tokens.Tint.orange, Tokens.Tint.yellow, Tokens.Tint.green, Tokens.Tint.blue,
+            Tokens.Tint.purple, Tokens.Tint.pink, Tokens.Tint.teal, Tokens.Tint.indigo, Tokens.Tint.brown,
+        ]
+    }
+
+    /// **The card's own index**: FNV-1a with a 64-bit final mix over the word, the entry key and the edition — a fixed
+    /// seed, never `Hasher`, which macOS reseeds per process and would re-roll every card at launch.
+    public static func index(for reading: LedgerReading) -> Int {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for part in [reading.surface, reading.entryKey, reading.edition] {
+            for byte in part.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* 0x0000_0100_0000_01b3
+            }
+            // 0xFF never occurs in UTF-8, so two different part lists never hash the same bytes.
+            hash ^= 0xff
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        // FNV-1a's low bits stay weak after a short input, and the modulus reads them: the final mix spreads them.
+        hash ^= hash >> 33
+        hash = hash &* 0xff51_afd7_ed55_8ccd
+        hash ^= hash >> 33
+        hash = hash &* 0xc4ce_b9fe_1a85_ec53
+        hash ^= hash >> 33
+        return Int(hash % UInt64(tints.count))
+    }
+
+    /// The tint the card's border takes.
+    public static func colour(for reading: LedgerReading) -> TokenColour {
+        tints[index(for: reading)]
+    }
 }
 
 extension EntryRef {
