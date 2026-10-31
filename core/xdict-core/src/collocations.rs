@@ -15,6 +15,7 @@ use xdict_entry::collocations::{Collocations, extract};
 use xdict_mdx::File;
 
 use crate::CoreError;
+use crate::sampling::{SIGNATURE_RECORD_BYTES, SIGNATURE_SAMPLES, any_sampled_record, with_record};
 use crate::types::EntryRef;
 
 /// **The extractor and frame vocabulary together**, stored in every store built under them: raised by any change to
@@ -27,6 +28,26 @@ pub const COLLOCATION_VERSION: u32 = 1;
 /// — half a dictionary's collocations would look like a dictionary that has fewer.
 pub const MAX_COLLOCATION_PAIRS: usize = 2_000_000;
 pub const MAX_COLLOCATION_BYTES: u64 = 512 << 20;
+
+/// **What a collocation dictionary has and nothing else does** (the owner's performance defect, 2026-10-31): one
+/// record's headword, frame and collocate classes — the three the extractor needs to make a pair. A record without all
+/// three contributes nothing however it is read, so a dictionary whose sample has none can be answered without its
+/// store. The needles are the extractor's own (`class="ocd_hw"`, `class="ocd_ps"`, `class="ocd_co"` exactly), and a
+/// looser test here would answer "no collocations" for markup the extractor does read.
+pub fn carries_signature(markup: &str) -> bool {
+    markup.contains("class=\"ocd_hw\"") && markup.contains("class=\"ocd_ps\"") && markup.contains("class=\"ocd_co\"")
+}
+
+/// **Whether a dictionary carries the collocation markup at all**, from a bounded, evenly spaced sample of its
+/// records: the extractor's signature without a store. `false` for an empty file, and only when every sampled record
+/// was examined and none carried it. **`true` otherwise** — any sample carrying the signature, and an incomplete
+/// sample too (a record skipped as oversized) — so the store's full read decides rather than the sampler guessing.
+pub fn carries_markup(file: &File) -> Result<bool, CoreError> {
+    if file.is_empty() {
+        return Ok(false);
+    }
+    Ok(any_sampled_record(file, SIGNATURE_SAMPLES, SIGNATURE_RECORD_BYTES, carries_signature)?.unwrap_or(true))
+}
 
 /// One collocation a dictionary writes: the word it is filed under, its frame, the partner, and the entry that said so.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,15 +176,6 @@ impl fmt::Display for Collocation {
     }
 }
 
-/// One record's own error, with the record's number added and its kind kept.
-fn with_record(error: CoreError, i: usize) -> CoreError {
-    match error {
-        CoreError::Malformed { detail } => CoreError::Malformed { detail: format!("record {i}: {detail}") },
-        CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("record {i}: {detail}") },
-        other => other,
-    }
-}
-
 /// A frame's stored name: the enum's own, so a store outlives a rename in the source only if the version is raised.
 fn frame_name(frame: Frame) -> &'static str {
     match frame {
@@ -231,5 +243,36 @@ mod tests {
         let text = String::from_utf8(bytes).unwrap();
         assert!(text.starts_with(&format!("colloc\t{COLLOCATION_VERSION}\t3\t0\n")), "{text}");
         assert!(text.contains("blood vessel\tverb+hw\tblock\tblood vessel\t0"), "{text}");
+    }
+
+    /// **The signature is the extractor's own markup, and a dictionary without it is answered without a store** (the
+    /// owner's performance defect, 2026-10-31): a probe reads at most 64 records for the three `ocd_` classes, where a
+    /// store's build reads every record — which the Explore panel paid once per non-collocation dictionary in the
+    /// reader's library.
+    #[test]
+    fn a_dictionary_without_markup_has_no_signature() {
+        assert!(
+            carries_signature(
+                r#"<span class="ocd_hw">blood vessel</span><span class="ocd_ps">ADJECTIVE</span><span class="ocd_co">major</span>"#
+            ),
+            "the collocation dictionary's own headword, frame and collocate"
+        );
+        // **The other dictionaries' markup is not a signature**: the Oxford Dictionary of English's headword and part
+        // of speech, and the converted thesaurus's senses and clusters, carry no collocation class.
+        assert!(!carries_signature(r#"<span class="hw">run</span><span class="se1">to move</span>"#));
+        assert!(!carries_signature(
+            r#"<span class="msThes"><span class="synGroup"><span class="syn">verdict</span></span></span>"#
+        ));
+        assert!(!carries_signature(r#"<span class="OCD_CO">major</span>"#), "classes are exact");
+        // **All three are needed**: a record with two of them makes no pair, so it is not a signature.
+        assert!(!carries_signature(r#"<span class="ocd_hw">blood vessel</span><span class="ocd_co">major</span>"#));
+        assert!(!carries_signature(r#"<span class="ocd_hw">blood vessel</span><span class="ocd_ps">ADJECTIVE</span>"#));
+        assert!(!carries_signature("an entry with no markup"));
+        assert!(carries_markup(&dictionary()).unwrap(), "the fixture's collocation entry is a signature");
+        let plain =
+            xdict_mdx_writer::write(&Spec::mdx(), &[Entry::text("run", r#"<span class="hw">run</span>to move"#)])
+                .unwrap();
+        let plain = File::from_source(Box::new(plain), Some(Kind::Mdx)).unwrap();
+        assert!(!carries_markup(&plain).unwrap(), "a plain dictionary is answered without a store");
     }
 }

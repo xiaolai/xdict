@@ -12,6 +12,7 @@ mod examples;
 pub mod explore;
 mod health;
 pub mod phrases;
+mod sampling;
 mod source;
 mod store;
 mod types;

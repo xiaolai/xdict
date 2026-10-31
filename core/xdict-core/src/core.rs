@@ -573,7 +573,7 @@ impl Core {
                 if out.len() >= limit as usize {
                     break;
                 }
-                let store = self.collocation_store(dict)?;
+                let Some(store) = self.collocation_store(dict)? else { continue };
                 for pair in store.collocates(&query) {
                     if out.len() >= limit as usize {
                         break;
@@ -586,8 +586,11 @@ impl Core {
     }
 
     /// One edition's store, built once and kept: the key is the handle and its edition, so a file opened, closed or
-    /// replaced is read again and nothing else is.
-    fn collocation_store(&self, dict: &str) -> Result<Arc<crate::collocations::Store>, CoreError> {
+    /// replaced is read again and nothing else is. **A dictionary without the collocation markup is answered `None`
+    /// from a bounded sample, never a store** (the owner's performance defect, 2026-10-31): the build reads every
+    /// record, and a dictionary ahead of the one that has collocations held the reader past Explore's deadline. The
+    /// sample is a filter, not a parse: a dictionary carrying the markup still builds its store, which decides.
+    fn collocation_store(&self, dict: &str) -> Result<Option<Arc<crate::collocations::Store>>, CoreError> {
         let handle = self.parse_handle(dict)?;
         let opened = self.dict(dict)?;
         let key = format!("{handle}:{}", opened.edition);
@@ -595,13 +598,16 @@ impl Core {
             // **A store is answered only for the file it was built from** (audit, 2026-10-28): the key holds the handle
             // and the edition, and neither changes when the file behind them is rewritten in place.
             opened.mdx_source.unchanged()?;
-            return Ok(held);
+            return Ok(Some(held));
+        }
+        if !crate::collocations::carries_markup(&opened.mdx)? {
+            return Ok(None);
         }
         let store = Arc::new(crate::collocations::Store::build(&opened.mdx, dict, &opened.edition)?);
         if let Ok(mut held) = self.colloc.lock() {
             held.insert(key, Arc::clone(&store));
         }
-        Ok(store)
+        Ok(Some(store))
     }
 
     /// **Installs the word pack from a file** (plan-word-exploration WI-5): the reader chose it in Settings, or the app
@@ -3433,6 +3439,88 @@ mod tests {
         core.import(package.clone(), &NoProgress).unwrap();
         let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
         (core, dict)
+    }
+
+    /// A file the shell holds, read from memory, under an identity of its own so a second dictionary is a second file.
+    struct Named(Vec<u8>, u64);
+
+    impl crate::ByteSource for Named {
+        fn size(&self) -> u64 {
+            self.0.len() as u64
+        }
+        fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+            let start = offset as usize;
+            Ok(self.0.get(start..start.saturating_add(len as usize)).unwrap_or_default().to_vec())
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            Some(FileIdentity { device: 1, inode: self.1, size: self.0.len() as u64, mtime_ns: 0, ctime_ns: 0 })
+        }
+    }
+
+    /// A dictionary added to an existing core, under an identity of its own: its handle.
+    fn added(core: &Core, name: &str, entries: &[xdict_mdx_writer::Entry]) -> String {
+        use xdict_mdx_writer::{Spec, write};
+        let bytes = write(&Spec { title: name.into(), ..Spec::mdx() }, entries).unwrap();
+        let mdx =
+            Location::Source { name: format!("{name}.mdx"), source: Arc::new(Named(bytes, 16 + name.len() as u64)) };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("{name} did not open") };
+        dict
+    }
+
+    /// **A dictionary with no collocation markup is answered empty without a store** (the owner's performance defect,
+    /// 2026-10-31): the Explore panel asks each dictionary in the reader's order, and a store built to answer nothing
+    /// reads every record of a dictionary that was never going to contribute — the 21 MB and 27 MB dictionaries in the
+    /// reader's library held the panel past its deadline. The store cache is the spy: no store is built, so none is
+    /// kept.
+    #[test]
+    fn a_dictionary_without_collocation_markup_answers_empty_and_keeps_no_store() {
+        use xdict_mdx_writer::Entry as W;
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        // Large enough that a store's build would walk every record, as the owner's two dictionaries do.
+        let entries: Vec<W> = (0..400)
+            .map(|n| W::text(&format!("word {n}"), &format!(r#"<span class="hw">word {n}</span><b>plain</b>"#)))
+            .collect();
+        let dict = added(&core, "plain", &entries);
+        assert!(core.collocates("word 1".into(), vec![dict.clone()], 50).unwrap().is_empty());
+        assert!(core.colloc.lock().unwrap().is_empty(), "no store is built to answer empty");
+    }
+
+    /// **A scope keeps only the store of the dictionary that carries the markup**: the large non-collocation
+    /// dictionary first in the reader's order is skipped from its sample, and the collocation dictionary still builds
+    /// its store once and answers from it.
+    #[test]
+    fn collocates_skips_the_non_collocation_dictionary_and_keeps_the_one_that_answers() {
+        use xdict_mdx_writer::Entry as W;
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let plain: Vec<W> = (0..400)
+            .map(|n| W::text(&format!("word {n}"), &format!(r#"<span class="hw">word {n}</span><b>plain</b>"#)))
+            .collect();
+        let first = added(&core, "plain", &plain);
+        let second = added(
+            &core,
+            "collocations",
+            &[W::text(
+                "blood vessel",
+                r#"<span class="ocd_hw">blood vessel</span><span class="ocd_m2"><span class="ocd_ps">ADJECTIVE</span></span><span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">major</span></span></span></span>"#,
+            )],
+        );
+        let found = core.collocates("blood vessel".into(), vec![first.clone(), second.clone()], 50).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].partner, "major");
+        assert_eq!(found[0].dict, second);
+        let held = core.colloc.lock().unwrap();
+        assert_eq!(held.len(), 1, "only the collocation dictionary keeps a store");
+        let key = held.keys().next().unwrap();
+        assert!(
+            key.starts_with(&format!("{}:", core.parse_handle(&second).unwrap())),
+            "the store is the collocation dictionary's: {key}"
+        );
+        assert!(
+            !key.starts_with(&format!("{}:", core.parse_handle(&first).unwrap())),
+            "no store is built for the plain dictionary: {key}"
+        );
     }
 
     /// Progress that counts its reports and answers `go`.
