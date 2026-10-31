@@ -97,36 +97,64 @@ public struct URLSessionTransfer: WordPackTransfer {
     private let session: URLSession
 
     public func fetch(_ url: URL, to destination: URL, written: @escaping @Sendable (Int64) -> Void) async throws {
-        let reporter = Reporter(destination: destination, written: written)
-        let (_, response) = try await session.download(for: URLRequest(url: url), delegate: reporter)
+        let reporter = Reporter(written: written)
+        // **The async call's first value is the downloaded file itself** (2026-10-31): a task-specific delegate receives
+        // no download callbacks on macOS 27, so waiting for `didFinishDownloadingTo` left `destination` unwritten while
+        // this call reported success. The delegate is kept for progress only; the file is moved into place below.
+        let (temporary, response) = try await session.download(for: URLRequest(url: url), delegate: reporter)
         if let error = reporter.recorded() {
+            Self.discard(temporary)
             throw error
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
+            Self.discard(temporary)
             throw WordPackDownload.Failure.transport(file: url.lastPathComponent, detail: "HTTP \(status)")
         }
-        guard FileManager.default.fileExists(atPath: destination.path) else {
-            throw WordPackDownload.Failure.transport(file: url.lastPathComponent, detail: "no file was written")
+        do {
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try Self.move(temporary, to: destination)
+        } catch {
+            Self.discard(temporary)
+            throw WordPackDownload.Failure.transport(file: url.lastPathComponent, detail: "\(error)")
+        }
+    }
+
+    /// **A temporary file this code will not keep is deleted here**: it is the system's, never the caller's, so a
+    /// failed status or a failed move must not leave it behind. The failure that caused the discard is what is thrown.
+    private static func discard(_ temporary: URL) {
+        try? FileManager.default.removeItem(at: temporary)
+    }
+
+    /// The downloaded file into its place: a rename where the destination is new, and `replaceItemAt` — the atomic
+    /// replacement — where an earlier copy is there to be replaced.
+    private static func move(_ temporary: URL, to destination: URL) throws {
+        if FileManager.default.fileExists(atPath: destination.path) {
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: temporary)
+        } else {
+            try FileManager.default.moveItem(at: temporary, to: destination)
         }
     }
 }
 
 /// Reports a download's bytes as they land. `URLSession` holds its delegate weakly, so the call keeps it alive.
+///
+/// **The file is never moved here** (2026-10-31): Apple documents `download(for:delegate:)`'s delegate parameter as
+/// "reserved for future use", and on macOS 27 this task-specific delegate receives no download callbacks at all — so a
+/// transport that waited for `didFinishDownloadingTo` to write the file reported success with nothing written.
+/// `URLSessionTransfer.fetch` moves the temporary file the async call returns; this delegate is for progress only.
 private final class Reporter: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    init(destination: URL, written: @escaping @Sendable (Int64) -> Void) {
-        self.destination = destination
+    init(written: @escaping @Sendable (Int64) -> Void) {
         self.written = written
     }
 
-    private let destination: URL
     private let written: @Sendable (Int64) -> Void
     private let lock = NSLock()
     private var failure: (any Error)?
 
     /// **`didWriteData` is a `URLSessionDownloadDelegate` requirement**, not a task-delegate one: conforming to the
-    /// task delegate left every download silent. The file arrives here, so it is copied where the caller asked; the
-    /// URL the async call also returns is deleted the moment this method returns.
+    /// task delegate left every download silent.
     func urlSession(
         _ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
         totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
@@ -134,16 +162,10 @@ private final class Reporter: NSObject, URLSessionDownloadDelegate, @unchecked S
         written(totalBytesWritten)
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        lock.lock()
-        defer { lock.unlock() }
-        do {
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.copyItem(at: location, to: destination)
-        } catch {
-            failure = error
-        }
-    }
+    /// **A stub, because Swift's conformance requires it — never called by the async download** (see the type's note).
+    /// Were it ever called, the system deletes `location` when this returns, so the file `fetch` moves is the async
+    /// call's returned URL, never this one.
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         lock.lock()
