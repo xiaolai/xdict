@@ -70,7 +70,7 @@ public struct SettingsWordData: View {
         switch model.state {
         case .unknown, .absent: WordDataSentences.absent
         case .downloading(let progress): WordDataSentences.downloading(progress)
-        case .building: WordDataSentences.building
+        case .building(let progress): WordDataSentences.building(progress)
         case .installed: WordDataSentences.installed
         case .refused(let refusal): WordDataSentences.sentence(refusal)
         case .trouble(let trouble): WordDataSentences.sentence(trouble)
@@ -85,10 +85,12 @@ public struct SettingsWordData: View {
         }
     }
 
-    /// How much of the download is done, under its sentence; nothing when nothing is arriving.
+    /// **How far the work has got, under its sentence** (2026-10-31): a determinate bar where the amount is known, and
+    /// a moving one where it is not — never a bar at zero while the download or the build is under way. Nothing once
+    /// the pack is installed or a failure's sentence takes the progress's place.
     @ViewBuilder private var bar: some View {
-        if case .downloading(let progress) = model.state {
-            ProgressView(value: progress.fraction)
+        if model.phase != nil {
+            ProgressBarView(bar: ProgressBar.of(fraction: model.fraction))
                 .accessibilityIdentifier("settings.worddata.progress")
         }
     }

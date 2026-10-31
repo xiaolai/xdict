@@ -49,6 +49,10 @@ actor FakeSearchBackend: SearchBackend {
 
     private(set) var queued: [Queued] = []
     private(set) var requests: [ServiceOperation] = []
+    /// The calls that came with a progress listener, and what each answered.
+    private(set) var progressRequests: [ServiceOperation] = []
+    private var progressRequest: (@Sendable (ServiceOperation, @Sendable (UInt64, UInt64) -> Void) async
+        -> ClientOutcome)?
     private(set) var superseded: [Caller] = []
     private var held: Set<DictId> = []
     /// **Examples answers a test can hold and release per query** (audit round 4, 2026-10-25): an older answer can be made
@@ -80,6 +84,12 @@ actor FakeSearchBackend: SearchBackend {
 
     func setSuggest(_ suggest: @escaping @Sendable (String, [DictId]) -> [String]) { self.suggest = suggest }
     func setAnswer(_ answer: @escaping @Sendable (ServiceOperation) -> ClientOutcome) { self.answer = answer }
+    /// **What a progress-reporting call does**: report through `progress` as the real service would, and answer when
+    /// the test lets it — so a test can read the model's state while the work is under way.
+    func setProgressRequest(_ body: @escaping @Sendable (ServiceOperation, @Sendable (UInt64, UInt64) -> Void) async
+        -> ClientOutcome) {
+        progressRequest = body
+    }
     func setHonoursSupersession(_ honours: Bool) { honoursSupersession = honours }
     func holdExamples() { examplesHeld = true }
     func holdPhrases() { phrasesHeld = true }
@@ -164,6 +174,13 @@ actor FakeSearchBackend: SearchBackend {
 
     func request(_ operation: ServiceOperation) -> ClientOutcome {
         requests.append(operation)
+        return answer(operation)
+    }
+
+    func request(_ operation: ServiceOperation,
+                 progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> ClientOutcome {
+        progressRequests.append(operation)
+        if let progressRequest { return await progressRequest(operation, progress) }
         return answer(operation)
     }
 }

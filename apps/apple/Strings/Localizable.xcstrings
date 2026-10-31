@@ -3263,6 +3263,7 @@
       }
     },
     "Building the word data from the downloaded sources. This takes a few minutes and needs no network.": {
+      "comment": "Word data: a build under way before the core has parsed a source byte",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3274,6 +3275,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在用已下载的源数据构建词数据。需要几分钟，无需联网。"
+          }
+        }
+      }
+    },
+    "Building the word data: %@ of %@ parsed. This needs no network.": {
+      "comment": "Word data: the build's sources parsed, their bytes so far and of all",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Building the word data: %1$@ of %2$@ parsed. This needs no network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在构建词数据：已解析 %1$@，共 %2$@。无需联网。"
+          }
+        }
+      }
+    },
+    "Building the word data: writing the pack. This needs no network.": {
+      "comment": "Word data: the build writing the pack, every source parsed",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Building the word data: writing the pack. This needs no network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在构建词数据：正在写入词数据文件。无需联网。"
           }
         }
       }
@@ -4884,19 +4919,19 @@
         }
       }
     },
-    "Downloading the word data from its own sources: file %@ of %@, %@ of %@. This is about 185 MB, and a few minutes of this Mac's time once it is here.": {
-      "comment": "Word data: the file being downloaded, its bytes so far and of all",
+    "Downloading the word data from its own sources: %@, file %@ of %@, %@ of %@. This is about 185 MB, and a few minutes of this Mac's time once it is here.": {
+      "comment": "Word data: the file being downloaded, its byte count so far and of all",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Downloading the word data from its own sources: file %1$@ of %2$@, %3$@ of %4$@. This is about 185 MB, and a few minutes of this Mac's time once it is here."
+            "value": "Downloading the word data from its own sources: %1$@, file %2$@ of %3$@, %4$@ of %5$@. This is about 185 MB, and a few minutes of this Mac's time once it is here."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在从原始来源下载词数据：第 %@ 个文件，共 %@ 个，已下载 %@，共 %@。约 185 MB，下载完成后还需几分钟本机运算。"
+            "value": "正在从原始来源下载词数据：%1$@，第 %2$@ 个文件，共 %3$@ 个，已下载 %4$@，共 %5$@。约 185 MB，下载完成后还需几分钟本机运算。"
           }
         }
       }
@@ -14606,6 +14641,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "词数据的 %@ 无法下载：%@"
+          }
+        }
+      }
+    },
+    "The word data's %@ is larger than the %@ XDict pins for it, so nothing was installed.": {
+      "comment": "Word data: a download streamed past the size the manifest pins",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The word data's %1$@ is larger than the %2$@ XDict pins for it, so nothing was installed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据中的 %1$@ 大于 XDict 为其固定的 %2$@，因此未安装任何内容。"
           }
         }
       }

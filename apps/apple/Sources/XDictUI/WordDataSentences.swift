@@ -15,21 +15,40 @@ public enum WordDataSentences {
     public static let build = LocalizedStringResource("Build Word Data…")
     public static let cancel = LocalizedStringResource("Cancel")
 
-    /// **What the download is doing** (plan-local-word-pack WI-6): the file in hand of how many, and how far in — the
-    /// size and the minutes said once, before it starts, so nobody waits for 185 MB unannounced.
+    /// **What the download is doing** (plan-local-word-pack WI-6): the file in hand by name and of how many, and how
+    /// far in — the size and the minutes said once, before it starts, so nobody waits for 185 MB unannounced.
     public static func downloading(_ progress: WordDataProgress) -> LocalizedStringResource {
         let done = progress.done.formatted(.byteCount(style: .file))
         let total = progress.total.formatted(.byteCount(style: .file))
         return LocalizedStringResource("""
-            Downloading the word data from its own sources: file \(String(progress.file)) of \
+            Downloading the word data from its own sources: \(progress.name), file \(String(progress.file)) of \
             \(String(progress.files)), \(done) of \(total). This is about 185 MB, and a few minutes of this Mac's \
             time once it is here.
-            """, comment: "Word data: the file being downloaded, its bytes so far and of all")
+            """, comment: "Word data: the file being downloaded, its byte count so far and of all")
     }
 
-    public static let building = LocalizedStringResource("""
-        Building the word data from the downloaded sources. This takes a few minutes and needs no network.
-        """)
+    /// **What the build is doing** (contract 20's progress): the phase the core's own report names, and the bytes of
+    /// the sources it has parsed. Before the first parsed byte there is no amount and no phase to claim beyond the
+    /// build itself — the row says that rather than leaving a bar at zero — and the last byte parsed is the writing one.
+    public static func building(_ progress: WordDataBuild) -> LocalizedStringResource {
+        switch progress.phase {
+        // **A build is never the download phase**; the kind is shared with the row's download state.
+        case .downloading, .preparing:
+            return LocalizedStringResource("""
+                Building the word data from the downloaded sources. This takes a few minutes and needs no network.
+                """, comment: "Word data: a build under way before the core has parsed a source byte")
+        case .building:
+            let done = progress.done.formatted(.byteCount(style: .file))
+            let total = progress.total.formatted(.byteCount(style: .file))
+            return LocalizedStringResource("""
+                Building the word data: \(done) of \(total) parsed. This needs no network.
+                """, comment: "Word data: the build's sources parsed, their bytes so far and of all")
+        case .writing:
+            return LocalizedStringResource("""
+                Building the word data: writing the pack. This needs no network.
+                """, comment: "Word data: the build writing the pack, every source parsed")
+        }
+    }
 
     /// What is installed, in one line: the schema version, the records it holds and its sources — enough to tell one
     /// release of the pack from another without opening the file.
@@ -84,14 +103,19 @@ public enum WordDataSentences {
     public static func sentence(_ failure: WordPackDownload.Failure) -> LocalizedStringResource {
         switch failure {
         case .transport(let file, let detail):
-            LocalizedStringResource("The word data's \(file) could not be downloaded: \(detail)")
+            return LocalizedStringResource("The word data's \(file) could not be downloaded: \(detail)")
+        case .tooLarge(let file, let limit):
+            let size = limit.formatted(.byteCount(style: .file))
+            return LocalizedStringResource("""
+                The word data's \(file) is larger than the \(size) XDict pins for it, so nothing was installed.
+                """, comment: "Word data: a download streamed past the size the manifest pins")
         case .sizeMismatch(let file, let expected, let found):
-            LocalizedStringResource("""
+            return LocalizedStringResource("""
                 The word data's \(file) arrived at \(String(found)) bytes instead of \(String(expected)), so nothing \
                 was installed.
                 """)
         case .hashMismatch(let file, let expected, let found):
-            LocalizedStringResource("""
+            return LocalizedStringResource("""
                 The word data's \(file) is not the file it should be: its SHA-256 is \(found), and the one XDict \
                 checks for is \(expected). Nothing was installed.
                 """)

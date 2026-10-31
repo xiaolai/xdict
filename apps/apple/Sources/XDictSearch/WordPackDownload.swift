@@ -84,11 +84,21 @@ public struct WordPackSources: Equatable, Sendable {
 /// Where a pinned file's bytes come from: the network in the app, a fake in the tests.
 public protocol WordPackTransfer: Sendable {
     /// Writes `url`'s bytes to `destination`, reporting the bytes so far, and throws `CancellationError` when the
-    /// task is cancelled. A response that is not a success is a failure, never a file.
-    func fetch(_ url: URL, to destination: URL, written: @escaping @Sendable (Int64) -> Void) async throws
+    /// task is cancelled. A response that is not a success is a failure, never a file. **`limit` is the size the
+    /// manifest pins**, known before the first byte arrives: a response larger than it is refused and stopped, so a
+    /// faulty or hostile server cannot stream unbounded bytes to disk before the size check is reached.
+    func fetch(_ url: URL, to destination: URL, limit: UInt64,
+               written: @escaping @Sendable (Int64) -> Void) async throws
 }
 
-/// The network, through `URLSession`, streaming each file to a temporary and moving it into place.
+/// The network, through `URLSession`, streaming each file to a temporary beside its destination and moving it into
+/// place.
+///
+/// **The body is streamed through a session delegate, and the bytes are counted there** (2026-10-31): a task-specific
+/// delegate receives no callbacks on macOS 27, which left `download(for:delegate:)`'s progress dead — and a download
+/// whose progress never fires leaves the reader with a bar at zero while 185 MB arrive. Every guarantee the temporary
+/// file's design had is kept: a response that is not a success is refused before any byte is written, the partial file
+/// is deleted on every failure path, and the file is moved into place only when the whole body landed.
 public struct URLSessionTransfer: WordPackTransfer {
     public init(session: URLSession = .shared) {
         self.session = session
@@ -96,90 +106,242 @@ public struct URLSessionTransfer: WordPackTransfer {
 
     private let session: URLSession
 
-    public func fetch(_ url: URL, to destination: URL, written: @escaping @Sendable (Int64) -> Void) async throws {
-        let reporter = Reporter(written: written)
-        // **The async call's first value is the downloaded file itself** (2026-10-31): a task-specific delegate receives
-        // no download callbacks on macOS 27, so waiting for `didFinishDownloadingTo` left `destination` unwritten while
-        // this call reported success. The delegate is kept for progress only; the file is moved into place below.
-        let (temporary, response) = try await session.download(for: URLRequest(url: url), delegate: reporter)
-        if let error = reporter.recorded() {
-            Self.discard(temporary)
+    public func fetch(_ url: URL, to destination: URL, limit: UInt64,
+                      written: @escaping @Sendable (Int64) -> Void) async throws {
+        try Task.checkCancellation()
+        let file = url.lastPathComponent
+        let folder = destination.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        } catch {
+            throw WordPackDownload.Failure.transport(file: file, detail: "\(error)")
+        }
+        // **The partial file sits beside its destination**, on the same volume, so the move into place is a rename;
+        // the name is fixed, so a run that crashed has only one stale file to overwrite and none to accumulate.
+        let partial = folder.appending(path: ".\(destination.lastPathComponent).partial")
+        let stream = DownloadStream(partial: partial, file: file, limit: limit, written: written)
+        // **The delegate belongs to the session, not the task** (2026-10-31): that is the delegate that receives
+        // `didReceive data` on macOS 27, and a session made from the caller's configuration keeps the app's settings
+        // and the tests' stubbed network.
+        let streaming = URLSession(configuration: session.configuration, delegate: stream, delegateQueue: nil)
+        defer { streaming.finishTasksAndInvalidate() }
+        do {
+            try await stream.download(streaming.dataTask(with: URLRequest(url: url)))
+        } catch {
+            stream.discard()
             throw error
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            Self.discard(temporary)
-            throw WordPackDownload.Failure.transport(file: url.lastPathComponent, detail: "HTTP \(status)")
-        }
         do {
-            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
-            try Self.move(temporary, to: destination)
+            try Self.move(partial, to: destination)
         } catch {
-            Self.discard(temporary)
-            throw WordPackDownload.Failure.transport(file: url.lastPathComponent, detail: "\(error)")
+            Self.discard(partial)
+            throw WordPackDownload.Failure.transport(file: file, detail: "\(error)")
         }
     }
 
-    /// **A temporary file this code will not keep is deleted here**: it is the system's, never the caller's, so a
-    /// failed status or a failed move must not leave it behind. The failure that caused the discard is what is thrown.
-    private static func discard(_ temporary: URL) {
-        try? FileManager.default.removeItem(at: temporary)
+    /// **A partial file this code will not keep is deleted here**: a failed status, a broken response or a failed move
+    /// must not leave half a pack in the folder a build reads.
+    private static func discard(_ partial: URL) {
+        try? FileManager.default.removeItem(at: partial)
     }
 
     /// The downloaded file into its place: a rename where the destination is new, and `replaceItemAt` — the atomic
     /// replacement — where an earlier copy is there to be replaced.
-    private static func move(_ temporary: URL, to destination: URL) throws {
+    private static func move(_ partial: URL, to destination: URL) throws {
         if FileManager.default.fileExists(atPath: destination.path) {
-            _ = try FileManager.default.replaceItemAt(destination, withItemAt: temporary)
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: partial)
         } else {
-            try FileManager.default.moveItem(at: temporary, to: destination)
+            try FileManager.default.moveItem(at: partial, to: destination)
         }
     }
 }
 
-/// Reports a download's bytes as they land. `URLSession` holds its delegate weakly, so the call keeps it alive.
-///
-/// **The file is never moved here** (2026-10-31): Apple documents `download(for:delegate:)`'s delegate parameter as
-/// "reserved for future use", and on macOS 27 this task-specific delegate receives no download callbacks at all — so a
-/// transport that waited for `didFinishDownloadingTo` to write the file reported success with nothing written.
-/// `URLSessionTransfer.fetch` moves the temporary file the async call returns; this delegate is for progress only.
-private final class Reporter: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    init(written: @escaping @Sendable (Int64) -> Void) {
+/// **One download, streamed to a file and counted as it lands**: the session's data delegate, because on macOS 27 a
+/// task-specific delegate receives no callbacks. It refuses a response that is not a success before writing a byte,
+/// reports each chunk's new total, and answers exactly once — with `CancellationError` when the caller stopped it.
+private final class DownloadStream: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    init(partial: URL, file: String, limit: UInt64, written: @escaping @Sendable (Int64) -> Void) {
+        self.partial = partial
+        self.file = file
+        self.limit = limit
+        self.cap = limit > UInt64(Int64.max) ? Int64.max : Int64(limit)
         self.written = written
     }
 
+    private let partial: URL
+    private let file: String
+    /// The size the manifest pins, as its own case reports it.
+    private let limit: UInt64
+    /// The same size as a count no response may exceed.
+    private let cap: Int64
     private let written: @Sendable (Int64) -> Void
     private let lock = NSLock()
+    private var handle: FileHandle?
+    private var count: Int64 = 0
     private var failure: (any Error)?
+    private var cancelled = false
+    private var finished = false
+    private var task: URLSessionDataTask?
+    private var continuation: CheckedContinuation<Void, any Error>?
 
-    /// **`didWriteData` is a `URLSessionDownloadDelegate` requirement**, not a task-delegate one: conforming to the
-    /// task delegate left every download silent.
-    func urlSession(
-        _ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-        totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
-    ) {
-        written(totalBytesWritten)
-    }
-
-    /// **A stub, because Swift's conformance requires it — never called by the async download** (see the type's note).
-    /// Were it ever called, the system deletes `location` when this returns, so the file `fetch` moves is the async
-    /// call's returned URL, never this one.
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        lock.lock()
-        defer { lock.unlock() }
-        if let error, failure == nil {
-            failure = error
+    /// Starts the task and waits for it: a success only when every chunk was written and the file closed.
+    func download(_ task: URLSessionDataTask) async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                lock.lock()
+                self.task = task
+                self.continuation = continuation
+                let cancelled = self.cancelled
+                lock.unlock()
+                if cancelled { task.cancel() }
+                task.resume()
+            }
+        } onCancel: {
+            self.cancel()
         }
     }
 
-    /// What went wrong, once the call has returned.
-    func recorded() -> (any Error)? {
+    /// The caller's task was cancelled: the download stops, and the partial file goes on the failure path that follows,
+    /// so a cancel never leaves a download behind.
+    func cancel() {
         lock.lock()
-        defer { lock.unlock() }
-        return failure
+        cancelled = true
+        let task = self.task
+        lock.unlock()
+        task?.cancel()
+    }
+
+    /// Everything this stream wrote, deleted: a failed download leaves nothing for a build to read.
+    func discard() {
+        lock.lock()
+        let handle = self.handle
+        self.handle = nil
+        lock.unlock()
+        try? handle?.close()
+        try? FileManager.default.removeItem(at: partial)
+    }
+
+    // MARK: - URLSessionDataDelegate
+
+    /// **Redirects are followed, as they were through `download(for:)`**: GitHub's release downloads answer with a
+    /// redirect to their object store, and a transport that refused a 3xx as an error would fail every one of them.
+    /// Implementing this also keeps a redirect's headers out of `didReceive response` below, which judges the final one.
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(request)
+    }
+
+    /// **A response that is not a success is refused before any write**: no file is created, the body is not allowed to
+    /// arrive, and the failure names the file and the status. **A declared length past the pinned size is refused the
+    /// same way**, before a byte lands; a body that streams past it is stopped in `didReceive data` below.
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            record(WordPackDownload.Failure.transport(file: file, detail: "HTTP \(status)"))
+            completionHandler(.cancel)
+            return
+        }
+        if response.expectedContentLength > 0, response.expectedContentLength > cap {
+            record(WordPackDownload.Failure.tooLarge(file: file, limit: limit))
+            completionHandler(.cancel)
+            return
+        }
+        guard FileManager.default.createFile(atPath: partial.path(percentEncoded: false), contents: nil) else {
+            record(WordPackDownload.Failure.transport(file: file, detail: "could not create \(partial.lastPathComponent)"))
+            completionHandler(.cancel)
+            return
+        }
+        do {
+            let handle = try FileHandle(forWritingTo: partial)
+            lock.lock()
+            self.handle = handle
+            lock.unlock()
+            completionHandler(.allow)
+        } catch {
+            record(WordPackDownload.Failure.transport(file: file, detail: "\(error)"))
+            completionHandler(.cancel)
+        }
+    }
+
+    /// Each chunk into the file and its new total out: the count is what the Settings row's bar reads. **The pinned
+    /// size is a hard ceiling**: a chunk that would take the file past it is not written, the task is cancelled, and
+    /// the failure says the response was larger than the manifest pins.
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.lock()
+        guard !finished, failure == nil, let handle else {
+            lock.unlock()
+            return
+        }
+        guard Int64(data.count) <= cap - count else {
+            failure = WordPackDownload.Failure.tooLarge(file: file, limit: limit)
+            lock.unlock()
+            dataTask.cancel()
+            return
+        }
+        do {
+            try handle.write(contentsOf: data)
+            count += Int64(data.count)
+            let now = count
+            lock.unlock()
+            written(now)
+        } catch {
+            failure = WordPackDownload.Failure.transport(file: file, detail: "\(error)")
+            lock.unlock()
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        finish(error)
+    }
+
+    // MARK: - The one ending
+
+    private func record(_ error: any Error) {
+        lock.lock()
+        if failure == nil { failure = error }
+        lock.unlock()
+    }
+
+    /// **One ending per download**: closes the file and answers the caller with a cancellation, the failure that ended
+    /// it (a status, a write, a broken response, the session's timeout), or success.
+    private func finish(_ error: (any Error)?) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let handle = self.handle
+        self.handle = nil
+        let continuation = self.continuation
+        self.continuation = nil
+        let cancelled = self.cancelled
+        let failure = self.failure
+        lock.unlock()
+        try? handle?.close()
+        let result: Result<Void, any Error>
+        if cancelled {
+            result = .failure(CancellationError())
+        } else if let failure {
+            result = .failure(failure)
+        } else if let error {
+            // The session's own cancellation of a refused response is not the caller's cancel: the recorded failure
+            // above has already answered that case. What is left is a real transport error.
+            result = Self.isCancellation(error)
+                ? .failure(CancellationError())
+                : .failure(WordPackDownload.Failure.transport(file: file, detail: "\(error)"))
+        } else {
+            result = .success(())
+        }
+        continuation?.resume(with: result)
+    }
+
+    private static func isCancellation(_ error: (any Error)?) -> Bool {
+        guard let error else { return false }
+        if error is CancellationError { return true }
+        return (error as? URLError)?.code == .cancelled
     }
 }
 
@@ -192,6 +354,9 @@ public struct WordPackDownload: Sendable {
     public enum Failure: Error, Equatable, Sendable {
         /// The fetch itself failed: the transport, or a response that was not a success.
         case transport(file: String, detail: String)
+        /// The response was larger than the size the manifest pins: the transfer stopped at that size, before another
+        /// byte was written, so a faulty or hostile server cannot fill the disk.
+        case tooLarge(file: String, limit: UInt64)
         /// The file arrived at the wrong size.
         case sizeMismatch(file: String, expected: UInt64, found: UInt64)
         /// The file's bytes are not the ones the manifest pins, and both hashes are shown.
@@ -218,7 +383,7 @@ public struct WordPackDownload: Sendable {
                 let base = done
                 progress(index + 1, base, total)
                 do {
-                    try await transfer.fetch(item.url, to: destination) { written in
+                    try await transfer.fetch(item.url, to: destination, limit: item.bytes) { written in
                         progress(index + 1, base &+ UInt64(max(written, 0)), total)
                     }
                 } catch is CancellationError {

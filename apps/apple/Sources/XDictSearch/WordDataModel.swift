@@ -23,8 +23,9 @@ public final class WordDataModel {
         case absent
         /// The pinned files are arriving (plan-local-word-pack WI-6): which one, of how many, and the bytes of all.
         case downloading(WordDataProgress)
-        /// Every source is here and the service is building the pack.
-        case building
+        /// Every source is here and the service is building the pack (contract 20): the bytes of the sources it has
+        /// parsed so far, of all to parse — zero until it parses the first one, after checking them all.
+        case building(WordDataBuild)
         /// The pack installed, as the core reports it.
         case installed(WordPackInfo)
         /// A file was refused, by the kind the core refused it with (`WordDataRefusal`): the app words it.
@@ -48,15 +49,39 @@ public final class WordDataModel {
     /// The manifest that ships in the app: the bytes the download checks each file against. `nil` is the trouble the
     /// row reports, never a list compiled into the shell.
     @ObservationIgnored private let manifest: @Sendable () -> Data?
+    /// The network the sources arrive over: `URLSession` in the app, a fake in the tests.
+    @ObservationIgnored private let transfer: any WordPackTransfer
     @ObservationIgnored private var generation = 0
 
     /// `container` names the app group's `WordPack` folder, or nil in a process without the entitlement (the test
     /// hosts). The model never falls back to another folder: a pack the service cannot read is no pack.
     public init(backend: any SearchBackend, container: @escaping @Sendable () -> URL?,
-                manifest: @escaping @Sendable () -> Data? = WordDataModel.bundledManifest) {
+                manifest: @escaping @Sendable () -> Data? = WordDataModel.bundledManifest,
+                transfer: any WordPackTransfer = URLSessionTransfer()) {
         self.backend = backend
         self.container = container
         self.manifest = manifest
+        self.transfer = transfer
+    }
+
+    /// **What the row is doing now**, as a kind the view layer words; nil when nothing is under way. A phase is named
+    /// while work runs, so the reader is never left without evidence that something is happening.
+    public var phase: WordDataPhase? {
+        switch state {
+        case .downloading: .downloading
+        case .building(let progress): progress.phase
+        case .unknown, .absent, .installed, .refused, .trouble: nil
+        }
+    }
+
+    /// **How far the phase has got, from 0 to 1**, or nil where the amount is not known yet: the row draws a moving
+    /// bar then, never a bar at zero while work goes on.
+    public var fraction: Double? {
+        switch state {
+        case .downloading(let progress): progress.fraction
+        case .building(let progress): progress.fraction
+        case .unknown, .absent, .installed, .refused, .trouble: nil
+        }
     }
 
     /// The manifest in the app's own bundle, checked against `Resources/WordPack.sha256` when that file is there: a
@@ -178,14 +203,18 @@ public final class WordDataModel {
         do {
             try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
             try manifest.write(to: sourceFolder.appending(path: WordPackSources.manifestName), options: .atomic)
-            state = .downloading(WordDataProgress(file: 0, files: sources.items.count, done: 0, total: sources.totalBytes))
-            try await WordPackDownload(sources: sources).fetch(into: sourceFolder) { [weak self] file, done, total in
+            state = .downloading(WordDataProgress(file: 1, files: sources.items.count,
+                                                  name: sources.items.first?.file ?? "", done: 0,
+                                                  total: sources.totalBytes))
+            let download = WordPackDownload(sources: sources, transfer: transfer)
+            try await download.fetch(into: sourceFolder) { [weak self] file, done, total in
                 Task { @MainActor in
                     // **Only while the download is the phase**: a report that lands after the build started, or after a
                     // cancel, would put `downloading` back over a state the reader has already been told.
                     guard let self, case .downloading = self.state else { return }
-                    self.state = .downloading(WordDataProgress(file: file, files: sources.items.count, done: done,
-                                                               total: total))
+                    let name = sources.items.indices.contains(file - 1) ? sources.items[file - 1].file : ""
+                    self.state = .downloading(WordDataProgress(file: file, files: sources.items.count, name: name,
+                                                               done: done, total: total))
                 }
             }
         } catch is CancellationError {
@@ -204,13 +233,21 @@ public final class WordDataModel {
             state = .absent
             return
         }
-        state = .building
+        state = .building(WordDataBuild())
         let output = folder.appending(path: AppGroup.wordPackFile)
         let request = ServiceOperation.buildWordPack(
             sources: sourceFolder.path(percentEncoded: false),
             manifest: sourceFolder.appending(path: WordPackSources.manifestName).path(percentEncoded: false),
             output: output.path(percentEncoded: false))
-        let outcome = await backend.request(request)
+        // **The core's own progress, heard while it builds** (contract 20): the bytes of the sources it has parsed, of
+        // all to parse. Its first reports are zero while it checks the sources it was handed, and the row says that in
+        // words rather than drawing a bar that would look stuck.
+        let outcome = await backend.request(request) { [weak self] done, total in
+            Task { @MainActor in
+                guard let self, case .building = self.state else { return }
+                self.state = .building(WordDataBuild(done: done, total: total))
+            }
+        }
         switch outcome.wordPackBuilt {
         case .success(let answer):
             state = answer.pack.map { .installed($0) } ?? .absent
@@ -333,24 +370,69 @@ public enum WordDataTrouble: Equatable, Sendable {
 /// **How far the download has got** (plan-local-word-pack WI-6): the file being fetched, of how many, and the bytes
 /// done of all — what the row's bar counts and its sentence names.
 public struct WordDataProgress: Equatable, Sendable {
-    /// The file being fetched, 1-based; 0 before the first starts.
+    /// The file being fetched, 1-based.
     public let file: Int
     /// How many files there are.
     public let files: Int
+    /// The name of the file being fetched, as the manifest writes it.
+    public let name: String
     /// Bytes finished.
     public let done: UInt64
     /// Bytes there are to finish.
     public let total: UInt64
 
-    public init(file: Int, files: Int, done: UInt64, total: UInt64) {
+    public init(file: Int, files: Int, name: String = "", done: UInt64, total: UInt64) {
         self.file = file
         self.files = files
+        self.name = name
         self.done = done
         self.total = total
     }
 
-    /// How much of the download is done, from 0 to 1.
-    public var fraction: Double {
-        total == 0 ? 0 : min(1, Double(done) / Double(total))
+    /// **How much of the download is done, from 0 to 1; nil before the first byte**, so the row draws a moving bar
+    /// rather than a bar at zero while the first file is on its way.
+    public var fraction: Double? {
+        guard total > 0, done > 0 else { return nil }
+        return min(1, Double(done) / Double(total))
+    }
+}
+
+/// **What the Word data row is doing**, as a kind the view layer words: the phases of getting the pack onto this Mac.
+public enum WordDataPhase: Equatable, Sendable {
+    /// The pinned files are arriving; the row names the file and its bytes.
+    case downloading
+    /// No source byte is parsed yet: the service is checking the sources it was handed, or parsing the first one.
+    case preparing
+    /// The core is parsing the sources; the row counts the bytes parsed.
+    case building
+    /// Every source is parsed and the pack is being written.
+    case writing
+}
+
+/// **How far the core's build has got** (contract 20): the bytes of the sources it has parsed, of all to parse. A
+/// report of zero means it has parsed nothing yet — the sources are still being checked — and a report of all means
+/// the parsing is done and the pack is being written; the row words both rather than drawing a frozen bar.
+public struct WordDataBuild: Equatable, Sendable {
+    /// Bytes parsed.
+    public let done: UInt64
+    /// Bytes there are to parse.
+    public let total: UInt64
+
+    public init(done: UInt64 = 0, total: UInt64 = 0) {
+        self.done = done
+        self.total = total
+    }
+
+    /// The phase the report names.
+    public var phase: WordDataPhase {
+        guard total > 0, done > 0 else { return .preparing }
+        return done >= total ? .writing : .building
+    }
+
+    /// **The bar's value, from 0 to 1, while the sources are being parsed**; nil for the preparing and writing phases,
+    /// whose amount the core does not report yet — the row says what it is doing in words there.
+    public var fraction: Double? {
+        guard phase == .building else { return nil }
+        return min(1, Double(done) / Double(total))
     }
 }

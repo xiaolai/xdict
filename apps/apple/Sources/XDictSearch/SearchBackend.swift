@@ -22,9 +22,26 @@ public protocol SearchBackend: Sendable {
     /// Supersedes every call `caller` made so far, queueing none: a lookup with no dictionary to ask.
     func supersede(_ caller: Caller) async
     func request(_ operation: ServiceOperation) async -> ClientOutcome
+    /// **A call whose progress the service reports** (the contract's `reportsProgress`, contract 20's `buildWordPack`
+    /// among them): `progress` hears each report of work done of all while the call runs. A backend that carries no
+    /// progress answers as `request` does, so only the tests and the real client differ.
+    func request(_ operation: ServiceOperation,
+                 progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> ClientOutcome
+}
+
+extension SearchBackend {
+    public func request(_ operation: ServiceOperation,
+                        progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> ClientOutcome {
+        await request(operation)
+    }
 }
 
 extension ServiceClient: SearchBackend {
+    public func request(_ operation: ServiceOperation,
+                        progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> ClientOutcome {
+        await submit(operation, progress: progress).outcome()
+    }
+
     public func queue(_ operations: [ServiceOperation], as caller: Caller, superseding: Bool) -> [PendingCall] {
         // **An empty queue still supersedes when it says so** (audit round 1, 2026-10-26): the protocol promises that
         // `superseding` answers every earlier call of the caller, and a lookup with no dictionary to ask relies on it.

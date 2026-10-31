@@ -165,6 +165,20 @@ public actor ServiceClient {
         await submit(operation, as: caller, supersedingEarlier: supersedingEarlier).outcome()
     }
 
+    /// **Queues `operation` with a listener for its progress** (an operation whose `reportsProgress` is true — an
+    /// import, a check, a build, a conversion; those have no deadline and are bounded by their reports' silence):
+    /// `progress` hears every report the service sends while the call runs.
+    public func submit(_ operation: ServiceOperation,
+                       progress: @escaping @Sendable (UInt64, UInt64) -> Void) -> CallTicket {
+        let call = makeCall(operation, caller: nil, package: nil, progress: progress)
+        if operation.packageSpec != nil {
+            call.promise.fulfil(.failure(.needsFiles))
+        } else {
+            enqueue(call)
+        }
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
     /// Supersedes every call of `caller` made so far: queued ones are dropped, sent ones answered `.superseded`.
     public func supersede(_ caller: Caller) {
         generations[caller, default: 0] += 1
