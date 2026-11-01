@@ -64,6 +64,129 @@ public final class HistoryModel {
     /// window. Nil until the app wires it; then the cards offer Open Entry.
     @ObservationIgnored public var entryLinks: HistoryEntryLinks?
 
+    /// **The reader's answers, while the app runs** (ADR-0037): memory only, never written. A card shows one when it
+    /// was given for the card's own reading. Nil until the app wires it.
+    @ObservationIgnored public var answers: MeaningAnswerMemory?
+
+    /// The answer for a card's exact reading, or nil when none was given.
+    public func answer(for card: LedgerCard) -> String? {
+        answers?.answer(for: card.reading)
+    }
+
+    // MARK: - The dictionary gloss (ADR-0037)
+
+    /// What the recorded edition's gloss state is. `.loading` and `.failed` both show no line; the card keeps its other
+    /// content, and nothing is said about a dictionary that cannot answer.
+    public enum GlossState: Equatable, Sendable {
+        case loading
+        case loaded(EntryGloss)
+        case failed
+    }
+
+    /// The glosses fetched this session, by the entry they belong to. A removed card's entry is forgotten.
+    public private(set) var glosses: [EntryRef: GlossState] = [:]
+    /// Bumped by each refresh: a card's gloss task re-runs for a failed state when the drawer opens again, and a loaded
+    /// one is not asked for twice.
+    public private(set) var glossRevision = 0
+    /// What a card's gloss task watches: its own reading and the model's revision.
+    public struct GlossRequest: Hashable, Sendable {
+        public let reading: LedgerReading
+        public let revision: Int
+
+        public init(reading: LedgerReading, revision: Int) {
+            self.reading = reading
+            self.revision = revision
+        }
+    }
+    @ObservationIgnored private var glossPending: [EntryRef] = []
+    @ObservationIgnored private var glossInFlight = 0
+    /// **The token of each entry's fetch** (audit 2026-10-31): a completion writes only while its request is still the
+    /// entry's. A clear, a removal or the history switch ending the line of requests drops the answer already on its
+    /// way; the slot it held is freed either way.
+    @ObservationIgnored private var glossRequests: [EntryRef: UInt64] = [:]
+    @ObservationIgnored private var glossNextRequest: UInt64 = 0
+    /// Two at a time: one entry render each, and a drawer of visible cards must not ask the service for all of them at
+    /// once. The rest wait in `glossPending` in the order they appeared.
+    private static let glossLimit = 2
+
+    /// The dictionary gloss a card shows, or nil while it is loading, after a failure, or when the edition has no
+    /// usable first sense. The AI answer, when there is one, wins in `HistoryCardContent`.
+    public func gloss(for card: LedgerCard) -> HistoryCardGloss? {
+        let ref = EntryRef(reading: card.reading)
+        guard let state = glosses[ref], case .loaded(let gloss) = state,
+              let text = gloss.text, !text.isEmpty else { return nil }
+        return HistoryCardGloss(text: text, pos: gloss.pos, source: .dictionary)
+    }
+
+    /// Asks for one card's gloss, once: the view calls this as a card appears. The core resolves the reading's edition
+    /// itself, so a dictionary that is gone or off simply answers nothing.
+    public func loadGloss(for card: LedgerCard) {
+        let ref = EntryRef(reading: card.reading)
+        guard glosses[ref] == nil else { return }
+        glossNextRequest += 1
+        glossRequests[ref] = glossNextRequest
+        glosses[ref] = .loading
+        glossPending.append(ref)
+        pumpGlosses()
+    }
+
+    private func pumpGlosses() {
+        while glossInFlight < Self.glossLimit, !glossPending.isEmpty {
+            let ref = glossPending.removeFirst()
+            glossInFlight += 1
+            let token = glossRequests[ref]
+            Task { [weak self] in
+                guard let self else { return }
+                let result = await self.service.call(.entryGloss(entry: ref))
+                self.glossInFlight -= 1
+                guard let token, self.glossRequests[ref] == token else {
+                    self.pumpGlosses()
+                    return
+                }
+                self.glossRequests[ref] = nil
+                if case .success(let delivered) = result, case .entryGloss(let gloss) = delivered.answer {
+                    self.glosses[ref] = .loaded(gloss)
+                } else {
+                    self.glosses[ref] = .failed
+                }
+                self.pumpGlosses()
+            }
+        }
+    }
+
+    /// **An erase took every reading** (ADR-0023, ADR-0037): the derived glosses go with them, and fetches already on
+    /// their way are dropped. The card's AI answers are cleared by the same erase through the app's
+    /// `StudyModel.onErased`.
+    public func clearGlosses() {
+        glosses.removeAll()
+        glossPending.removeAll()
+        glossRequests.removeAll()
+    }
+
+    /// **The history switch went off while the app runs** (ADR-0037): nothing about a reading stays in memory, and a
+    /// refresh already on its way cannot write a loaded state over `off`.
+    public func historySwitchedOff() {
+        generation += 1
+        answers?.clear()
+        clearGlosses()
+        state = .off
+    }
+
+    /// A dictionary enabled since the last open may answer now: a failed state is forgotten, and the card asks again
+    /// when it appears. A loaded gloss stays: the edition's content cannot change under it.
+    private func forgetFailedGlosses() {
+        for (ref, state) in glosses where state == .failed {
+            glosses[ref] = nil
+        }
+    }
+
+    private func forgetGloss(_ reading: LedgerReading) {
+        let ref = EntryRef(reading: reading)
+        glosses[ref] = nil
+        glossPending.removeAll { $0 == ref }
+        glossRequests[ref] = nil
+    }
+
     /// **Hides a card's readings behind a tombstone that carries no content** (ADR-0024): the card's own event ids, the
     /// stamp, and nothing of the sentence.
     @discardableResult
@@ -78,6 +201,9 @@ public final class HistoryModel {
         lastRemoval = removal
         removalFailed = false
         removalNoticeShown = true
+        // A removed reading takes its answer with it; an undo finds the dictionary gloss, never a hidden answer.
+        answers?.forget(card.reading)
+        forgetGloss(card.reading)
         await refresh()
         return outcome
     }
@@ -127,9 +253,13 @@ public final class HistoryModel {
         generation += 1
         let mine = generation
         guard preferences.historyEnabled else {
-            state = .off
+            // Off means nothing about a reading stays in memory either: the answers and the glosses go with the history,
+            // and fetches already on their way are dropped.
+            historySwitchedOff()
             return
         }
+        forgetFailedGlosses()
+        glossRevision += 1
         state = .loading
         let at = now()
         let outcome = await service.call(.ledgerHistory(now: at.timeIntervalSince1970.rounded(.down),

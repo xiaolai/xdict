@@ -9,13 +9,15 @@ import XDictTokens
 public enum HistoryCardAction: Equatable, Sendable, CaseIterable {
     case openEntry
     case note
+    case askAI
     case remove
 
-    public static func actions(canNote: Bool, canOpen: Bool) -> [HistoryCardAction] {
+    public static func actions(canNote: Bool, canOpen: Bool, canAsk: Bool) -> [HistoryCardAction] {
         allCases.filter {
             switch $0 {
             case .openEntry: canOpen
             case .note: canNote
+            case .askAI: canAsk
             case .remove: true
             }
         }
@@ -25,6 +27,7 @@ public enum HistoryCardAction: Equatable, Sendable, CaseIterable {
         switch self {
         case .openEntry: "Open Entry"
         case .note: "Note…"
+        case .askAI: "Ask AI"
         case .remove: "Remove from History"
         }
     }
@@ -121,11 +124,17 @@ public enum HistoryEntryLink: Equatable, Sendable {
 public struct HistoryEntryLinks {
     public let resolve: @MainActor (EntryRef) -> HistoryEntryLink
     public let open: @MainActor (Visit) -> Void
+    /// **Ask AI about the card's own reading** (ADR-0037): the app opens the recorded entry and hands the reading's
+    /// sentence to a main window, the same tap the capture's expansion makes. Nil when the app wired none: the action is
+    /// then not offered at all, rather than shown and doing nothing (audit 2026-10-31).
+    public let openMeaning: (@MainActor (ResultID, LedgerReading) -> Void)?
 
     public init(resolve: @escaping @MainActor (EntryRef) -> HistoryEntryLink,
-                open: @escaping @MainActor (Visit) -> Void) {
+                open: @escaping @MainActor (Visit) -> Void,
+                openMeaning: (@MainActor (ResultID, LedgerReading) -> Void)? = nil) {
         self.resolve = resolve
         self.open = open
+        self.openMeaning = openMeaning
     }
 }
 

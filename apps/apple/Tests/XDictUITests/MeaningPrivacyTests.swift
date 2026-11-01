@@ -124,4 +124,22 @@ import XDictUI
         }
         #expect(Mirror(reflecting: sent).children.isEmpty)
     }
+
+    /// **The answer memory describes nothing it holds** (ADR-0037): the description and the mirror are constants, so a
+    /// diagnostic or a dump can walk neither the sentence nor the model's answer. The same shape as the session's.
+    @Test func theAnswerMemoryDescribesNeitherItsSentenceNorItsAnswer() {
+        let memory = MeaningAnswerMemory()
+        let entry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:ab"), key: "hold", occurrence: 0)
+        let sent = MeaningSent(text: "question", mode: .grounded, source: .http, complete: true, cutAt: 0,
+                               questionContext: MeaningContext(term: "hold", sentence: Self.sentence,
+                                                                range: NSRange(location: 5, length: 4)),
+                               target: MeaningTarget(dictionary: DictId(rawValue: "1a2b3c4d00000001"), entry: entry))
+        memory.publish(.answer(AIAnswer(outcome: .matched, quotes: [], explanation: "private generated explanation"),
+                               mode: .grounded), sent: sent)
+        for line in [String(describing: memory), String(reflecting: memory), memory.debugDescription] {
+            #expect(!line.contains("quiet river"), "the sentence reached a description: \(line)")
+            #expect(!line.contains("private generated explanation"), "the answer reached a description: \(line)")
+        }
+        #expect(Mirror(reflecting: memory).children.isEmpty)
+    }
 }

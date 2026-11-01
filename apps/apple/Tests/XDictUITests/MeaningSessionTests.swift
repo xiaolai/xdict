@@ -57,13 +57,15 @@ final class Counter: @unchecked Sendable {
         fetched: Result<EntryText, ClientFailure> = .success(entryText),
         drawn: Bool = true,
         provider: StubProvider = StubProvider(answers: [.success(matched)]),
-        fetch: Fetcher? = nil
+        fetch: Fetcher? = nil,
+        answers: MeaningAnswerMemory? = nil
     ) -> (MeaningSession, StubProvider, Fetcher) {
         let fetcher = fetch ?? Fetcher(fetched)
         let session = MeaningSession(
             fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
             presented: { drawn ? (Self.dict, Self.entry) : nil },
-            makeProvider: { _, _ in provider })
+            makeProvider: { _, _ in provider },
+            answers: answers)
         session.settings = settings
         session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.", range: NSRange(location: 5, length: 4),
                                     origin: MeaningOrigin(request: 7, generation: 2)))
@@ -78,9 +80,11 @@ final class Counter: @unchecked Sendable {
         fetch: @escaping @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
         presented: @escaping @MainActor () -> (DictId, EntryRef)?,
         makeProvider: @escaping @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
+        answers: MeaningAnswerMemory? = nil,
         drawn: Bool = true
     ) -> MeaningSession {
-        let session = MeaningSession(fetchEntryText: fetch, presented: presented, makeProvider: makeProvider)
+        let session = MeaningSession(fetchEntryText: fetch, presented: presented, makeProvider: makeProvider,
+                                     answers: answers)
         session.settings = settings
         session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.", range: NSRange(location: 5, length: 4),
                                     origin: MeaningOrigin(request: 5, generation: 1)))
@@ -126,6 +130,92 @@ final class Counter: @unchecked Sendable {
         #expect(question.contains("«hold»"), "the term is marked in its sentence")
         #expect(await fetcher.calls.count == 1)
         #expect(await fetcher.calls.first?.2 == MeaningBudget.entryTextBytes)
+    }
+
+    /// **A validated answer reaches the session's memory** (ADR-0037): the card's gloss comes from the one place an
+    /// answer is published, and the key is the reading the session actually asked about.
+    @Test func aValidatedAnswerReachesTheMemory() async {
+        let memory = MeaningAnswerMemory()
+        let (session, _, _) = Self.session(answers: memory)
+        session.ask()
+        #expect(await Self.waitUntil { session.state != .asking })
+        let reading = LedgerReading(surface: "hold", lemma: "hold", sentence: "They hold that view.",
+                                    span: LedgerSpan(start: 5, len: 4), cut: 0, quality: "complete",
+                                    edition: Self.edition.rawValue, entryKey: "hold", occurrence: 0,
+                                    dictionaryName: "Tiny", language: "en", at: 0, device: "d")
+        #expect(memory.answer(for: reading) == "It means to keep.")
+    }
+
+    /// **A sentence-only answer reaches the memory too** (audit 2026-10-31): the entry-text switch defaults off, so the
+    /// ordinary ask sends no entry — and its answer still belongs to the card's reading, which the request now carries
+    /// separately from what it sent. A sentence-only answer quotes nothing (AI contract §5).
+    @Test func aSentenceOnlyAnswerReachesTheMemory() async {
+        let memory = MeaningAnswerMemory()
+        let sentenceOnly = #"{"outcome":"explanationOnly","quotes":[],"explanation":"Here, to maintain a view."}"#
+        let (session, _, _) = Self.session(
+            settings: MeaningSettings(source: .http, model: "m", sendEntryText: false),
+            provider: StubProvider(answers: [.success(sentenceOnly)]), answers: memory)
+        session.ask()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.sent?.target == nil, "the sentence-only request sent an entry")
+        #expect(session.sent?.reading == MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+        let reading = LedgerReading(surface: "hold", lemma: "hold", sentence: "They hold that view.",
+                                    span: LedgerSpan(start: 5, len: 4), cut: 0, quality: "complete",
+                                    edition: Self.edition.rawValue, entryKey: "hold", occurrence: 0,
+                                    dictionaryName: "Tiny", language: "en", at: 0, device: "d")
+        #expect(memory.answer(for: reading) == "Here, to maintain a view.")
+    }
+
+    /// **An answer begun before a clear does not repopulate the memory** (audit 2026-10-31): the erase or the history
+    /// switch going off wins over a request already in flight.
+    @Test func anAnswerAfterAClearDoesNotRepopulateTheMemory() async {
+        let memory = MeaningAnswerMemory()
+        let release = Flag()
+        let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
+        let entryText = Self.entryText
+        let session = Self.session(fetch: { _, _, _ in .success(entryText) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _, _ in provider },
+                                   answers: memory)
+        session.ask()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 })
+        memory.clear()
+        release.set()
+        #expect(await Self.waitUntil { session.state != .asking })
+        let reading = LedgerReading(surface: "hold", lemma: "hold", sentence: "They hold that view.",
+                                    span: LedgerSpan(start: 5, len: 4), cut: 0, quality: "complete",
+                                    edition: Self.edition.rawValue, entryKey: "hold", occurrence: 0,
+                                    dictionaryName: "Tiny", language: "en", at: 0, device: "d")
+        #expect(memory.answer(for: reading) == nil, "an answer begun before the clear repopulated the memory")
+    }
+
+    /// **The adoption names the query its own lookup will use** (audit 2026-10-31): the window keeps the held sentence
+    /// across that lookup even when the recorded word differs from the entry key (`Hold` / `hold`).
+    @Test func anAdoptedHandoffNamesItsOwnLookupQuery() {
+        let entryText = Self.entryText
+        let matched = Self.matched
+        let session = MeaningSession(fetchEntryText: { _, _, _ in .success(entryText) },
+                                     presented: { (Self.dict, Self.entry) },
+                                     makeProvider: { _, _ in StubProvider(answers: [.success(matched)]) })
+        let expected = MeaningSession.Subject(dictionary: Self.subject.dictionary, key: "hold", occurrence: 0)
+        session.hold(MeaningHandoff(term: "Hold", sentence: "They hold that view.",
+                                    range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 9, generation: 3)),
+                     expecting: expected, adopted: true)
+        #expect(session.adoptedQuery == "hold")
+        #expect(session.held?.term == "Hold")
+        // **The draw consumes the expectation, not the hand-off's own query** (audit 2026-10-31): a later lookup event of
+        // the same lookup — a library change, say — must still keep the sentence.
+        session.adopted(1, handoff: session.handoffToken)
+        session.drawn(expected, target: (Self.dict, Self.entry), lookup: 1)
+        #expect(session.adoptedQuery == "hold")
+        #expect(!SearchWindowState.meaningIsDropped(heldTerm: "Hold", query: "hold",
+                                                    adoptionQuery: session.adoptedQuery, phraseAsked: false))
+        // A plain hold names no query: there is no adopted lookup to keep it across.
+        session.hold(MeaningHandoff(term: "Hold", sentence: "They hold that view.",
+                                    range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 10, generation: 1)))
+        #expect(session.adoptedQuery == nil)
     }
 
     /// **A no-entry failure carries none of the earlier request's evidence** (audit round 4, 2026-10-26): the prompt and

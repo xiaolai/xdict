@@ -125,7 +125,8 @@ public final class SearchWindowState {
 
     public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String,
                 speech: any PronunciationOutput = SystemOutput(),
-                speechPreferences: SpeechPreferences = SpeechPreferences(), panel: Bool = false) {
+                speechPreferences: SpeechPreferences = SpeechPreferences(), panel: Bool = false,
+                answers: MeaningAnswerMemory? = nil) {
         self.library = library
         self.backend = backend
         self.entry = entry
@@ -153,7 +154,8 @@ public final class SearchWindowState {
                 await backend.entryText(dict, entry: entry, maxTextBytes: budget)
             },
             presented: { [weak model] in model.flatMap(Self.drawnEntry) },
-            makeProvider: MeaningProviders.make)
+            makeProvider: MeaningProviders.make,
+            answers: answers)
         // **The reader's choices are Settings ▸ AI's** (plan-ai-meaning WI-6): read at each ask, and only then, so the
         // store is not touched by a window that never asks (and a test never reads the Keychain).
         meaning.settingsProvider = { MeaningPreferences.shared.settings }
@@ -473,6 +475,14 @@ public final class SearchWindowState {
         model.adopt(place, started: { [weak self] serial in self?.meaning.adopted(serial, handoff: token) })
     }
 
+    /// **Whether a changed lookup drops the held sentence** (ADR-0021 d.4; audit 2026-10-31): a query other than the
+    /// hand-off's own term is the reader moving on — except a phrase ask's own lookup, or the adopted lookup a card's
+    /// hand-off began, where the query is the entry key rather than the recorded word.
+    nonisolated static func meaningIsDropped(heldTerm: String, query: String, adoptionQuery: String?,
+                                             phraseAsked: Bool) -> Bool {
+        !phraseAsked && query != heldTerm && query != adoptionQuery
+    }
+
     /// **A lookup replaced the presentation**: a query other than the held sentence's word means the reader moved on, and
     /// the captured sentence is dropped — including a lookup that draws no entry at all, which `drawn` never sees.
     /// **The examples belong to the lookup shown** (ADR-0031 d.9): a new query resets them, and one with no Chinese
@@ -483,7 +493,14 @@ public final class SearchWindowState {
         // sentence's words, while the window looks the dictionary's spelling up, so the two differ by design. Any other
         // query is the reader moving on, and drops the sentence as before.
         let phraseAsk = meaning.held?.phrase != nil && lookup?.query == meaning.held?.phrase
-        if let held = meaning.held, let lookup, lookup.query != held.term, !phraseAsk { clearMeaning() }
+        // **The adoption's own lookup keeps the sentence** (audit 2026-10-31): a history card's recorded word can differ
+        // from the entry key it opens (`Apple` / `apple`), and the lookup the hand-off itself began is not the reader
+        // moving on. Any other query still drops the sentence.
+        if let held = meaning.held, let lookup,
+           Self.meaningIsDropped(heldTerm: held.term, query: lookup.query, adoptionQuery: meaning.adoptedQuery,
+                                 phraseAsked: phraseAsk) {
+            clearMeaning()
+        }
         panes.examplesSearched()
         let kept = examples.update(query: lookup?.query ?? "", handles: exampleHandles,
                                   unavailable: exampleUnavailable)

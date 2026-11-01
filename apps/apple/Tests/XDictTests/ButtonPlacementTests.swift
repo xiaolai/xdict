@@ -57,6 +57,7 @@ struct ButtonPlacementTests {
         "explore-tab": "the Explore panel's tab row: a wrapping strip of chips the panel places itself, at its own wrap rather than a form's row (owner, 2026-10-29)",
         "meaning-chip": "\"Meaning here\" on the presented term (ADR-0021 d.1): the popover's title row and the main window's entry corner, both drawn by their container",
         "history-menu": "the reading-history drawer's language menu, a menu the system lays out (plan-history-and-learning WI-4)",
+        "history-card": "a history card's own context disclosure: the resting line's chevron and its fold control, placed by the card (ADR-0037)",
         "menubar-item": "an NSMenuItem's key equivalent: the menu-bar item's menu is drawn and dispatched by the system, and its items are not buttons a view places",
     ]
 

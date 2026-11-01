@@ -59,6 +59,9 @@ public final class StudyModel {
     /// What the review window opens the card's entry through (UI48): the shell's library and main window, wired by the
     /// app. Nil offers no Open Entry.
     @ObservationIgnored public var entryLinks: HistoryEntryLinks?
+    /// **An erase took every reading, note and grade** (ADR-0037): the app-session answer memory goes with them, since
+    /// each answer is about a reading the ledger no longer holds.
+    @ObservationIgnored public var onErased: (@MainActor () -> Void)?
 
     @ObservationIgnored private let service: any StudyService
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -242,6 +245,7 @@ public final class StudyModel {
         let result = await service.call(.eraseData(stamp: stamp, operation: UUID().uuidString))
         guard case .success(let delivered) = result, case .erased(let report) = delivered.answer else { return nil }
         notes = []
+        onErased?()
         await refresh()
         return report
     }

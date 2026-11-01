@@ -17889,6 +17889,89 @@
           }
         }
       }
+    },
+    "Show context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show context"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示上下文"
+          }
+        }
+      }
+    },
+    "Hide context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide context"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏上下文"
+          }
+        }
+      }
+    },
+    "AI answer": {
+      "comment": "The mark on a gloss that is the reader's own AI answer",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI answer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 释义"
+          }
+        }
+      }
+    },
+    "Ask AI": {
+      "comment": "History card action: ask the AI about this reading",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask AI"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "询问 AI"
+          }
+        }
+      }
+    },
+    "as %@": {
+      "comment": "A word's lemma, when the dictionary's form differs: e.g. as run",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作 %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

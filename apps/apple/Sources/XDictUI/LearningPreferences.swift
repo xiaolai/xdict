@@ -20,10 +20,17 @@ public final class LearningPreferences {
 
     @ObservationIgnored private let defaults: UserDefaults
 
+    /// **The switch's transition**, so what is held in memory can be cleared at once (ADR-0037): the drawer's data is
+    /// dropped when it next refreshes, and an answer already kept must not outlive the switch. Nil in tests.
+    @ObservationIgnored public var onHistoryChanged: (@MainActor (Bool) -> Void)?
+
     /// **On for a new reader** (ADR-0023): a history that begins empty because the switch was never found is a failed
     /// feature; one click turns it off. Off means no reading is written at all — not the sentence, not the word.
     public var historyEnabled: Bool {
-        didSet { defaults.set(historyEnabled, forKey: Key.history) }
+        didSet {
+            defaults.set(historyEnabled, forKey: Key.history)
+            if historyEnabled != oldValue { onHistoryChanged?(historyEnabled) }
+        }
     }
 
     /// The languages a reading must be in to be written; **empty keeps every language** (D5). The core decides, so every

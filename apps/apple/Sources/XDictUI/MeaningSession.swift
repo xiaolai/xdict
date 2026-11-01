@@ -189,14 +189,18 @@ public struct MeaningSent: Sendable, Equatable {
     public let questionContext: MeaningContext?
     /// **The entry the request sent**, so the pane's evidence reveals the right frame (UI11); nil when no entry went.
     public let target: MeaningTarget?
+    /// **The entry the sentence was captured from, in the app's terms** (ADR-0037): the reading a history card is
+    /// identified by. It is never sent — `target` is what went — and it is present in `sentenceOnly` mode too, whose
+    /// request carries no entry but whose answer still belongs to this card.
+    public let reading: MeaningTarget?
     /// **The language the answer was asked in** (contract 6): the translation's target in `translate` mode, the
     /// explanation's language otherwise. Frozen with the request, so a Settings change cannot relabel an old answer.
     public let language: String?
 
     public init(text: String, mode: AIMode, source: AIProviderKind?, complete: Bool, cutAt: UInt64,
                 sense: AISense? = nil, dictionaryName: String? = nil, questionContext: MeaningContext? = nil,
-                target: MeaningTarget? = nil, model: String? = nil, endpointHost: String? = nil,
-                language: String? = nil) {
+                target: MeaningTarget? = nil, reading: MeaningTarget? = nil, model: String? = nil,
+                endpointHost: String? = nil, language: String? = nil) {
         self.text = text
         self.mode = mode
         self.source = source
@@ -208,6 +212,7 @@ public struct MeaningSent: Sendable, Equatable {
         self.dictionaryName = dictionaryName
         self.questionContext = questionContext
         self.target = target
+        self.reading = reading
         self.language = language
     }
 }
@@ -330,6 +335,9 @@ public final class MeaningSession {
     /// place may still equal the model's current value, so nothing but the adoption's own lookup may bind the sentence
     /// (verification finding, 2026-10-20).
     @ObservationIgnored private var awaitsAdoptedPlace = false
+    /// **The query the held sentence's hand-off began** (audit 2026-10-31): the draw consumes `askWhenDrawnExpected`, but
+    /// a later lookup event of that same lookup must still keep the sentence.
+    @ObservationIgnored private var adoptedPlaceQuery: String?
     /// The lookup the adoption itself began, reported with the hand-off it belongs to; nil until then.
     @ObservationIgnored private var adoptionSerial: Int?
     /// **Which hand-off the sentence is**: a callback from an adoption a newer hand-off superseded must not name the
@@ -365,6 +373,10 @@ public final class MeaningSession {
     @ObservationIgnored private let fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>
     @ObservationIgnored private let presented: @MainActor () -> (DictId, EntryRef)?
     @ObservationIgnored private let makeProvider: @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider
+    /// **The app-session memory a finished meaning answer is published to** (ADR-0037): nil in tests and instruments
+    /// that keep no answers. It is not a second store: the answer lives in memory only, and this only lets a history
+    /// card show it after the pane has moved on.
+    @ObservationIgnored private let answers: MeaningAnswerMemory?
     @ObservationIgnored private var running: Task<Void, Never>?
     /// **The operation `running` is executing**: a cleared chosen sense must be able to invalidate a preview or ask still
     /// being composed (audit finding, 2026-10-25).
@@ -377,6 +389,9 @@ public final class MeaningSession {
     public private(set) var askingTarget: MeaningTarget?
     /// Bumped by every ask, cancel and clear: a task finishing after one of them changes nothing.
     @ObservationIgnored private var generation = 0
+    /// **The answer memory's epoch when this ask starts** (ADR-0037): a clear, a card's removal or the history switch
+    /// going off invalidates every ask in flight, so a late answer is not published into the cleared memory.
+    @ObservationIgnored private var askingEpoch: UInt64 = 0
     /// **Counts every ask, Send or preview task that finished, stale or not** (audit round 2, 2026-10-25): a test's signal
     /// that a released operation is over. Nothing in the app reads it.
     public private(set) var settled = 0
@@ -386,10 +401,12 @@ public final class MeaningSession {
     /// - `makeProvider` builds the source `settings` names (a fake in the tests).
     public init(fetchEntryText: @escaping @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
                 presented: @escaping @MainActor () -> (DictId, EntryRef)?,
-                makeProvider: @escaping @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider) {
+                makeProvider: @escaping @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
+                answers: MeaningAnswerMemory? = nil) {
         self.fetchEntryText = fetchEntryText
         self.presented = presented
         self.makeProvider = makeProvider
+        self.answers = answers
     }
 
     /// Whether the ask button has something to ask about. The source is the settings' business; a missing one says so
@@ -521,6 +538,9 @@ public final class MeaningSession {
         // The entry the sentence belongs to is remembered even without an ask owed: a manual ask before it draws must
         // wait for it, not ground in whatever the window shows (verification finding, 2026-10-20).
         askWhenDrawnExpected = expecting
+        // **The hand-off's own lookup, for the sentence's whole life** (audit 2026-10-31): the draw consumes
+        // `askWhenDrawnExpected`, but a later lookup event of the same lookup must not drop the sentence.
+        adoptedPlaceQuery = expecting?.key
         state = .idle
     }
 
@@ -581,6 +601,14 @@ public final class MeaningSession {
     public func adopted(_ serial: Int, handoff: Int) {
         guard awaitsAdoptedPlace, handoff == handoffToken else { return }
         adoptionSerial = serial
+    }
+
+    /// **The query the held sentence's adoption expects**, or nil: the adopted lookup's own entry key. It lives as long
+    /// as the sentence, not only while the adoption is pending: a later `lookupDidChange()` of the same lookup (a
+    /// library change, say) must keep the sentence too (audit 2026-10-31). A window keeps the sentence across that
+    /// lookup even when the recorded word differs from the entry key (`Apple` / `apple`).
+    public var adoptedQuery: String? {
+        adoptedPlaceQuery
     }
 
     public func drawn(_ subject: Subject, target: (DictId, EntryRef)? = nil, lookup: Int? = nil) {
@@ -682,6 +710,7 @@ public final class MeaningSession {
         boundTarget = nil
         awaitsAdoptedPlace = false
         adoptionSerial = nil
+        adoptedPlaceQuery = nil
         dropEvidence()
         selection = nil
         lastOperation = nil
@@ -953,14 +982,17 @@ public final class MeaningSession {
         askingModel = chosen.source == .http && !chosen.model.isEmpty ? chosen.model : nil
         askingHost = chosen.source == .http ? chosen.endpoint?.host() : nil
         askingTarget = target.map { MeaningTarget(dictionary: $0.0, entry: $0.1) }
+        askingEpoch = answers?.epoch ?? 0
         runningOperation = operation
         let fetchEntryText = self.fetchEntryText
         let makeProvider = self.makeProvider
         let recheck = Self.consentReader(self)
         let name = dictionaryName(for: operation, target: target)
+        let reading = readingTarget(operation, resolved: target)
         running = Task { [weak self] in
             let outcome = await Self.composeAndSend(handoff: handoff, mode: operation.mode, target: target,
-                                             selection: operation.selection, dictionaryName: name, settings: chosen,
+                                             reading: reading, selection: operation.selection, dictionaryName: name,
+                                             settings: chosen,
                                              fetchEntryText: fetchEntryText, makeProvider: makeProvider,
                                              recheck: recheck)
             guard let self else { return }
@@ -981,6 +1013,11 @@ public final class MeaningSession {
         askingTarget = nil
         state = outcome.state
         sent = outcome.sent
+        // **A finished ask reaches the session's memory** (ADR-0037): only a validated answer that states a meaning is
+        // kept there; the memory applies those rules itself, so a refusal, a translation or a failed ask changes
+        // nothing. This is the one place an answer is published — asks and Send share it — and the epoch captured when
+        // the ask began makes a clear or a removal since then win.
+        answers?.publish(outcome.state, sent: outcome.sent, epoch: askingEpoch)
     }
 
     /// **Send, from a preview**: the Send button's own action. It transmits the previewed bytes themselves — no refetch,
@@ -1007,6 +1044,7 @@ public final class MeaningSession {
         sent = previewed
         state = .asking
         askingSource = current.source
+        askingEpoch = answers?.epoch ?? 0
         // **The previewed request's own name** (verification 2026-10-27): a Send shows the model and host it was composed
         // for, exactly as the answer will keep them.
         askingModel = previewed.model
@@ -1058,6 +1096,15 @@ public final class MeaningSession {
             guard let drawn = presented() else { return .refused(.noEntry) }
             return .resolved(drawn)
         }
+    }
+
+    /// **The entry the held sentence belongs to**, whether or not the request carries it (ADR-0037): the explicit
+    /// target, then what the ask grounds in, then the entry the sentence's own draw bound. A sentence-only ask sends no
+    /// entry, and its answer still names this card's reading.
+    private func readingTarget(_ operation: Operation, resolved: (DictId, EntryRef)?) -> (DictId, EntryRef)? {
+        if let explicit = operation.target { return (explicit.dictionary, explicit.entry) }
+        if let resolved { return resolved }
+        return subject == nil ? nil : boundTarget
     }
 
     /// **Preview the request without sending it** (ADR-0021 d.13): the same composition an ask would send — the reader's
@@ -1112,8 +1159,9 @@ public final class MeaningSession {
         runningOperation = operation
         let fetchEntryText = self.fetchEntryText
         let name = dictionaryName(for: operation, target: target)
+        let reading = readingTarget(operation, resolved: target)
         running = Task { [weak self] in
-            let composed = await Self.compose(handoff: handoff, mode: operation.mode, target: target,
+            let composed = await Self.compose(handoff: handoff, mode: operation.mode, target: target, reading: reading,
                                               selection: operation.selection, dictionaryName: name, settings: chosen,
                                               fetchEntryText: fetchEntryText)
             guard let self else { return }
@@ -1203,8 +1251,8 @@ public final class MeaningSession {
     /// **Composition alone**: the entry under the budget, the chosen sense, the question, the template. No provider,
     /// no send — shared by an ask and a preview, so the prompt a preview shows is byte for byte the prompt an ask sends.
     private nonisolated static func compose(
-        handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
-        dictionaryName: String?, settings: MeaningSettings,
+        handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, reading: (DictId, EntryRef)?,
+        selection: MeaningSelection?, dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>
     ) async -> Composed {
         // A source is required to have come this far (`ask` refuses without one).
@@ -1262,6 +1310,7 @@ public final class MeaningSession {
                                           target: mode.carriesEntry ? target.map {
                                               MeaningTarget(dictionary: $0.0, entry: $0.1)
                                           } : nil,
+                                          reading: reading.map { MeaningTarget(dictionary: $0.0, entry: $0.1) },
                                           model: settings.source == .http && !settings.model.isEmpty
                                               ? settings.model : nil,
                                           endpointHost: settings.source == .http ? settings.endpoint?.host() : nil,
@@ -1352,15 +1401,15 @@ public final class MeaningSession {
     /// **A direct ask's composition and send**, apart from the session's state so cancellation is decided by `generation`
     /// alone. The preview's own Send is `sendPreview()`.
     private nonisolated static func composeAndSend(
-        handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
-        dictionaryName: String?, settings: MeaningSettings,
+        handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, reading: (DictId, EntryRef)?,
+        selection: MeaningSelection?, dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
         makeProvider: @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
         recheck: @Sendable () async -> MeaningSettings
     ) async -> Performed {
         guard settings.source != nil else { return Performed(state: .unavailable(.noSource), sent: nil) }
-        let composed = await Self.compose(handoff: handoff, mode: mode, target: target, selection: selection,
-                                          dictionaryName: dictionaryName, settings: settings,
+        let composed = await Self.compose(handoff: handoff, mode: mode, target: target, reading: reading,
+                                          selection: selection, dictionaryName: dictionaryName, settings: settings,
                                           fetchEntryText: fetchEntryText)
         // **Nothing was sent on a refusal** (audit rounds 1–4, 2026-10-26): `sent` is what the pane's evidence names and
         // what a note records as its provenance; a request that stopped at a check never reached the source.

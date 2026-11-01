@@ -80,9 +80,9 @@ struct HistoryRemovalReachTests {
 
     @Test func everyCardActionIsReachableWithoutAPointer() {
         // One list feeds the context menu and the VoiceOver actions; Remove is in it, not only behind a hover.
-        let all = HistoryCardAction.actions(canNote: true, canOpen: true)
-        #expect(all == [.openEntry, .note, .remove])
-        #expect(HistoryCardAction.actions(canNote: false, canOpen: false) == [.remove],
+        let all = HistoryCardAction.actions(canNote: true, canOpen: true, canAsk: true)
+        #expect(all == [.openEntry, .note, .askAI, .remove])
+        #expect(HistoryCardAction.actions(canNote: false, canOpen: false, canAsk: false) == [.remove],
                 "Remove never depends on the other surfaces being wired")
     }
 }

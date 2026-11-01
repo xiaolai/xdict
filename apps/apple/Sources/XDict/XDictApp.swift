@@ -99,11 +99,18 @@ struct XDictApp: App {
     /// **The reading history** (ADR-0023): the drawer's days and the one place a reading is recorded. The core owns every
     /// rule; the preferences are Settings ▸ Learning's, and off means nothing is written at all.
     @MainActor static let history = HistoryModel(service: service, preferences: LearningPreferences.shared)
+    /// **The reader's meaning answers, while the app runs** (ADR-0037): memory only, never written or logged. Each main
+    /// window publishes into it; a history card reads from it. It dies with the process.
+    @MainActor static let meaningAnswers = MeaningAnswerMemory()
     /// **The review session** (plan-history-and-learning §5): the due queue, a grade, an undo and a note. The core owns
     /// eligibility and scheduling; this is the reader's side of it. Every load of the summary replans the one reminder.
     @MainActor static let study: StudyModel = {
         let study = StudyModel(service: service)
         study.summaryChanged = { summary in Task { await XDictApp.reminders.refresh(summary: summary) } }
+        study.onErased = {
+            XDictApp.meaningAnswers.clear()
+            XDictApp.history.clearGlosses()
+        }
         return study
     }()
     /// **Review reminders** (plan §5.4): the reader's switch, the system's permission and the one pending notification.
@@ -268,7 +275,7 @@ struct XDictApp: App {
         let state = SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
                                       speech: SystemOutput(volume: setup.speechVolume),
                                       speechPreferences: SpeechPreferences(defaults: setup.speechDefaults),
-                                      panel: panel)
+                                      panel: panel, answers: XDictApp.meaningAnswers)
         // **The pane's Save as Note** (plan-companion WI-9; owner, 2026-10-25): the app's study model, behind the reader's
         // explicit tap; a note already on the entry is replaced only after the pane asks.
         // **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): the pane no longer asks first, so a note

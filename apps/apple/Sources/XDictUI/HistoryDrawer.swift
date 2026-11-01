@@ -15,17 +15,10 @@ public enum HistoryRuns {
     public static func runs(sentence: String, span: LedgerSpan?, cut: UInt8) -> [Run] {
         var runs: [Run] = []
         if cut & 1 != 0 { runs.append(.text("…")) }
-        if let span {
-            // A span outside the sentence is clamped, never a crash: the capture validates it, and a corrupt record must
-            // not take the drawer down with it.
-            let units = sentence.utf16.count
-            let start = min(max(0, Int(span.start)), units)
-            let end = min(start + max(0, Int(span.len)), units)
-            let first = String.Index(utf16Offset: start, in: sentence)
-            let second = String.Index(utf16Offset: end, in: sentence)
-            let before = String(sentence[..<first])
-            let word = String(sentence[first..<second])
-            let after = String(sentence[second...])
+        if let range = wordRange(sentence: sentence, span: span) {
+            let before = String(sentence[..<range.lowerBound])
+            let word = String(sentence[range])
+            let after = String(sentence[range.upperBound...])
             if !before.isEmpty { runs.append(.text(before)) }
             if !word.isEmpty { runs.append(.word(word)) }
             if !after.isEmpty { runs.append(.text(after)) }
@@ -34,6 +27,37 @@ public enum HistoryRuns {
         }
         if cut & 2 != 0 { runs.append(.text("…")) }
         return runs
+    }
+
+    /// **The runs as the one string a screen reader hears**: the preview and the opened sentence are styled runs, but
+    /// their accessibility text is the sentence itself, ellipses included.
+    public static func plain(_ runs: [Run]) -> String {
+        var text = ""
+        for run in runs {
+            switch run {
+            case .text(let part), .word(let part): text += part
+            }
+        }
+        return text
+    }
+
+    /// **The span as a validated range** (audit 2026-10-31): clamped to the sentence's UTF-16 length, and nil when it
+    /// names nothing or does not fall on a character boundary — a corrupt record produces no word run, never a trap or a
+    /// split grapheme. The one conversion both the expanded sentence and the collapsed window use.
+    public static func wordRange(sentence: String, span: LedgerSpan?) -> Range<String.Index>? {
+        guard let span else { return nil }
+        let units = sentence.utf16.count
+        let start = min(max(0, Int(span.start)), units)
+        let end = min(start + max(0, Int(span.len)), units)
+        guard end > start else { return nil }
+        guard let valid = Range(NSRange(location: start, length: end - start), in: sentence) else { return nil }
+        // **The conversion keeps an offset that falls inside a Character** — a surrogate pair, a combining mark — so the
+        // landed indices are checked against the string's own Character boundaries: a corrupt span names no word rather
+        // than half of one.
+        let boundaries = sentence.indices
+        let isBoundary = { (index: String.Index) in index == sentence.endIndex || boundaries.contains(index) }
+        guard isBoundary(valid.lowerBound), isBoundary(valid.upperBound) else { return nil }
+        return valid
     }
 }
 
@@ -54,6 +78,11 @@ public struct HistoryView: View {
     /// The card the pointer is over: its controls show while it is there, or while the card has keyboard focus.
     @State private var hovered: LedgerCard?
     @FocusState private var focused: LedgerCard?
+    /// **The cards whose whole sentence is open** (ADR-0037), keyed by the reading rather than the card: a repeat on
+    /// the same day changes `times`, not the reading, and the disclosure must survive that. Closing the drawer folds
+    /// them, so the next open starts as a list.
+    @State private var expanded: Set<LedgerReading> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var initialDraft = ""
     /// A card whose notes could not be read: its editor stays shut rather than open empty over the reader's words.
     @State private var notesUnreadable: LedgerReading?
@@ -107,6 +136,10 @@ public struct HistoryView: View {
             // **A bar, not an overlay** (UI44): the list ends above the notice, so it never covers the last card.
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 removalToast
+            }
+            // A closed drawer is a fresh list: no card stays open behind the slide.
+            .onChange(of: presentation.revealed) { _, revealed in
+                if !revealed { expanded.removeAll() }
             }
     }
 
@@ -242,23 +275,30 @@ public struct HistoryView: View {
     }
 
     @ViewBuilder private func cardView(_ card: LedgerCard) -> some View {
+        // **The card's content as one value** (ADR-0037): the word first, then the gloss the reader last got for this
+        // reading (or the recorded edition's own), then one line of its context.
+        let content = HistoryCardContent(card: card, answer: model.answer(for: card),
+                                         dictionaryGloss: model.gloss(for: card))
+        // **What a screen reader hears and may do** (plan item 7): the four lines as the card's label, and every card
+        // operation as its custom action. A container's actions are never announced — the reader focuses its children —
+        // and a written representation drops them too (both checked by the UI tour, 2026-11-01), so the card itself is
+        // the leaf that carries them. A note editor or a status message makes it a container again, so those stay
+        // reachable.
+        let special = noting == card.reading || unopened?.reading == card.reading || notesUnreadable == card.reading
+        let expandedNow = expanded.contains(card.reading)
+        let contextText = HistoryRuns.plain(expandedNow
+            ? HistoryRuns.runs(sentence: card.reading.sentence, span: card.reading.span, cut: card.reading.cut)
+            : content.context)
+        let spoken = content.spoken(context: contextText,
+                                    time: Date(timeIntervalSince1970: content.at)
+                                        .formatted(date: .omitted, time: .shortened))
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-            // Selectable text, and only that: copying the sentence never navigates (UI46).
-            sentence(card.reading)
-                .font(Tokens.TextRole.body.font)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-            HStack(spacing: Tokens.Space.xs) {
-                Text(card.reading.dictionaryName.isEmpty
-                     ? String(localized: "Unknown dictionary") : card.reading.dictionaryName)
-                Text(verbatim: "·")
-                Text(Date(timeIntervalSince1970: card.reading.at), style: .time)
-                if card.times > 1 {
-                    Text(verbatim: "×\(card.times)")
-                }
+            wordLine(content)
+            if let gloss = content.gloss {
+                glossLine(gloss)
             }
-            .font(Tokens.TextRole.caption.font)
-            .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            context(card, content)
+            metadata(content)
             if let unopened, unopened.reading == card.reading, let why = unopened.link.explanation {
                 unavailable(why, key: card.reading.entryKey)
             }
@@ -304,19 +344,29 @@ public struct HistoryView: View {
         .onHover { inside in
             hovered = inside ? card : (hovered == card ? nil : hovered)
         }
+        // **A visible card asks for its dictionary gloss once** (ADR-0037): the model caches it, limits how many run at
+        // once, and asks again only for a failed edition, on the next drawer open.
+        .task(id: HistoryModel.GlossRequest(reading: card.reading, revision: model.glossRevision)) {
+            model.loadGloss(for: card)
+        }
         .focusable()
         .focused($focused, equals: card)
         // Delete removes the focused card, as in a list; the undo stays reachable (UI43, UI44).
         .onDeleteCommand { perform(.remove, on: card) }
-        // The card reads as one element; its note editor is its own, so a combined card would hide the field.
-        .accessibilityElement(children: noting == card.reading ? .contain : .combine)
-        .accessibilityActions {
-            ForEach(actions, id: \.self) { action in
-                Button(String(localized: action.title)) { perform(action, on: card) }  // placement: history-menu
-            }
-        }
+        // Space opens or folds the context; Return opens the entry. Both are list habits, and the pointer keeps its
+        // own control — the card body stays free for selecting the open sentence.
+        .onKeyPress(.space) { toggleContext(card.reading); return .handled }
+        .onKeyPress(.return) { perform(.openEntry, on: card); return .handled }
+        // **One card, one element, every operation on it** (plan item 7): its four lines are the label and its actions
+        // are custom actions; a container or a representation would drop them (see `CardAccessibility`).
+        .modifier(CardAccessibility(narrated: !special, label: spoken,
+                                    contextTitle: contextActionTitle(card.reading), actions: actions,
+                                    toggle: { toggleContext(card.reading) },
+                                    perform: { perform($0, on: card) }))
         .accessibilityIdentifier("history.card")
         .contextMenu {
+            Button(String(localized: contextActionTitle(card.reading))) { toggleContext(card.reading) }  // placement: history-menu
+            Divider()
             ForEach(actions, id: \.self) { action in
                 if action == .remove { Divider() }
                 Button(String(localized: action.title)) { perform(action, on: card) }  // placement: history-menu
@@ -324,9 +374,133 @@ public struct HistoryView: View {
         }
     }
 
-    /// The actions this drawer can offer: Remove always; Note and Open Entry where the app wired them.
+    /// **The card's four lines, drawn from one value** (ADR-0037). The word is the card's title; the gloss says what it
+    /// meant; the context is one line around the word; the metadata names where and when.
+    private func wordLine(_ content: HistoryCardContent) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+            Text(verbatim: content.word)
+                .font(Tokens.TextRole.headline.font)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+            if let lemma = content.lemma {
+                Text("as \(lemma)")
+                    .font(Tokens.TextRole.caption.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if content.times > 1 {
+                Text(verbatim: "×\(content.times)")
+                    .font(Tokens.TextRole.caption.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            }
+        }
+    }
+
+    /// **What the word meant** (ADR-0037): the reader's answer, marked AI, or the recorded edition's first sense. The
+    /// part of speech leads when one is known; the AI mark says whose wording this is, never the dictionary's.
+    private func glossLine(_ gloss: HistoryCardGloss) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+            if let pos = gloss.pos, !pos.isEmpty {
+                Text(verbatim: pos)
+                    .font(Tokens.TextRole.callout.font)
+                    .italic()
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            }
+            if gloss.source == .ai {
+                HStack(spacing: Tokens.Space.xxs) {
+                    Image(systemName: "sparkles")
+                    Text(verbatim: "AI")
+                }
+                .font(Tokens.TextRole.caption.font)
+                .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("AI answer"))
+            }
+            Text(verbatim: gloss.text)
+                .font(Tokens.TextRole.callout.font)
+                .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+    }
+
+    /// **The context, one line at rest and whole when opened** (ADR-0037): the resting line is the preview window, never
+    /// selectable; the opened sentence is the full selectable text, and the control that folds it sits beside it, so a
+    /// drag selects rather than toggles.
+    @ViewBuilder private func context(_ card: LedgerCard, _ content: HistoryCardContent) -> some View {
+        if expanded.contains(card.reading) {
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                sentence(HistoryRuns.runs(sentence: card.reading.sentence, span: card.reading.span,
+                                          cut: card.reading.cut))
+                    .font(Tokens.TextRole.body.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.label.nsColor))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                Button { toggleContext(card.reading) } label: {  // placement: history-card
+                    HStack(spacing: Tokens.Space.xxs) {
+                        Text(contextActionTitle(card.reading))
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(Tokens.TextRole.caption.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("history.expandContext")
+                .help(Text("Hide context"))
+            }
+        } else {
+            Button { toggleContext(card.reading) } label: {  // placement: history-card
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+                    sentence(content.context)
+                        .font(Tokens.TextRole.callout.font)
+                        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(Tokens.TextRole.caption.font)
+                        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("history.expandContext")
+            .accessibilityHint(Text("Show context"))
+            .help(Text("Show context"))
+        }
+    }
+
+    private func metadata(_ content: HistoryCardContent) -> some View {
+        HStack(spacing: Tokens.Space.xs) {
+            Text(verbatim: content.dictionaryName.isEmpty
+                 ? String(localized: "Unknown dictionary") : content.dictionaryName)
+            Text(verbatim: "·")
+            Text(Date(timeIntervalSince1970: content.at), style: .time)
+        }
+        .font(Tokens.TextRole.caption.font)
+        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+    }
+
+    /// A card opens and folds without a spring of its own: the system's default disclosure animation, and none when the
+    /// reader has asked for reduced motion.
+    private func toggleContext(_ reading: LedgerReading) {
+        withAnimation(reduceMotion ? nil : .default) {
+            if expanded.contains(reading) {
+                expanded.remove(reading)
+            } else {
+                expanded.insert(reading)
+            }
+        }
+    }
+
+    private func contextActionTitle(_ reading: LedgerReading) -> LocalizedStringResource {
+        expanded.contains(reading) ? "Hide context" : "Show context"
+    }
+
+    /// The actions this drawer can offer: Remove always; Note, Open Entry and Ask AI where the app wired them.
     private var actions: [HistoryCardAction] {
-        HistoryCardAction.actions(canNote: study != nil, canOpen: model.entryLinks != nil)
+        HistoryCardAction.actions(canNote: study != nil, canOpen: model.entryLinks != nil,
+                                  canAsk: model.entryLinks?.openMeaning != nil)
     }
 
     private func glyph(_ symbol: String, _ action: HistoryCardAction, card: LedgerCard, id: String) -> some View {
@@ -336,7 +510,9 @@ public struct HistoryView: View {
         }
         .buttonStyle(.plain)
         .help(String(localized: action.title))
-        .accessibilityLabel(Text(action.title))
+        // **The glyphs are pointer controls** (plan item 7): their actions are the card's custom actions, so a screen
+        // reader never meets a second, hover-only copy of them.
+        .accessibilityHidden(true)
         .accessibilityIdentifier(id)
     }
 
@@ -344,13 +520,20 @@ public struct HistoryView: View {
         switch action {
         case .remove:
             Task { await model.remove(card) }
-        case .openEntry:
+        case .openEntry, .askAI:
+            // **One resolution for both** (audit 2026-10-31): the two actions differ only in where a resolved entry
+            // goes, so the guard, the lookup and the refusal are written once.
             guard let links = model.entryLinks else { return }
             let link = links.resolve(EntryRef(reading: card.reading))
-            if case .entry(let result) = link {
+            switch link {
+            case .entry(let result):
                 unopened = nil
-                links.open(HistoryEntryLink.visit(opening: result))
-            } else {
+                if action == .openEntry {
+                    links.open(HistoryEntryLink.visit(opening: result))
+                } else if let openMeaning = links.openMeaning {
+                    openMeaning(result, card.reading)
+                }
+            case .dictionaryOff, .editionMissing:
                 unopened = Unopened(reading: card.reading, link: link)
             }
         case .note:
@@ -375,10 +558,11 @@ public struct HistoryView: View {
     }
 
     /// The sentence as one attributed run, the word in bold: `Text` concatenation is deprecated on macOS 26, and its
-    /// suggested interpolation cannot mark part of a string.
-    private func sentence(_ reading: LedgerReading) -> Text {
+    /// suggested interpolation cannot mark part of a string. The preview and the whole sentence are the same runs,
+    /// only windowed differently.
+    private func sentence(_ runs: [HistoryRuns.Run]) -> Text {
         var text = AttributedString()
-        for run in HistoryRuns.runs(sentence: reading.sentence, span: reading.span, cut: reading.cut) {
+        for run in runs {
             switch run {
             case .text(let part):
                 text.append(AttributedString(part))
@@ -398,6 +582,36 @@ public struct HistoryView: View {
         case .yesterday: return String(localized: "Yesterday")
         case .weekday: return date.formatted(.dateTime.weekday(.wide))
         case .date: return date.formatted(.dateTime.year().month(.wide).day())
+        }
+    }
+}
+
+/// **A card as a screen reader hears and operates it** (plan item 7; the UI tour of 2026-11-01 found the derived
+/// element spoke only its provenance): the four lines are its label and its operations are custom actions, because a
+/// container's own actions are never announced — the reader focuses its children — and a written representation drops
+/// them too (`AXCustomActions` read as a failure). A note editor or a status message makes the card a container again,
+/// so the element the reader must reach there stays in the tree.
+private struct CardAccessibility: ViewModifier {
+    let narrated: Bool
+    let label: String
+    let contextTitle: LocalizedStringResource
+    let actions: [HistoryCardAction]
+    let toggle: () -> Void
+    let perform: (HistoryCardAction) -> Void
+
+    @ViewBuilder func body(content view: Content) -> some View {
+        if narrated {
+            view
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: label))
+                .accessibilityActions {
+                    Button(String(localized: contextTitle)) { toggle() }  // placement: history-menu
+                    ForEach(actions, id: \.self) { action in
+                        Button(String(localized: action.title)) { perform(action) }  // placement: history-menu
+                    }
+                }
+        } else {
+            view.accessibilityElement(children: .contain)
         }
     }
 }

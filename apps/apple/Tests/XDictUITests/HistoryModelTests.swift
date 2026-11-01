@@ -6,6 +6,7 @@ import XDictCapture
 import XDictClient
 import XDictContract
 import XDictLibrary
+import XDictTestSupport
 import XDictTokens
 import XDictUI
 
@@ -78,10 +79,16 @@ actor FakeHistoryService: HistoryService {
     private(set) var operations: [ServiceOperation] = []
     var history: LedgerHistory
     var outcomes: [LedgerRecordOutcome]
+    /// What an `entryGloss` answers: the text and its part of speech, or none.
+    let gloss: String?
+    let glossFails: Bool
 
-    init(history: LedgerHistory = LedgerHistory(days: []), outcomes: [LedgerRecordOutcome] = [.recorded]) {
+    init(history: LedgerHistory = LedgerHistory(days: []), outcomes: [LedgerRecordOutcome] = [.recorded],
+         gloss: String? = "to keep; to maintain", glossFails: Bool = false) {
         self.history = history
         self.outcomes = outcomes
+        self.gloss = gloss
+        self.glossFails = glossFails
     }
 
     func call(_ operation: ServiceOperation) async -> ClientOutcome {
@@ -95,6 +102,11 @@ actor FakeHistoryService: HistoryService {
         case .ledgerRecord:
             let outcome = outcomes.isEmpty ? .recorded : outcomes.removeFirst()
             return .success(Delivered(answer: .ledgerRecord(outcome), payload: nil))
+        case .entryGloss(let entry):
+            guard !glossFails else { return .failure(.wire(.refused(.unsupportedOperation))) }
+            return .success(Delivered(answer: .entryGloss(
+                EntryGloss(entry: entry, text: gloss, pos: gloss == nil ? nil : "verb",
+                           source: gloss == nil ? nil : .definition, truncated: false)), payload: nil))
         default:
             return .failure(.wire(.refused(.unsupportedOperation)))
         }
@@ -102,6 +114,34 @@ actor FakeHistoryService: HistoryService {
 
     func recorded() -> [ServiceOperation] {
         operations.filter { if case .ledgerRecord = $0 { return true } else { return false } }
+    }
+}
+
+/// A history service whose gloss answer waits for the test's release: a reply already on its way when the drawer clears
+/// or the card goes (audit 2026-10-31).
+actor SlowGlossHistoryService: HistoryService {
+    private let release: Flag
+    private let gloss: EntryGloss
+    private(set) var glossesSettled = 0
+
+    init(release: Flag, gloss: EntryGloss) {
+        self.release = release
+        self.gloss = gloss
+    }
+
+    func call(_ operation: ServiceOperation) async -> ClientOutcome {
+        switch operation {
+        case .entryGloss:
+            while !release.isSet { try? await Task.sleep(for: .milliseconds(5)) }
+            glossesSettled += 1
+            return .success(Delivered(answer: .entryGloss(gloss), payload: nil))
+        case .ledgerHistory:
+            return .success(Delivered(answer: .ledgerHistory(LedgerHistory(days: [])), payload: nil))
+        case .ledgerRemove, .ledgerRestore:
+            return .success(Delivered(answer: .ledgerRecord(.recorded), payload: nil))
+        default:
+            return .failure(.wire(.refused(.unsupportedOperation)))
+        }
     }
 }
 
@@ -385,5 +425,173 @@ struct StatusItemClickTests {
         #expect(StatusItemClick.isSecondary(Self.event(.leftMouseUp, control: true)))
         #expect(!StatusItemClick.isSecondary(Self.event(.leftMouseUp)))
         #expect(!StatusItemClick.isSecondary(nil), "a VoiceOver press carries no mouse event: the history, not the menu")
+    }
+}
+
+/// **The dictionary gloss the drawer fetches** (ADR-0037): once per card, cached by the recorded edition, two at a
+/// time, and asked again only after a failure when the drawer opens. A card whose edition answers nothing shows no line.
+@MainActor
+struct HistoryGlossModelTests {
+    static func glossCalls(_ service: FakeHistoryService) async -> Int {
+        let calls = await service.operations
+        return calls.filter { if case .entryGloss = $0 { return true } else { return false } }.count
+    }
+
+    @Test func aCardsGlossIsFetchedOnceAndCached() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+
+        model.loadGloss(for: card)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+        #expect(model.gloss(for: card)?.text == "to keep; to maintain")
+        #expect(model.gloss(for: card)?.source == .dictionary)
+        #expect(model.gloss(for: card)?.pos == "verb")
+        #expect(await Self.glossCalls(service) == 1, "a second appearance asks the same entry again")
+    }
+
+    @Test func anEntryWithNoUsableTextShowsNoGloss() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService(gloss: nil)
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+        #expect(model.gloss(for: card) == nil)
+    }
+
+    @Test func aFailedGlossIsAskedAgainOnlyAfterTheNextOpen() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService(glossFails: true)
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] == .failed })
+        // The drawer is opened again: the failed state is forgotten, and the card asks once more.
+        await model.refresh()
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] == .failed })
+        #expect(await Self.glossCalls(service) == 2)
+    }
+
+    @Test func removingACardForgetsItsGloss() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+        #expect(model.gloss(for: card) != nil)
+
+        await model.remove(card)
+        #expect(model.glosses[ref] == nil)
+    }
+
+    @Test func anEraseClearsTheGlosses() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+        model.clearGlosses()
+        #expect(model.glosses.isEmpty)
+    }
+
+    @Test func theHistoryOffClearsTheGlosses() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+
+        preferences.historyEnabled = false
+        await model.refresh()
+        #expect(model.glosses.isEmpty)
+    }
+
+    /// **A gloss already on its way is dropped by a clear** (audit 2026-10-31): an erase, or the history switch going
+    /// off, wins over the fetch's late answer.
+    @Test func aClearDropsAGlossAlreadyOnItsWay() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        let release = Flag()
+        let service = SlowGlossHistoryService(release: release,
+                                              gloss: EntryGloss(entry: ref, text: "to keep", pos: "verb",
+                                                                source: .definition))
+        let model = HistoryModel(service: service, preferences: preferences)
+        model.loadGloss(for: card)
+        #expect(model.glosses[ref] == .loading)
+        model.clearGlosses()
+        release.set()
+        #expect(await HistoryGlossModelTests.settled(service, glosses: 1), "the late gloss never ran")
+        #expect(model.glosses[ref] == nil, "a cleared gloss was restored by its late answer")
+    }
+
+    /// **A removed card's gloss already on its way is dropped too.**
+    @Test func aRemovalDropsAGlossAlreadyOnItsWay() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        let release = Flag()
+        let service = SlowGlossHistoryService(release: release,
+                                              gloss: EntryGloss(entry: ref, text: "to keep", pos: "verb",
+                                                                source: .definition))
+        let model = HistoryModel(service: service, preferences: preferences)
+        model.loadGloss(for: card)
+        #expect(model.glosses[ref] == .loading)
+        await model.remove(card)
+        release.set()
+        #expect(await HistoryGlossModelTests.settled(service, glosses: 1))
+        #expect(model.glosses[ref] == nil, "a removed card's gloss came back")
+    }
+
+    /// **The history switch going off clears the glosses and the answer memory at once** (ADR-0037): no drawer refresh
+    /// is needed, and the answers' epoch moves so an ask already in flight is not stored either.
+    @Test func theSwitchOffClearsTheGlossesAndTheAnswers() async throws {
+        let (preferences, defaults, name) = try HistoryModelTests.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        let answers = MeaningAnswerMemory()
+        model.answers = answers
+        let card = LedgerCard(reading: HistoryModelTests.reading(), times: 1, events: ["e1"])
+        let ref = EntryRef(reading: card.reading)
+        model.loadGloss(for: card)
+        #expect(await eventually(2) { model.glosses[ref] != .loading })
+        let epoch = answers.epoch
+        model.historySwitchedOff()
+        #expect(model.state == .off)
+        #expect(model.glosses.isEmpty)
+        #expect(answers.epoch == epoch + 1, "the answers were not cleared with the switch")
+    }
+
+    /// Waits until the slow service has answered `glosses` gloss calls.
+    static func settled(_ service: SlowGlossHistoryService, glosses: Int) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while ContinuousClock.now < deadline {
+            if await service.glossesSettled >= glosses { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return await service.glossesSettled >= glosses
     }
 }
