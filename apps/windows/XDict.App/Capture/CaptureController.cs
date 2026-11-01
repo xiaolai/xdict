@@ -14,6 +14,7 @@ public sealed class CaptureController : IDisposable
     private readonly ServiceClient client;
     private readonly LibraryStore store;
     private readonly SearchSession session;
+    private readonly ReadingRecorder readings;
     private readonly Action<string, double> openInApp;
     private readonly CaptureRequests book = new();
     private readonly CaptureContextSession contexts = new();
@@ -33,6 +34,7 @@ public sealed class CaptureController : IDisposable
         this.client = client;
         this.store = store;
         this.session = session;
+        readings = new ReadingRecorder(client);
         this.openInApp = openInApp;
         hotkey = new Hotkey(() => AskGuarded(CaptureTrigger.Selection));
         tray = new TrayIcon();
@@ -213,6 +215,9 @@ public sealed class CaptureController : IDisposable
             return;
         }
         bool drawn = false;
+        // The entry branch alone is a reading. The no-results placeholder draws and acknowledges `shown`, but has
+        // no entry to record (plan §2.2, D14).
+        SearchHit? drawnHit = null;
         try
         {
             view.SetContent(delivery.Term.Term, Strings.Format("capture.searching", delivery.Term.Term));
@@ -257,6 +262,7 @@ public sealed class CaptureController : IDisposable
                 await pane!.ShowAsync(response);
                 if (!book.IsCurrent(delivery.Request)) return;
                 view.SetStatus(Strings.Format("search.results", page.Hits.Count));
+                drawnHit = hit;
                 drawn = true;
             }
         }
@@ -272,7 +278,27 @@ public sealed class CaptureController : IDisposable
             LastFailure = error.GetType().Name + ": " + error.Message;
             if (book.IsCurrent(delivery.Request)) view.SetStatus(Strings.Get("capture.denied"));
         }
-        if (drawn) Acknowledge(delivery, CaptureOutcome.Shown);
+        if (drawn)
+        {
+            Acknowledge(delivery, CaptureOutcome.Shown);
+            // A separate event from the acknowledgement: the capture ended either way; this is the reading the
+            // history may keep, and only when its own switch and sentence allow it.
+            if (drawnHit is { } entry)
+            {
+                LearningSettings settings = LearningSettings.Load();
+                if (HistoryCapture.Records(onScreen: true, current: true, hasEntry: true,
+                        hasSentence: delivery.Term.Context is CaptureContext.Available, settings.HistoryEnabled))
+                {
+                    LibraryDictionary? dictionary =
+                        store.Dictionaries.FirstOrDefault(item => item.Edition == entry.Edition);
+                    _ = Task.Run(async () =>
+                    {
+                        try { await readings.RecordAsync(delivery.Term, entry, dictionary, settings); }
+                        catch (Exception) { /* The entry drew; a lost history record must not fail the capture. */ }
+                    });
+                }
+            }
+        }
         else Acknowledge(delivery, CaptureOutcome.NotShown);
     }
 

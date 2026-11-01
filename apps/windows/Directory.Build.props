@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
-    <!-- The Windows shell's version: Provenance.txt, the MSI and its file name all read it from here. -->
-    <Version>0.1.6</Version>
+    <!-- The Windows shell's version: Provenance.txt, the MSI and its file name all read it from here. 0.2.0 is the
+         learning release (contract 2); this is its unsigned qualification build (owner, 2026-11-01). -->
+    <Version>0.2.0</Version>
   </PropertyGroup>
 </Project>
