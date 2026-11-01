@@ -59,6 +59,11 @@ pub use xdict_identity::EDITION_SCHEME;
 /// The largest resource the core serves: one block of the reader's, the most an MDD record can be.
 pub const MAX_RESOURCE_BYTES: u64 = xdict_mdx::limits::BLOCK_BYTES;
 
+/// **A gloss's fixed view** (ADR-0037): the entry's own render, with the ceiling the entry view has and a text budget
+/// whose only job is to hold the projection: the first sense is at the start, and no caller chooses either bound.
+const GLOSS_BODY_BYTES: u64 = 16 * 1_024 * 1_024;
+const GLOSS_TEXT_BYTES: usize = 256 * 1_024;
+
 /// **A peer log over this size is refused, not read** (plan §2.6): a year of readings on a device that checks a hundred
 /// words a day is far under it, and a stray file in the reader's sync folder must not exhaust the service.
 #[cfg(not(target_family = "wasm"))]
@@ -1091,6 +1096,37 @@ impl Core {
                 omitted_bytes: projection.omitted_bytes,
                 cut_at: projection.cut_at,
                 spans_dropped: projection.runs_dropped,
+            })
+        })
+    }
+
+    /// **One entry's brief gloss** (ADR-0037): the first sense's definition, or the translation the dictionary prints
+    /// for it, read from the recorded edition and resolved by that edition alone. The view is fixed here, so no shell
+    /// can make the service project an unbounded entry for a gloss; the reply is the gloss, not the projection. A
+    /// dictionary whose markup gives nothing usable answers no text, never an error and never a guess.
+    pub fn entry_gloss(&self, entry: EntryRef) -> Result<EntryGloss, CoreError> {
+        guard(|| {
+            let dict = self.dict_of_edition(&entry.edition)?;
+            let view = View { base_url: "xdict://d/".into(), max_body_bytes: GLOSS_BODY_BYTES, original_style: false };
+            let (entry, html, _lossy) = self.render(&dict, entry, &view)?;
+            let projection = xdict_entry::entry_text_from_html(&html, GLOSS_TEXT_BYTES);
+            let gloss = xdict_entry::first_gloss_after(
+                &projection.text,
+                &projection.runs,
+                &projection.senses,
+                projection.next_dropped.as_ref(),
+                &entry.key,
+                xdict_entry::GLOSS_MAX_CHARS,
+            );
+            Ok(EntryGloss {
+                entry,
+                text: gloss.as_ref().map(|gloss| gloss.text.clone()),
+                pos: gloss.as_ref().and_then(|gloss| gloss.pos.clone()),
+                source: gloss.as_ref().map(|gloss| match gloss.source {
+                    xdict_entry::GlossSource::Definition => GlossSource::Definition,
+                    xdict_entry::GlossSource::Translation => GlossSource::Translation,
+                }),
+                truncated: gloss.as_ref().is_some_and(|gloss| gloss.truncated),
             })
         })
     }

@@ -184,6 +184,9 @@ final class Dictionaries: Sendable {
                 let projected = try core.entryText(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                    view: XDictCore.TextView(text))
                 return (.answer(.entryText(XDictContract.EntryText(projected))), nil)
+            case .entryGloss(let entry):
+                let gloss = try core.entryGloss(entry: XDictCore.EntryRef(entry))
+                return (.answer(.entryGloss(XDictContract.EntryGloss(gloss))), nil)
             // ADR-0023/ADR-0024: the local history. The recording filter runs in the core, before any byte is written.
             case .ledgerRecord(let reading, let operation, let targetLanguages):
                 let outcome = try core.ledgerRecord(reading: XDictCore.Reading(reading), operation: operation,

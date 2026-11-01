@@ -258,6 +258,11 @@ fun main(args: Array<String>) {
     val senseIds = projected.senses.map { it.id }.toSet()
     check("entryText.style", true, projected.style > 0u)
     check("entryText.membership", true, projected.spans.all { it.sense == null || senseIds.contains(it.sense) })
+    // The gloss crosses the Kotlin binding (contract 21, ADR-0037).
+    val gloss = core.entryGloss(EntryRef(imported.edition, "run", 0u))
+    check("entryGloss.text", "to move fast", gloss.text)
+    check("entryGloss.source", true, gloss.source != null)
+    check("entryGloss.truncated", false, gloss.truncated)
     val origin = LinkOrigin.Entry(EntryRef(imported.edition, "run", 0u))
     list(x["links"]).forEachIndexed { n, c -> check("links[$n]", c["link"], outcome { j(core.link(dict, c["url"] as String, origin, view())) }) }
     list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view().copy(originalStyle = c["originalStyle"] == true))) }) }

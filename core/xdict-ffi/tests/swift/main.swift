@@ -356,6 +356,11 @@ let textBytes = UInt64(projected.text.utf8.count)
 check("entryText.style", true, projected.style > 0)
 check("entryText.senses", true, projected.senses.allSatisfy { $0.start <= textBytes && $0.len <= textBytes - $0.start })
 check("entryText.membership", true, projected.spans.allSatisfy { $0.sense == nil || senseIds.contains($0.sense!) })
+// **The gloss crosses the Swift binding** (contract 21, ADR-0037): the first entry's own body, its source, and no cut.
+let gloss = try core.entryGloss(entry: EntryRef(edition: imported.edition, key: "run", occurrence: 0))
+check("entryGloss.text", "to move fast", gloss.text)
+check("entryGloss.source", true, gloss.source != nil)
+check("entryGloss.truncated", false, gloss.truncated)
 let origin = LinkOrigin.entry(entry: EntryRef(edition: imported.edition, key: "run", occurrence: 0))
 for (i, c) in (x["links"] as! [[String: Any]]).enumerated() {
     check("links[\(i)]", c["link"], outcome { j(try core.link(dict: dict, url: c["url"] as! String, origin: origin, view: view())) })

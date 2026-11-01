@@ -511,6 +511,13 @@ impl Core {
         watched_reply(|| self.0.entry_text(dict.into(), entry, view))
     }
 
+    /// One entry's brief gloss (ADR-0037): the first sense's definition or the translation printed for it, from the
+    /// recorded edition; `text` is null when the markup gives nothing usable.
+    pub fn entry_gloss(&self, entry: &str) -> Reply {
+        let entry = from_json(entry)?;
+        watched_reply(|| self.0.entry_gloss(entry))
+    }
+
     /// **Records a reading** in the local history (ADR-0023). `reading` is a `Reading` as JSON; `targetLanguages` is a
     /// JSON array of the languages the reader keeps. The answer is the outcome's JSON: `"recorded"`, `"duplicate"`,
     /// `"uncertain"` or `"skippedLanguage"`. The Web's log lives in memory until its worker adapter lands (ADR-0024).

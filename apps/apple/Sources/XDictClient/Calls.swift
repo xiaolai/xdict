@@ -117,7 +117,7 @@ extension ServiceOperation {
              .phrases(_, _, let dicts), .explore(let dicts, _, _, _, _), .collocates(_, let dicts, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
+             .reviewSummary, .studyReanchor, .studyNoteAt, .entryGloss, .exportData, .eraseData, .studyConflicts, .reviewResolve,
              .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: []
         }
     }
@@ -150,7 +150,7 @@ extension ServiceOperation {
         case .words(let dict, let from, let limit): .words(dict: rename(dict), from: from, limit: limit)
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
+             .reviewSummary, .studyReanchor, .studyNoteAt, .entryGloss, .exportData, .eraseData, .studyConflicts, .reviewResolve,
              .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: self
         }
     }

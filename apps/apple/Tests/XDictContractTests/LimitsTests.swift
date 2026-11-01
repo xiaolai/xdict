@@ -23,6 +23,9 @@ struct LimitsTests {
                               Fixtures.index(.resource(dict: Fixtures.dict, path: "a", render: .reader)),
                               Fixtures.index(.entryText(dict: Fixtures.dict, entry: Fixtures.entryRef,
                                                         text: TextRenderContext(maxBodyBytes: 1, maxTextBytes: 1))),
+                              // **The gloss renders the recorded edition like an entry read** (ADR-0037), so it holds
+                              // a bulk credit too.
+                              Fixtures.index(.entryGloss(entry: Fixtures.entryRef)),
                               Fixtures.index(.studyNote(dict: Fixtures.dict, entry: Fixtures.entryRef, text: "t",
                                                         name: "Tiny", stamp: Fixtures.studyStamp,
                                                         operation: "op")),

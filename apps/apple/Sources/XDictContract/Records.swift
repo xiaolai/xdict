@@ -645,6 +645,33 @@ public struct EntryText: Codable, Hashable, Sendable {
     }
 }
 
+/// Where a gloss's words came from (ADR-0037, contract 21): the dictionary's definition body, or the translation it
+/// prints for that sense.
+public enum GlossSource: String, Codable, Hashable, Sendable {
+    case definition
+    case translation
+}
+
+/// **An entry's brief gloss for a history card** (ADR-0037, contract 21): the first sense's definition or translation,
+/// the entry's part of speech, and whether the core's clamp cut it. No text is data — a dictionary whose markup gives
+/// nothing usable — never an error and never a guess.
+public struct EntryGloss: Codable, Hashable, Sendable {
+    public let entry: EntryRef
+    public let text: String?
+    public let pos: String?
+    public let source: GlossSource?
+    public let truncated: Bool
+
+    public init(entry: EntryRef, text: String?, pos: String? = nil, source: GlossSource? = nil,
+                truncated: Bool = false) {
+        self.entry = entry
+        self.text = text
+        self.pos = pos
+        self.source = source
+        self.truncated = truncated
+    }
+}
+
 /// An entry for the entry view, **less its HTML, which is the reply's payload** (UTF-8).
 public struct Entry: Codable, Hashable, Sendable {
     public let entry: EntryRef

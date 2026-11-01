@@ -66,7 +66,7 @@ public enum Limits {
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .words, .link,
              .resource(.missing),
-             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .examples, .examplesBuilt,
+             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .entryGloss, .examples, .examplesBuilt,
              .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
              .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked,
@@ -201,7 +201,7 @@ public enum Deadlines {
         // no file.
         case .setWordPack: installDeadline
         case .wordPack, .clearWordPack: .seconds(5)
-        case .entry, .entryText: .seconds(10)
+        case .entry, .entryText, .entryGloss: .seconds(10)
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.
         case .resource: .seconds(15)

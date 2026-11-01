@@ -52,6 +52,12 @@ export type EntryText = {
   entry: EntryRef; text: string; spans: TextSpan[]; senses: Sense[]; style: number;
   complete: boolean; omittedBytes: number; cutAt: number; spansDropped: number;
 };
+/** Where a gloss's words came from (ADR-0037, contract 21). */
+export type GlossSource = "definition" | "translation";
+/** An entry's brief gloss (ADR-0037, contract 21); `text` is null when the markup gives nothing usable. */
+export type EntryGloss = {
+  entry: EntryRef; text: string | null; pos: string | null; source: GlossSource | null; truncated: boolean;
+};
 export type ReadingSpan = { start: number; len: number };
 /** One reading as the history stores it (ADR-0023): the word, its sentence, and the edition's content hash. */
 export type Reading = {
@@ -184,6 +190,7 @@ interface GlueCore {
   explore(dicts: string, mode: string, text: string, offset: number, limit: number): string;
   entry(dict: string, entry: string, view: string): string;
   entry_text(dict: string, entry: string, view: string): string;
+  entry_gloss(entry: string): string;
   ledger_record(reading: string, operation: string, targetLanguages: string): string;
   ledger_history(now: number, utcOffsetSeconds: number): string;
   ledger_remove(removal: string, operation: string): string;
@@ -387,6 +394,11 @@ export class XDictCore {
 
   entryText(dict: string, entry: EntryRef, view: TextView): EntryText {
     return this.call(() => this.inner.entry_text(dict, JSON.stringify(entry), JSON.stringify(view)));
+  }
+
+  /** One entry's brief gloss (ADR-0037, contract 21): the first sense, or the translation printed for it. */
+  entryGloss(entry: EntryRef): EntryGloss {
+    return this.call(() => this.inner.entry_gloss(JSON.stringify(entry)));
   }
 
   /** Records a reading in the local history: the language filter runs before anything is written. */

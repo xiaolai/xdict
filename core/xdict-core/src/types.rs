@@ -381,6 +381,26 @@ record! {
         /// Runs (and so their roles) the budget left out.
         pub spans_dropped: u64,
     }
+
+    /// **Where a gloss's words came from** (ADR-0037): the dictionary's definition body, or the translation it prints
+    /// for that sense. A unit-only enum, so the Web binding carries the plain string.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum GlossSource {
+        Definition,
+        Translation,
+    }
+
+    /// **An entry's brief gloss** (ADR-0037): the first sense's definition or translation, the entry's part of speech,
+    /// and whether the clamp cut it. `text: None` is data — a dictionary whose markup gives nothing usable — never an
+    /// error, and never a guess.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct EntryGloss {
+        pub entry: EntryRef,
+        pub text: Option<String>,
+        pub pos: Option<String>,
+        pub source: Option<GlossSource>,
+        pub truncated: bool,
+    }
 }
 
 message! {

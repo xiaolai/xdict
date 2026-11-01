@@ -8,6 +8,7 @@ mod colour;
 mod controls;
 mod entities;
 mod facts;
+mod gloss;
 mod images;
 mod normalize;
 mod options;
@@ -24,6 +25,7 @@ mod url;
 mod work;
 
 pub use calibrate::{file_name, linked_sheets};
+pub use gloss::{GLOSS_EXTRACTOR, GLOSS_MAX_CHARS, Gloss, GlossSource, first_gloss, first_gloss_after};
 pub use normalize::{
     Base, BaseFrom, Counts, Entry, Kept, KeptReason, STYLE, Strips, Style, TOKENS, css_normalized_within,
     css_styled_within, entry_normalized_within, html_normalized_unstripped_within, html_normalized_within,

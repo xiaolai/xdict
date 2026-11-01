@@ -467,6 +467,23 @@ extension XDictContract.EntryText {
     }
 }
 
+extension XDictContract.GlossSource {
+    init(_ source: XDictCore.GlossSource) {
+        switch source {
+        case .definition: self = .definition
+        case .translation: self = .translation
+        }
+    }
+}
+
+extension XDictContract.EntryGloss {
+    /// The core's gloss in the contract's record: the same fields, one for one; `nil` is the core's "no usable text".
+    init(_ gloss: XDictCore.EntryGloss) {
+        self.init(entry: XDictContract.EntryRef(gloss.entry), text: gloss.text, pos: gloss.pos,
+                  source: gloss.source.map { XDictContract.GlossSource($0) }, truncated: gloss.truncated)
+    }
+}
+
 extension XDictCore.FileIdentity {
     init(_ identity: XDictContract.FileIdentity) {
         self.init(device: identity.device, inode: identity.inode, size: identity.size, mtimeNs: identity.mtimeNs,

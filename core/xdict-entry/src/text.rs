@@ -56,6 +56,10 @@ pub struct Projection {
     pub cut_at: u64,
     /// Runs (and so their roles) that the budget left out.
     pub runs_dropped: u64,
+    /// **The first run the projection dropped** (audit 2026-10-31): its role and sense say whether the last kept
+    /// definition ended before the cut, so a cut sense's final segment can be offered when it did. Its offsets point
+    /// past `text`; only its role, label, section and sense are meaningful.
+    pub next_dropped: Option<TextRun>,
 }
 
 /// Elements whose text is not part of the reading: never shown, or instructions rather than prose.
@@ -240,6 +244,7 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
             }
         })
         .collect();
+    let next_dropped = state.runs.get(kept_by_cap).cloned();
     state.text.truncate(cut);
     state.runs.truncate(kept_by_cap);
     Projection {
@@ -251,6 +256,7 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
         cut_at: cut as u64,
         // Every run the projection does not carry: those past the budget's cut, and those past the span cap.
         runs_dropped: (all_runs - kept_by_cap) as u64,
+        next_dropped,
     }
 }
 

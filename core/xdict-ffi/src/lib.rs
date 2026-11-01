@@ -16,14 +16,14 @@ use xdict_core::explore::{ExploreAnswer, ExploreReason, ExploreRow, ExploreState
 use xdict_core::words::{WordMode, WordPackInfo};
 use xdict_core::{
     BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Coverage,
-    CoverageEntry, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport,
-    ExampleHit, ExampleSource, Examples, ExamplesBuilt, Feature, FileIdentity, FindingKind, FontReason, Health,
-    HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont,
-    Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, PhraseAnswer, PhraseBuilt,
-    PhraseMatch, PhraseState, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport,
-    ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary,
-    Sense, Separation, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
-    SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
+    CoverageEntry, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry, EntryGloss, EntryRef, EntryText,
+    EraseReport, ExampleHit, ExampleSource, Examples, ExamplesBuilt, Feature, FileIdentity, FindingKind, FontReason,
+    GlossSource, Health, HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason,
+    Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page,
+    PhraseAnswer, PhraseBuilt, PhraseMatch, PhraseState, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome,
+    ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy,
+    ReviewSummary, Sense, Separation, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget,
+    StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -121,6 +121,22 @@ pub struct EntryText {
     pub omitted_bytes: u64,
     pub cut_at: u64,
     pub spans_dropped: u64,
+}
+
+/// Where a gloss's words came from (ADR-0037): the definition body, or the translation printed for it.
+#[uniffi::remote(Enum)]
+pub enum GlossSource {
+    Definition,
+    Translation,
+}
+
+#[uniffi::remote(Record)]
+pub struct EntryGloss {
+    pub entry: EntryRef,
+    pub text: Option<String>,
+    pub pos: Option<String>,
+    pub source: Option<GlossSource>,
+    pub truncated: bool,
 }
 
 #[uniffi::remote(Record)]
@@ -1053,6 +1069,12 @@ impl Core {
     /// **The whole entry as plain text** (ADR-0021 d.5): spans, completeness and the budget's cut.
     pub fn entry_text(&self, dict: String, entry: EntryRef, view: TextView) -> Result<EntryText, CoreError> {
         self.0.entry_text(dict, entry, view)
+    }
+
+    /// **One entry's brief gloss** (ADR-0037): the first sense's definition or the translation printed for it, from
+    /// the recorded edition; `text` is none when the markup gives nothing usable.
+    pub fn entry_gloss(&self, entry: EntryRef) -> Result<EntryGloss, CoreError> {
+        self.0.entry_gloss(entry)
     }
 
     pub fn link(&self, dict: String, url: String, origin: LinkOrigin, view: View) -> Result<Link, CoreError> {

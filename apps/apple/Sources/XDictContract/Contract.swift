@@ -66,7 +66,10 @@ public enum Contract {
     /// 20 (2026-10-28): the operation `buildWordPack` and the answer `wordPackBuilt`: the service builds the pack on
     /// the reader's Mac from the sources the app downloaded into the container, then installs it (plan-local-word-pack
     /// WI-5). It reports progress as bytes parsed of all, has no deadline, and stops by `cancel`, writing nothing.
-    public static let version: UInt32 = 20
+    /// 21 (2026-10-31): the operation `entryGloss` and its answer, the first sense of the recorded edition as one brief
+    /// gloss for a history card (ADR-0037). The core resolves the edition itself and fixes the view; a dictionary whose
+    /// markup gives nothing usable answers no text, never an error.
+    public static let version: UInt32 = 21
 }
 
 // MARK: - The request
@@ -285,6 +288,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// roles, and the cut report when the text budget trimmed it. The core projects it from the same render an `entry`
     /// call gets (same guards, same roles); a cut is data, never an error. A bulk call, like `entry`.
     case entryText(dict: DictId, entry: EntryRef, text: TextRenderContext)
+    /// **An entry's brief gloss** (contract 21, ADR-0037): the recorded edition's first sense, or the translation it
+    /// prints for it, resolved by the edition itself and under a view the core fixes. The reply is the gloss, not the
+    /// projection; a dictionary whose markup gives nothing usable answers no text, never an error.
+    case entryGloss(entry: EntryRef)
     /// **Record a reading in the local history** (ADR-0023, ADR-0024): the language filter runs before anything is
     /// written, and `operation` is the client's stable id for this record — a retry reuses it and is one event. The
     /// sentence travels here because the history stores it (D1); the core never sends it anywhere.
@@ -338,7 +345,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .words, .entry, .link, .resource, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
+             .entryText, .entryGloss, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
@@ -352,7 +359,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
+             .entryText, .entryGloss, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
@@ -380,7 +387,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// lookup for the calls that search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash, .studyReanchor: .bulk
+        case .entry, .resource, .entryText, .entryGloss, .studyNote, .studyNoteAt, .definitionHash, .studyReanchor: .bulk
         case .openPackage, .lookup, .suggest, .words, .link, .examples, .phrases: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
@@ -396,6 +403,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var editionsRead: [Edition] {
         switch self {
         case .studyNoteAt(let entry, _, _, _, _): [entry.edition]
+        case .entryGloss(let entry): [entry.edition]
         case .studyReanchor(_, let newEdition, _, _): [newEdition]
         default: []
         }
@@ -418,7 +426,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         // **These read through an edition, not a handle** (`editionsRead` adds those files), or read nothing at all.
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyNoteAt, .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
+             .studyNoteAt, .entryGloss, .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
              .ledgerRemove, .ledgerRestore,
              // The pack is read from the container by the service, not through one of the app's file handles.
              .wordPack, .setWordPack, .clearWordPack, .buildWordPack: []
@@ -449,6 +457,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .convertApple: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .entryGloss: .entryGloss
         case .examples: .examples
         case .examplesBuild: .examplesBuilt
         case .phrases: .phrases
@@ -477,7 +486,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .importPackage, .health, .convertApple, .examplesBuild, .phrasesBuild, .buildWordPack: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .words, .entry, .link, .resource,
              .joinLineage, .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText,
-             .examples, .phrases, .ledgerRecord,
+             .entryGloss, .examples, .phrases, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
              .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack, .clearWordPack: false
@@ -624,6 +633,8 @@ public enum Answer: Codable, Hashable, Sendable {
     case displayOptions(DisplayOptions)
     /// An entry as plain text, its spans and its cut report (contract 8).
     case entryText(EntryText)
+    /// An entry's first sense as one brief gloss for a history card (contract 21).
+    case entryGloss(EntryGloss)
     /// The reverse-example query's hits (contract 14).
     case examples(Examples)
     /// What building one dictionary's example store did (contract 14).
@@ -663,7 +674,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .words, .link,
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
-             .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
+             .entryGloss, .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
              .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked,
              .wordPackBuilt: false
@@ -702,6 +713,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .converted: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .entryGloss: .entryGloss
         case .examples: .examples
         case .examplesBuilt: .examplesBuilt
         case .phrases: .phrases
@@ -736,8 +748,8 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, words, entry, link, resource, lineage, health
-    case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, phrases, phrasesBuilt, ledgerRecord,
-         ledgerHistory
+    case readingStyle, converted, displayOptions, entryText, entryGloss, examples, examplesBuilt, phrases, phrasesBuilt,
+         ledgerRecord, ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
     case exported, erased, conflicts, synced, explored, collocations, wordPacked, wordPackBuilt
 }

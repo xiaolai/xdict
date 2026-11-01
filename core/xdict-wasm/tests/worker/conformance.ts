@@ -143,6 +143,11 @@ const textBytes = new TextEncoder().encode(projected.text).length;
 check('entryText.style', true, projected.style > 0);
 check('entryText.senses', true, projected.senses.every((s) => s.start + s.len <= textBytes));
 check('entryText.membership', true, projected.spans.every((s) => s.sense == null || senseIds.has(s.sense)));
+// The gloss crosses the Worker binding (contract 21, ADR-0037).
+const gloss = core.entryGloss({ edition: imported.edition, key: 'run', occurrence: 0 });
+check('entryGloss.text', 'to move fast', gloss.text);
+check('entryGloss.source', 'definition', gloss.source);
+check('entryGloss.truncated', false, gloss.truncated);
 const origin = { type: 'entry' as const, entry: { edition: imported.edition, key: 'run', occurrence: 0 } };
 x.links.forEach((c: any, i: number) => check(`links[${i}]`, c.link, outcome(() => core.link(dict, c.url, origin, view()))));
 x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, outcome(() => core.resource(dict, c.path, { ...view(), originalStyle: c.originalStyle === true }))));
