@@ -16,6 +16,20 @@ public sealed record LearningSettings
     /// <summary>The set the recorder sends, never null even from an older file.</summary>
     public IReadOnlyList<string> Targets => TargetLanguages ?? [];
 
+    /// <summary>The review's target recall; the scheduler's own default until the reader changes it.</summary>
+    public double ReviewRetention { get; init; } = 0.9;
+
+    /// <summary>The scheduler's interval cap.</summary>
+    public int MaximumDays { get; init; } = 36500;
+
+    /// <summary>Whether review reminders are scheduled; the toast itself is the shell's.</summary>
+    public bool RemindersEnabled { get; init; } = true;
+
+    /// <summary>The validated policy a grade carries, whatever the file said.</summary>
+    public ReviewPolicy Policy => new(
+        double.IsFinite(ReviewRetention) && ReviewRetention > 0 && ReviewRetention < 1 ? ReviewRetention : 0.9,
+        MaximumDays >= 1 ? MaximumDays : 36500);
+
     public static string Path =>
         Environment.GetEnvironmentVariable("XDICT_LEARNING")
         ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

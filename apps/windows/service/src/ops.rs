@@ -79,6 +79,10 @@ fn named_dicts(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
         "entry" => vec![one::<EntryBody>(body)?.dict],
         "resource" => vec![one::<ResourceBody>(body)?.dict],
         "link" => vec![one::<LinkBody>(body)?.dict],
+        // Contract 2's handle-named reads: a note's definition and its hash both read the entry, so the dictionary's
+        // observations are required exactly as they are for an entry read.
+        "studyNote" => vec![one::<StudyNoteBody>(body)?.dict],
+        "definitionHash" => vec![one::<DefinitionHashBody>(body)?.dict],
         "close" | "health" | "readingStyle" | "displayOptions" => vec![one::<DictBody>(body)?.dict],
         _ => Vec::new(),
     })
