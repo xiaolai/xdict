@@ -8,6 +8,18 @@ enum Fixture {
     static let versions = Versions(protocolVersion: 1, core: "0.0.1", indexFormat: 2, normalization: 1)
     static let edition = Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "ab", count: 32))
     static let info = DictInfo(title: "t", description: "", formatVersion: "2.0", keys: 1)
+    static let entryRef = EntryRef(edition: edition, key: "k", occurrence: 0)
+    static let studyStamp = StudyStamp(at: 1_790_643_600, device: "fixture")
+    static let studyNote = StudyNote(
+        target: StudyTarget(lineage: "lineage", entryKey: "k", occurrence: 0, kind: .entry,
+                            edition: edition.rawValue, definitionHash: String(repeating: "ab", count: 32)),
+        text: "my own words", at: 1_790_643_600, device: "fixture")
+    static let gloss = EntryGloss(entry: entryRef, text: "to move fast", pos: "verb", source: .definition)
+
+    /// A note saved by edition, the operation that fails when the service has the dictionary closed.
+    static func studyNoteAt() -> ServiceOperation {
+        .studyNoteAt(entry: entryRef, text: "my own words", name: "Tiny", stamp: studyStamp, operation: "op-1")
+    }
 
     static func page(_ hits: [Hit] = []) -> Answer {
         .page(Page(hits: hits, total: UInt64(hits.count), generation: 0, problems: []))

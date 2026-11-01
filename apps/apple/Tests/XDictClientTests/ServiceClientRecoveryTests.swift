@@ -359,4 +359,151 @@ struct ServiceClientRecoveryTests {
         #expect(await client.versions() == .failure(.wire(.invalidated)))
     }
 
+    /// **An edition-named call opens its dictionary again after the service restarted** (2026-10-31): the service ends
+    /// itself when idle (ADR-0009 d.4) and launchd starts a fresh one with no dictionary open. `studyNoteAt`,
+    /// `studyReanchor` and `entryGloss` name an edition, not a handle, so the fresh service answers `notFound(.edition)`
+    /// where a handle-named call answers `staleHandle`; the client opens the registered dictionary again, once, and sends
+    /// the call once more. Red with the edition recovery removed (the note fails and nothing is opened again).
+    @Test func anEditionNamedCallOpensItsDictionaryAgainAfterARestart() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: count == 1 ? first : second, edition: Fixture.edition, info: Fixture.info)),
+                              to: request)
+            case .studyNoteAt where opens.current == 1:
+                return .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+            case .studyNoteAt:
+                return .reply(.studyNote(Fixture.studyNote), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options())
+        _ = await client.open(package)
+        let outcome = await client.call(Fixture.studyNoteAt())
+        #expect(outcome == .success(Delivered(answer: .studyNote(Fixture.studyNote), payload: nil)))
+        #expect(opens.current == 2, "the dictionary was not opened again for an edition-named call")
+        let notes = service.sent.filter { if case .studyNoteAt = $0.request.operation { true } else { false } }
+        #expect(notes.count == 2, "the failed call was not sent again")
+        #expect(notes.allSatisfy { $0.request.tokens.map(\.file) == package.files.map(\.spec.id) },
+                "the edition's files were not sent with the call")
+    }
+
+    /// **The history card's gloss recovers the same way** (ADR-0037): `entryGloss` names an edition too, so a card fetched
+    /// after the service restarted is answered `notFound(.edition)`; the client opens the dictionary again and the card
+    /// gets its gloss rather than silently none.
+    @Test func anEntryGlossAfterARestartOpensTheEditionItNames() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: count == 1 ? first : second, edition: Fixture.edition, info: Fixture.info)),
+                              to: request)
+            case .entryGloss where opens.current == 1:
+                return .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+            case .entryGloss:
+                return .reply(.entryGloss(Fixture.gloss), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options())
+        _ = await client.open(package)
+        let outcome = await client.call(.entryGloss(entry: Fixture.entryRef))
+        #expect(outcome == .success(Delivered(answer: .entryGloss(Fixture.gloss), payload: nil)))
+        #expect(opens.current == 2, "the dictionary was not opened again for the gloss's edition")
+    }
+
+    /// **An edition the client has no package for is not opened again**: the dictionary is gone, not the service stale,
+    /// and a reopen would have no files to send.
+    @Test func anEditionTheClientNeverOpenedIsNotOpenedAgain() async {
+        let service = FakeTransport { request, _ in
+            .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options())
+        #expect(await client.call(Fixture.studyNoteAt())
+            == .failure(.wire(.core(.notFound(what: .edition, detail: "not open")))))
+        #expect(service.sent.count == 1, "an unregistered edition must not be opened")
+    }
+
+    /// **A second edition failure is answered, never retried again**: the dictionary opened, and the service still
+    /// cannot resolve the edition — a retry loop would hide it.
+    @Test func anEditionNamedCallIsRetriedOnlyOnce() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: DictId(rawValue: "handle-\(count)"), edition: Fixture.edition,
+                                            info: Fixture.info)), to: request)
+            default:
+                return .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options())
+        _ = await client.open(package)
+        #expect(await client.call(Fixture.studyNoteAt())
+            == .failure(.wire(.core(.notFound(what: .edition, detail: "not open")))))
+        #expect(opens.current == 2, "the dictionary was opened again exactly once")
+        #expect(service.sent.filter { if case .studyNoteAt = $0.request.operation { true } else { false } }.count == 2,
+                "the call was sent again exactly once")
+    }
+
+    /// **A late edition failure is retried on the handle another call already opened** (audit 2026-10-31): opening the
+    /// dictionary a second time would leak a service handle and drop the first one's caller mapping.
+    @Test func aLateEditionFailureUsesTheHandleAlreadyOpened() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>(), notes = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: count == 1 ? first : second, edition: Fixture.edition,
+                                            info: Fixture.info)), to: request)
+            case .studyNoteAt:
+                let count = (notes.current ?? 0) + 1
+                notes.set(count)
+                if count == 1 {
+                    return .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+                }
+                if count == 2 {
+                    // The second call's failure arrives after the first call's reopen replaced the handle.
+                    let late = Response(id: request.id,
+                                        outcome: .failure(.core(.notFound(what: .edition, detail: "late"))))
+                    return .later(.milliseconds(150), late, payload: nil)
+                }
+                return .reply(.studyNote(Fixture.studyNote), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect,
+                                   options: Fixture.options(warm: .seconds(1), cold: .seconds(1)))
+        _ = await client.open(package)
+        let early = await client.submit(Fixture.studyNoteAt())
+        let late = await client.submit(Fixture.studyNoteAt())
+        #expect(await early.outcome(within: .seconds(3))
+            == .success(Delivered(answer: .studyNote(Fixture.studyNote), payload: nil)))
+        #expect(await late.outcome(within: .seconds(3))
+            == .success(Delivered(answer: .studyNote(Fixture.studyNote), payload: nil)))
+        #expect(opens.current == 2, "the dictionary was opened again for a handle already replaced")
+    }
+
 }

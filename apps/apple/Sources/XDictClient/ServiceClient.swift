@@ -20,6 +20,10 @@ import os
 /// - **Handles survive a restart**: a dictionary opened through `open` keeps the `DictId` it was first given. When the
 ///   service answers `staleHandle` for it, the client opens its package again, sends the call again once under the new
 ///   handle, and maps the service's new handle back to the caller's in what it answers.
+/// - **An operation that names an edition recovers the same way** (2026-10-31): `studyNoteAt`, `studyReanchor` and
+///   `entryGloss` resolve their dictionary in the service by edition, and the process launchd starts after the idle
+///   exit (ADR-0009 d.4) has none open, so it answers `notFound(edition)` where a handle-named call answers
+///   `staleHandle`. The client opens the dictionary it registered for that edition and sends the call once more.
 /// - **Payloads are held to their ceilings** before anything sees them (`Response.read`).
 /// - **Tokens** for every file a call may read, from `stat`, numbered by `FileObserver`.
 public actor ServiceClient {
@@ -57,12 +61,17 @@ public actor ServiceClient {
         var unchecked: (files: [FileHandle]?, tokens: [FileToken])?
         /// The dictionary this call opens again after a restart, for the calls waiting on it.
         var reopens: DictId?
-        /// Sent once already and answered `staleHandle`.
+        /// Sent once already after a recovery — a `staleHandle`, or an edition the fresh service had not opened: a call
+        /// that fails again is answered, never retried a second time.
         var retried = false
         /// Dictionaries this call waits on being opened again.
         var awaiting: Set<DictId> = []
         /// The service handles this call was sent with: a `staleHandle` is retried on a replacement already made.
         var sentHandles: [DictId: DictId] = [:]
+        /// The service handles the editions this call names had when it was sent (audit 2026-10-31): a late
+        /// `notFound(.edition)` whose handle another call already replaced is retried on the replacement, never opened
+        /// again.
+        var sentEditions: [Edition: DictId] = [:]
 
         init(number: UInt64, operation: ServiceOperation, caller: Caller?, generation: UInt64, package: DictionaryPackage?,
              progress: (@Sendable (UInt64, UInt64) -> Void)?) {
@@ -482,6 +491,9 @@ public actor ServiceClient {
             call.sentHandles = call.operation.namedDicts.reduce(into: [:]) { used, dict in
                 used[dict] = registry[dict]?.current ?? dict
             }
+            call.sentEditions = call.operation.editionsRead.reduce(into: [:]) { used, edition in
+                used[edition] = editions[edition].flatMap { registry[$0]?.current }
+            }
             operation = call.operation.renamingDicts { registry[$0]?.current ?? $0 }
             // The dictionaries the request names travel by service handle; `callersID` maps each back to the caller's.
             var sent = operation.namedDicts.flatMap { dict in
@@ -570,6 +582,33 @@ public actor ServiceClient {
                 // **A dictionary another call already opened again is retried on its replacement** (audit round 4,
                 // 2026-10-26): opening it a second time would replace the handle those calls are already using.
                 let stale = named.filter { call.sentHandles[$0] == registry[$0]?.current }
+                if stale.isEmpty {
+                    queue.append(call)
+                    return pump()
+                }
+                return reopen(stale, then: call)
+            }
+        }
+        // **An edition-named call after the service restarted** (2026-10-31): the service ends itself when idle
+        // (ADR-0009 d.4) and launchd starts a fresh one, which has no dictionary open. An operation that resolves its
+        // dictionary by edition — `studyNoteAt`, `studyReanchor`, `entryGloss` — is answered `notFound(.edition)`
+        // where a handle-named call is answered `staleHandle`, so the recovery above never ran and a note save was
+        // lost. The client opens the dictionaries it registered for the editions the call names, and sends the call
+        // once more on them. An edition with no registered package is not opened: its dictionary is gone, and the
+        // failure is the caller's.
+        if case .failure(.wire(.core(.notFound(what: .edition, detail: _)))) = outcome,
+           call.unchecked == nil, call.reopens == nil, !call.retried {
+            let named = call.operation.editionsRead.compactMap { edition -> (edition: Edition, dict: DictId)? in
+                guard let dict = editions[edition], registry[dict] != nil else { return nil }
+                return (edition, dict)
+            }
+            if !named.isEmpty {
+                call.retried = true
+                // **A handle another call already replaced is not opened again** (audit 2026-10-31): the late reply is
+                // retried on the replacement, exactly as a late stale handle is, so a second open neither leaks a
+                // service handle nor drops the first one's caller mapping.
+                let stale = named.filter { call.sentEditions[$0.edition] == registry[$0.dict]?.current }
+                    .map { $0.dict }
                 if stale.isEmpty {
                     queue.append(call)
                     return pump()
