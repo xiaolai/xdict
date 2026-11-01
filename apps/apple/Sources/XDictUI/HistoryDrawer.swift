@@ -261,8 +261,12 @@ public struct HistoryView: View {
                         Text(dayName(day))
                             .font(Tokens.TextRole.caption.font)
                             .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
-                        ForEach(day.cards, id: \.self) { card in
-                            cardView(card)
+                        // **Cards breathe** (owner, 2026-11-01: "card 之间的距离，也要放大一点，现在太挤"): the day's
+                        // name stays close to its first card, and the cards themselves take the group step.
+                        VStack(alignment: .leading, spacing: Tokens.Space.m) {
+                            ForEach(day.cards, id: \.self) { card in
+                                cardView(card)
+                            }
                         }
                     }
                 }
@@ -322,7 +326,7 @@ public struct HistoryView: View {
         .overlay {
             // **A tint from the card's own identity** (owner, 2026-10-31; supersedes UI45's neutral hairline): one of the
             // system's tints at border opacity — a border, never a fill, and the same one on every redraw and launch.
-            RoundedRectangle(cornerRadius: Tokens.Radius.cardShadow, style: .continuous)
+            RoundedRectangle(cornerRadius: Tokens.Radius.historyCard, style: .continuous)
                 .stroke(HistoryCardTint.colour(for: card.reading).color.opacity(Tokens.Opacity.cardBorder),
                         lineWidth: Tokens.Line.hairline)
         }

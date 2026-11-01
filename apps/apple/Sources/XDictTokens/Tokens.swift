@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "4bac5cd874c79ea6bf89b545f96095dd2382a264887f557f96237f19900e2b25"
+    public static let sourceDigest = "e348c381ff67f80294d7d452f9fedddc94777087af810a6efb3efac72ca0f297"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -276,8 +276,8 @@ public enum Tokens {
     public enum Radius {
         /// Apple-measured (P43, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let sidebarSelection: CGFloat = 8
-        /// A history card's corner: its own rounded rect, inside the drawer's 8 pt selection corner.
-        public static let cardShadow: CGFloat = 4
+        /// The drawer's cards are 328 pt wide inside its 360 pt pane; the pane's 16 pt window corner at that width is 16 x 328/360 = 14.6, so 15 keeps the same corner proportion at card scale.
+        public static let historyCard: CGFloat = 15
         /// The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's.
         public static let banner: CGFloat = 16
     }

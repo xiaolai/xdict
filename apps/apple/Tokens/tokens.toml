@@ -177,7 +177,7 @@ brown = { system = "systemBrown" }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
-cardShadow = { value = 4, why = "A history card's corner: its own rounded rect, inside the drawer's 8 pt selection corner." }
+historyCard = { value = 15, why = "The drawer's cards are 328 pt wide inside its 360 pt pane; the pane's 16 pt window corner at that width is 16 x 328/360 = 14.6, so 15 keeps the same corner proportion at card scale." }
 banner = { value = 16, why = "The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's." }
 
 [line]
