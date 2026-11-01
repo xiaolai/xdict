@@ -4,7 +4,10 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="XDict" Manufacturer="XDict" Version="$(var.Version)" UpgradeCode="41C24C37-620F-46DC-A1E0-BF1D638ADE6E"
            Scope="perMachine" Compressed="yes" InstallerVersion="500">
-    <MajorUpgrade DowngradeErrorMessage="A newer version of XDict is already installed." />
+    <!-- Remove the old product only after the new one is installed: a failed upgrade then leaves the reader's
+         working version in place. The default schedule removes it before the new files are copied. -->
+    <MajorUpgrade Schedule="afterInstallExecute"
+                  DowngradeErrorMessage="A newer version of XDict is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="XDict" />
