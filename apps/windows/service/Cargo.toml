@@ -7,9 +7,10 @@ publish = false
 [workspace]
 
 [features]
-# Test artifact only: confinement probes never ship in the production service.
+# Test artifact only: confinement probes never ship in the production service. The foreign-contract build speaks the
+# next version, so a mixed pair exercises `contractMismatch` against the product pair.
 acceptance-probes = []
-acceptance-contract2 = []
+acceptance-contract3 = []
 
 [dependencies]
 # The core's serde feature gives the contract's camelCase, type-tagged records.

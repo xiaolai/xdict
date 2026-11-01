@@ -8,10 +8,11 @@ namespace XDict.Contract;
 public static class Wire
 {
     /// <summary>Raised by any change to the envelope, an operation, a record, a limit or an error.</summary>
-    public const uint Version = 1;
+    public const uint Version = 2;
 
-    /// <summary>One JSON envelope's ceiling, read before it is decoded.</summary>
-    public const int JsonMax = 1 << 20;
+    /// <summary>One JSON envelope's ceiling, read before it is decoded. 4 MiB since contract 2: a maximum history,
+    /// the notes and the conflicts travel whole, or are refused as a product-visible bound.</summary>
+    public const int JsonMax = 4 << 20;
 
     /// <summary>One bulk payload's ceiling, in bytes.</summary>
     public const int BulkMax = 64 << 20;

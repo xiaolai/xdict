@@ -14,7 +14,8 @@ public static class Validate
         "cancelled", "incompatible", "internal",
     ];
 
-    public static readonly string[] WireErrorTypes = ["contractMismatch", "admission", "busy", "deadline", "closed"];
+    public static readonly string[] WireErrorTypes =
+        ["contractMismatch", "admission", "busy", "deadline", "closed", "envelopeTooLarge"];
 
     public static void Request(JsonElement request)
     {

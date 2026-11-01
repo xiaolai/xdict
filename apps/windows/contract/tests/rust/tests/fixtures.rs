@@ -15,6 +15,7 @@ fn every_fixture_decodes_and_re_encodes() {
         serde_json::from_str(&fs::read_to_string(contract_dir().join("contract.json")).expect("contract.json"))
             .expect("contract.json decodes");
     let operations = schema["operations"].as_object().expect("operations");
+    let contract = schema["contract"].as_u64().expect("the contract's number");
     let mut errors: Vec<String> = Vec::new();
     for side in ["core", "wire"] {
         for error in schema["errors"][side].as_array().expect("errors") {
@@ -33,8 +34,8 @@ fn every_fixture_decodes_and_re_encodes() {
         assert_eq!(request["id"], reply["id"], "{name}: the id is echoed");
         let op = request["op"].as_str().expect("an op");
         assert!(operations.contains_key(op), "{name}: op {op} is in the schema");
-        assert_eq!(reply["contract"].as_u64(), Some(1), "{name}: the reply's contract is 1");
-        if request["contract"].as_u64() != Some(1) {
+        assert_eq!(reply["contract"].as_u64(), Some(contract), "{name}: the reply's contract is the schema's");
+        if request["contract"].as_u64() != Some(contract) {
             assert_eq!(
                 reply["error"]["type"].as_str(),
                 Some("contractMismatch"),
@@ -53,5 +54,5 @@ fn every_fixture_decodes_and_re_encodes() {
         }
         count += 1;
     }
-    assert!(count >= 8, "the fixture set is {count}, expected at least 8");
+    assert!(count >= 26, "the fixture set is {count}, expected at least 26");
 }

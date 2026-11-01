@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use crate::failure::Failure;
 use crate::ops::Events;
-use crate::wire::{Answer, CONTRACT};
+use crate::wire::{Answer, CONTRACT, JSON_MAX};
 use serde_json::{Value, json};
 
 pub struct Writer {
@@ -56,6 +56,20 @@ impl Writer {
         let Ok(bytes) = serde_json::to_vec(&record) else {
             return;
         };
+        // A valid answer over the envelope ceiling is refused as a product-visible bound, never truncated and never
+        // left to make the client drop the connection (`CONTRACT.md` §5). Its bulk payload goes with it.
+        if bytes.len() > JSON_MAX {
+            let refusal = json!({"contract": CONTRACT, "id": id, "error": {
+                "type": "envelopeTooLarge", "bytes": bytes.len(), "ceiling": JSON_MAX,
+                "detail": "the answer is over the JSON envelope's ceiling"
+            }});
+            let Ok(refusal) = serde_json::to_vec(&refusal) else {
+                return;
+            };
+            let mut out = self.out.lock().unwrap_or_else(|p| p.into_inner());
+            let _ = frame(out.as_mut(), 1, &refusal);
+            return;
+        }
         // One lock for the announcement AND bytes: no event or reply may split this pair.
         let mut out = self.out.lock().unwrap_or_else(|p| p.into_inner());
         if frame(out.as_mut(), 1, &bytes).is_err() {

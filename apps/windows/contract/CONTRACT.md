@@ -1,8 +1,9 @@
-# The Windows wire contract — contract 1
+# The Windows wire contract — contract 2
 
-**2026-10-20** · Status: **frozen, contract 1** — every fixture in `fixtures.jsonl` is decoded, checked against this
-schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it in WI-3/WI-4.
-Normative for `apps/windows/`; decisions in ADR-0022.
+**2026-11-01** · Status: **current, contract 2** — every fixture in `fixtures.jsonl` is decoded, checked against this
+schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 adds
+the learning set (history, notes, review, export/erase, the entry gloss) and raises the JSON envelope to 4 MiB.
+Normative for `apps/windows/`; decisions in ADR-0022 and ADR-0023/0037.
 
 ## 1. Transport
 
@@ -18,8 +19,10 @@ one end and reads replies on the other; the service does the reverse on its inhe
 | 1 | a JSON envelope, UTF-8 |
 | 2 | `u64 transfer id` then raw bytes (a bulk reply) |
 
-A frame is bounded before it is read: JSON ≤ 1 MiB, bulk ≤ 64 MiB. A frame of an unknown kind, a length that
-exceeds its bound, or a truncated frame ends the connection; the service answers nothing further on it.
+A frame is bounded before it is read: JSON ≤ 4 MiB, bulk ≤ 64 MiB. A frame of an unknown kind, a length that
+exceeds its bound, or a truncated frame ends the connection; the service answers nothing further on it. A **reply**
+JSON over 4 MiB is refused as `envelopeTooLarge`, with its bulk payload withheld, so a maximum history is a typed,
+product-visible bound rather than a connection the client must drop.
 
 ## 2. The envelope
 
@@ -68,8 +71,31 @@ are macOS-only, ADR-0011).
 | `joinLineage` | `{"edition","lineage"}` | `LineageId` |
 | `splitLineage` | `{"edition","newLineage"}` | `LineageId` |
 | `lineageOf` | `{"edition"}` | `LineageId?` |
+| `entryGloss` | `{"entry":EntryRef}` | `EntryGloss` |
+| `ledgerRecord` | `{"reading":Reading,"operation","targetLanguages":[string]}` | `RecordOutcome` |
+| `ledgerHistory` | `{"now","utcOffsetSeconds"}` | `History` |
+| `ledgerRemove` / `ledgerRestore` | `{"removal":Removal,"operation"}` | `RecordOutcome` |
+| `exportData` | — | the log's JSON as the reply's **bulk payload** (`application/json`) |
+| `eraseData` | `{"stamp":Stamp,"operation"}` | `EraseReport` |
+| `studyNote` | `{"dict","entry":EntryRef,"text","name","stamp":Stamp,"operation"}` | `Note` |
+| `studyNoteAt` | `{"entry":EntryRef,"text","name","stamp":Stamp,"operation"}` | `Note` |
+| `studyNotes` | — | `[Note]` |
+| `definitionHash` | `{"dict","entry":EntryRef}` | string |
+| `studyReanchor` | `{"oldEdition","newEdition","stamp":Stamp,"operationPrefix"}` | `ReanchorReport` |
+| `reviewQueue` | `{"now","limit"}` | `[StudyCard]` |
+| `reviewGrade` | `{"target","revision","grade":"again"|"hard"|"good"|"easy","policy":ReviewPolicy,"stamp":Stamp,"operation"}` | `ReviewOutcome` |
+| `reviewUndo` | `{"target","gradeEvent","stamp":Stamp,"operation"}` | `ReviewOutcome` |
+| `reviewSummary` | `{"now"}` | `ReviewSummary` |
+| `studyConflicts` | — | `[CardConflict]` |
+| `reviewResolve` | `{"target","keep","stamp":Stamp,"operation"}` | `ReviewOutcome` |
 
 `FileRef` is `{"file":"<uuid>"}`, naming an entry of `files`. `EntryRef` is `{"edition","key","occurrence"}`.
+
+**Edition admission.** `entryGloss`, `studyNoteAt` and `studyReanchor` name an edition rather than a handle. The service
+keeps an **edition→open-dictionary map** from `open`; the named edition is resolved there and its files must be
+observed like any dictionary's, or the request is `admission`. A service that does not hold the edition answers
+`notFound` with `what:"edition"`; the client reopens that dictionary once, keeps the operation id, and never substitutes
+another edition. `exportData`'s JSON document is the reply's bulk payload, so the 4 MiB envelope never carries it.
 `View` is `{"baseUrl","maxBodyBytes","originalStyle":<bool>}`; the service applies the contract's base and the
 view's ceiling, never a base from the request. The records, enums and error shapes are the core's serde shapes
 (`core/xdict-core/src/types.rs`, camelCase and a `type` tag), which the fixtures below quote.
@@ -84,15 +110,19 @@ answers `cancelled` and registers nothing.
 `CoreError` maps one-to-one: `unsupported` (`feature` typed), `malformed`, `tooLarge` (`limit`), `notFound`
 (`what`), `io` (`kind`), `staleHandle`, `editionMismatch`, `sourceChanged`, `cancelled`, `incompatible`
 (`core`,`client`), `internal`; each carries `detail` for logs only. The wire adds `contractMismatch`
-(`contract`,`service`), `admission`, `busy`, `deadline` and `closed`. **The shell words every sentence**; a service
-never sends one.
+(`contract`,`service`), `admission`, `busy`, `deadline`, `closed` and `envelopeTooLarge` (`bytes`,`ceiling`). **The
+shell words every sentence**; a service never sends one.
 
 ## 5. Limits, deadlines and lifecycle
 
-- Envelope ≤ 1 MiB; rendered body ≤ 16 MiB; any other resource ≤ 64 MiB; a page ≤ 1,000; suggestions ≤ 1,000.
+- Envelope ≤ 4 MiB; rendered body ≤ 16 MiB; any other resource ≤ 64 MiB; a page ≤ 1,000; suggestions ≤ 1,000.
 - Two bulk replies in flight; eight lookup-class calls in flight; one import at a time; a **service-wide** gate
   admits work across connections, and a stalled call past its deadline frees its slot by a new connection.
-- Deadlines: lookup-class 10 s, import none (the app cancels), bulk 30 s.
+- Deadlines: lookup-class 10 s, import none (the app cancels), bulk 30 s. Contract 2: `entryGloss`, `studyNote`,
+  `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` 15 s; `ledgerRecord`, `ledgerHistory`,
+  `ledgerRemove`/`Restore`, `exportData`, `eraseData`, `studyNotes`, the review calls and `studyConflicts` 5 s.
+  Bulk-class in contract 2 is `entry`, `resource`, `entryGloss`, `exportData`, `studyNote`, `studyNoteAt`,
+  `definitionHash` and `studyReanchor`.
 - A killed service makes every handle stale; the app starts a new service, re-duplicates the handles and re-opens.
   The service exits when idle with no request, import or reply in flight; the app restarts it on demand.
 

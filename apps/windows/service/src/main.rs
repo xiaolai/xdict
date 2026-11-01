@@ -8,14 +8,12 @@ mod wire;
 use crate::failure::Failure;
 use crate::ops::{Service, is_bulk};
 use crate::runtime::{Active, Activity, WorkGate, Writer};
-use crate::wire::{CONTRACT, Request};
+use crate::wire::{CONTRACT, JSON_MAX, Request};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-
-const JSON_MAX: usize = 1 << 20;
 
 fn main() {
     let arguments = Arguments::parse();

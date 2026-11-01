@@ -1,16 +1,16 @@
 {
-  "contract": 1,
-  "status": "frozen at contract 1 (2026-10-20): tests/rust and tests/cs decode, validate and re-encode every fixture",
+  "contract": 2,
+  "status": "current at contract 2 (2026-11-01): the learning set; tests/rust and tests/cs decode, validate and re-encode every fixture",
   "transport": {
     "pipe": "a private duplex pair created by the app at each spawn; the service's ends inherited through PROC_THREAD_ATTRIBUTE_HANDLE_LIST",
     "frame": ["u32 length (little-endian, payload bytes)", "u8 kind", "payload"],
     "kinds": { "1": "json envelope", "2": "u64 transfer id, then bulk bytes" },
-    "jsonMax": 1048576,
+    "jsonMax": 4194304,
     "bulkMax": 67108864
   },
   "envelope": {
     "required": ["contract", "id", "op", "files", "operation"],
-    "contract": 1,
+    "contract": 2,
     "id": "u64, unique per connection, echoed",
     "files": {
       "id": "uuid, the app's file id",
@@ -21,8 +21,8 @@
     }
   },
   "reply": {
-    "ok": { "contract": 1, "id": "echoed", "ok": "the operation's record" },
-    "error": { "contract": 1, "id": "echoed", "error": { "type": "one of the typed errors", "detail": "logs only" } },
+    "ok": { "contract": 2, "id": "echoed", "ok": "the operation's record" },
+    "error": { "contract": 2, "id": "echoed", "error": { "type": "one of the typed errors", "detail": "logs only" } },
     "bulk": { "transfer": "u64", "length": "u64", "mime": "string; the kind-2 frame with this transfer id follows before any other reply" }
   },
   "operations": {
@@ -41,14 +41,32 @@
     "readingStyle": { "operation": ["dict"], "ok": "ReadingStyle" },
     "joinLineage": { "operation": ["edition", "lineage"], "ok": "LineageId" },
     "splitLineage": { "operation": ["edition", "newLineage"], "ok": "LineageId" },
-    "lineageOf": { "operation": ["edition"], "ok": "LineageId?" }
+    "lineageOf": { "operation": ["edition"], "ok": "LineageId?" },
+    "entryGloss": { "operation": ["entry"], "ok": "EntryGloss" },
+    "ledgerRecord": { "operation": ["reading", "operation", "targetLanguages"], "ok": "RecordOutcome" },
+    "ledgerHistory": { "operation": ["now", "utcOffsetSeconds"], "ok": "History" },
+    "ledgerRemove": { "operation": ["removal", "operation"], "ok": "RecordOutcome" },
+    "ledgerRestore": { "operation": ["removal", "operation"], "ok": "RecordOutcome" },
+    "exportData": { "operation": null, "ok": "the log's JSON as bulk (application/json)" },
+    "eraseData": { "operation": ["stamp", "operation"], "ok": "EraseReport" },
+    "studyNote": { "operation": ["dict", "entry", "text", "name", "stamp", "operation"], "ok": "Note" },
+    "studyNoteAt": { "operation": ["entry", "text", "name", "stamp", "operation"], "ok": "Note" },
+    "studyNotes": { "operation": null, "ok": "Note[]" },
+    "definitionHash": { "operation": ["dict", "entry"], "ok": "string" },
+    "studyReanchor": { "operation": ["oldEdition", "newEdition", "stamp", "operationPrefix"], "ok": "ReanchorReport" },
+    "reviewQueue": { "operation": ["now", "limit"], "ok": "StudyCard[]" },
+    "reviewGrade": { "operation": ["target", "revision", "grade", "policy", "stamp", "operation"], "ok": "ReviewOutcome" },
+    "reviewUndo": { "operation": ["target", "gradeEvent", "stamp", "operation"], "ok": "ReviewOutcome" },
+    "reviewSummary": { "operation": ["now"], "ok": "ReviewSummary" },
+    "studyConflicts": { "operation": null, "ok": "CardConflict[]" },
+    "reviewResolve": { "operation": ["target", "keep", "stamp", "operation"], "ok": "ReviewOutcome" }
   },
   "errors": {
     "core": ["unsupported", "malformed", "tooLarge", "notFound", "io", "staleHandle", "editionMismatch", "sourceChanged", "cancelled", "incompatible", "internal"],
-    "wire": ["contractMismatch", "admission", "busy", "deadline", "closed"]
+    "wire": ["contractMismatch", "admission", "busy", "deadline", "closed", "envelopeTooLarge"]
   },
   "limits": {
-    "jsonMax": 1048576,
+    "jsonMax": 4194304,
     "bodyMax": 16777216,
     "resourceMax": 67108864,
     "page": 1000,
@@ -57,5 +75,17 @@
     "lookupClassInFlight": 8,
     "imports": 1
   },
-  "deadlines": { "lookupClassSeconds": 10, "import": "the app cancels", "bulkSeconds": 30 }
+  "deadlines": {
+    "lookupClassSeconds": 10,
+    "import": "the app cancels",
+    "bulkSeconds": 30,
+    "entryGlossSeconds": 10,
+    "studyNoteSeconds": 10,
+    "definitionHashSeconds": 10,
+    "studyReanchorSeconds": 15,
+    "ledgerSeconds": 5,
+    "exportSeconds": 5,
+    "eraseSeconds": 5,
+    "reviewSeconds": 5
+  }
 }

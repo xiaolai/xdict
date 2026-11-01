@@ -68,7 +68,7 @@ public static class Program
         });
         Check("the index format is a known version", () => AtLeast(1u, versions!.IndexFormat, "index format"));
         Check("normalization is a known version", () => AtLeast(1u, versions!.Normalization, "normalization"));
-        Check("a contract other than 1 is answered contractMismatch", () => mismatch = client.CallWithContract(999, "versions", null));
+        Check("a contract other than the product's is answered contractMismatch", () => mismatch = client.CallWithContract(999, "versions", null));
         Check("the mismatch names both contracts", () =>
         {
             Json(mismatch!, "error");

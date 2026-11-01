@@ -7,6 +7,12 @@ using XDict.Contract;
 
 namespace XDict.Client;
 
+/// <summary>An envelope the client refuses to send: the contract's 4 MiB bound, checked before the pipe.</summary>
+public sealed class RequestTooLargeException : Exception
+{
+    public RequestTooLargeException(int bytes, int ceiling) : base($"the request is {bytes} bytes, the ceiling is {ceiling}") { }
+}
+
 internal sealed class ServiceConnection : IDisposable
 {
     internal readonly ChildProcess Child;
@@ -46,7 +52,7 @@ internal sealed class ServiceConnection : IDisposable
             {
                 contract, id, op = operation, files = files(), operation = body,
             }, Wire.Options);
-            if (payload.Length > Wire.JsonMax) throw new ContractViolationException("the request is over the JSON limit");
+            if (payload.Length > Wire.JsonMax) throw new RequestTooLargeException(payload.Length, Wire.JsonMax);
             if (!pending.TryAdd(id, completion)) throw new ContractViolationException("a request id was reused");
             sent();
             // Anonymous pipes are synchronous handles. Keep blocking I/O off the caller's (possibly UI) thread.

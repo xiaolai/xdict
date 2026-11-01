@@ -41,8 +41,8 @@ public class FixtureTests
             Assert.Equal(request["id"]!.ToJsonString(), reply["id"]!.ToJsonString());
             string op = request["op"]!.GetValue<string>();
             Assert.True(operations.ContainsKey(op), $"{name}: op {op} is in the schema");
-            Assert.Equal(1, reply["contract"]!.GetValue<int>());
-            if (request["contract"]!.GetValue<int>() != 1)
+            Assert.Equal(Wire.Version, reply["contract"]!.GetValue<uint>());
+            if (request["contract"]!.GetValue<uint>() != Wire.Version)
                 Assert.Equal("contractMismatch", reply["error"]!["type"]!.GetValue<string>());
             if (reply["error"] is JsonObject error)
                 Assert.Contains(error["type"]!.GetValue<string>(), errors);
@@ -54,6 +54,6 @@ public class FixtureTests
             }
             count++;
         }
-        Assert.True(count >= 8, $"the fixture set is {count}, expected at least 8");
+        Assert.True(count >= 26, $"the fixture set is {count}, expected at least 26");
     }
 }

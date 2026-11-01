@@ -8,14 +8,18 @@ use std::sync::{Arc, Mutex};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use xdict_core::{Config, Core, CoreError, Location, Opened, Package, Progress, Resource, View};
+use xdict_core::{
+    Config, Core, CoreError, Location, Missing, Opened, Package, Progress, Resource, View,
+};
 
 use crate::failure::Failure;
 use crate::handles::{HandleSource, Ledger, admit};
 use crate::wire::{
-    Answer, BASE_URL, BODY_MAX, CONTRACT, CloseBody, DictBody, EntryBody, FileRef, ImportBody,
-    JoinLineageBody, LineageOfBody, LinkBody, LookupBody, OpenBody, PackageSpec, Request,
-    ResourceBody, SplitLineageBody, SuggestBody,
+    Answer, BASE_URL, BODY_MAX, CONTRACT, CloseBody, DefinitionHashBody, DictBody, EntryBody,
+    EntryGlossBody, EraseBody, FileRef, GradeBody, ImportBody, JoinLineageBody, LedgerHistoryBody,
+    LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody, OpenBody,
+    PackageSpec, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody, SplitLineageBody,
+    StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, UndoBody,
 };
 
 /// Slow work tells the app how far it is; the app's answer can stop it.
@@ -80,10 +84,32 @@ fn named_dicts(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
     })
 }
 
+/// The editions an operation names instead of a handle. Admission resolves each through the service's edition→open
+/// map, so the operation's files are checked even though the app sent no dictionary handle (`CONTRACT.md` §3).
+fn named_editions(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
+    fn one<T: DeserializeOwned>(body: &Value) -> Result<T, Failure> {
+        serde_json::from_value(body.clone()).map_err(|error| {
+            Failure::Core(CoreError::Malformed {
+                detail: error.to_string(),
+            })
+        })
+    }
+    Ok(match operation {
+        "entryGloss" => vec![one::<EntryGlossBody>(body)?.entry.edition],
+        "studyNoteAt" => vec![one::<StudyNoteAtBody>(body)?.entry.edition],
+        "studyReanchor" => vec![one::<ReanchorBody>(body)?.new_edition],
+        _ => Vec::new(),
+    })
+}
+
 pub struct Service {
     core: Core,
     ledger: Arc<Ledger>,
     files_of: Mutex<HashMap<String, Vec<String>>>,
+    /// Which open dictionary a contract-2 operation names by edition. A fresh service has no entry, which is what
+    /// makes `notFound(.edition)` a real answer the client reopens from.
+    editions: Mutex<HashMap<String, String>>,
+    edition_of: Mutex<HashMap<String, String>>,
     cancels: Mutex<HashMap<u64, Arc<CancelState>>>,
 }
 
@@ -93,6 +119,8 @@ impl Service {
             core,
             ledger: Arc::new(Ledger::default()),
             files_of: Mutex::new(HashMap::new()),
+            editions: Mutex::new(HashMap::new()),
+            edition_of: Mutex::new(HashMap::new()),
             cancels: Mutex::new(HashMap::new()),
         }
     }
@@ -123,7 +151,22 @@ impl Service {
     /// decodes: a temporary duplicate is owned and closed even when the operation is refused.
     fn admit_request(&self, request: &Request) -> Result<HashMap<String, HandleSource>, Failure> {
         let sources = admit(&request.files, &self.ledger)?;
-        let dicts = named_dicts(&request.op, &request.operation)?;
+        let mut dicts = named_dicts(&request.op, &request.operation)?;
+        // An edition-named operation reads the dictionary open under that edition; the app never names its handle,
+        // so admission resolves it here and then checks that dictionary's files like any other.
+        for edition in named_editions(&request.op, &request.operation)? {
+            let editions = self
+                .editions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let Some(dict) = editions.get(&edition).cloned() else {
+                return Err(Failure::Core(CoreError::NotFound {
+                    what: Missing::Edition,
+                    detail: format!("{edition} is not open"),
+                }));
+            };
+            dicts.push(dict);
+        }
         if request.op != "close" {
             let packages = self.files_of.lock().unwrap_or_else(|p| p.into_inner());
             for dict in dicts {
@@ -217,6 +260,121 @@ impl Service {
                 let body: LineageOfBody = decode(&request.operation)?;
                 record(self.core.lineage_of(body.edition)?)
             }
+            // MARK: contract 2 — the learning set
+            "entryGloss" => {
+                let body: EntryGlossBody = decode(&request.operation)?;
+                record(self.core.entry_gloss(body.entry)?)
+            }
+            "ledgerRecord" => {
+                let body: LedgerRecordBody = decode(&request.operation)?;
+                record(self.core.ledger_record(
+                    body.reading,
+                    body.operation,
+                    body.target_languages,
+                )?)
+            }
+            "ledgerHistory" => {
+                let body: LedgerHistoryBody = decode(&request.operation)?;
+                record(
+                    self.core
+                        .ledger_history(body.now, body.utc_offset_seconds)?,
+                )
+            }
+            "ledgerRemove" => {
+                let body: LedgerRemovalBody = decode(&request.operation)?;
+                record(self.core.ledger_remove(body.removal, body.operation)?)
+            }
+            "ledgerRestore" => {
+                let body: LedgerRemovalBody = decode(&request.operation)?;
+                record(self.core.ledger_restore(body.removal, body.operation)?)
+            }
+            "exportData" => {
+                let bytes = self.core.ledger_export_json()?.into_bytes();
+                Ok(Answer {
+                    record: json!({}),
+                    payload: Some((bytes, "application/json".to_string())),
+                })
+            }
+            "eraseData" => {
+                let body: EraseBody = decode(&request.operation)?;
+                record(
+                    self.core
+                        .ledger_erase(body.operation, body.stamp.at, body.stamp.device)?,
+                )
+            }
+            "studyNote" => {
+                let body: StudyNoteBody = decode(&request.operation)?;
+                record(self.core.study_note(
+                    body.dict,
+                    body.entry,
+                    body.text,
+                    body.name,
+                    body.stamp,
+                    body.operation,
+                )?)
+            }
+            "studyNoteAt" => {
+                let body: StudyNoteAtBody = decode(&request.operation)?;
+                record(self.core.study_note_at(
+                    body.entry,
+                    body.text,
+                    body.name,
+                    body.stamp,
+                    body.operation,
+                )?)
+            }
+            "studyNotes" => record(self.core.study_notes()?),
+            "definitionHash" => {
+                let body: DefinitionHashBody = decode(&request.operation)?;
+                record(self.core.definition_hash_of(body.dict, body.entry)?)
+            }
+            "studyReanchor" => {
+                let body: ReanchorBody = decode(&request.operation)?;
+                record(self.core.study_reanchor(
+                    body.old_edition,
+                    body.new_edition,
+                    body.stamp,
+                    body.operation_prefix,
+                )?)
+            }
+            "reviewQueue" => {
+                let body: QueueBody = decode(&request.operation)?;
+                record(self.core.review_queue(body.now, body.limit)?)
+            }
+            "reviewGrade" => {
+                let body: GradeBody = decode(&request.operation)?;
+                record(self.core.review_grade(
+                    body.target,
+                    body.revision,
+                    body.grade.number(),
+                    body.policy,
+                    body.stamp,
+                    body.operation,
+                )?)
+            }
+            "reviewUndo" => {
+                let body: UndoBody = decode(&request.operation)?;
+                record(self.core.review_undo(
+                    body.target,
+                    body.grade_event,
+                    body.stamp,
+                    body.operation,
+                )?)
+            }
+            "reviewSummary" => {
+                let body: SummaryBody = decode(&request.operation)?;
+                record(self.core.review_summary(body.now)?)
+            }
+            "studyConflicts" => record(self.core.review_conflicts()?),
+            "reviewResolve" => {
+                let body: ResolveBody = decode(&request.operation)?;
+                record(self.core.review_resolve(
+                    body.target,
+                    body.keep,
+                    body.stamp,
+                    body.operation,
+                )?)
+            }
             other => Err(Failure::Core(CoreError::Malformed {
                 detail: format!("the operation {other} is not in contract {CONTRACT}"),
             })),
@@ -271,11 +429,19 @@ impl Service {
         let package = self.package(&body.package, &mut sources)?;
         let ids = package_ids(&body.package);
         let opened = self.core.open(package)?;
-        if let Opened::Ready { dict, .. } = &opened {
+        if let Opened::Ready { dict, edition, .. } = &opened {
             self.files_of
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .insert(dict.clone(), ids);
+            self.editions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(edition.clone(), dict.clone());
+            self.edition_of
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(dict.clone(), edition.clone());
         }
         record(opened)
     }
@@ -287,6 +453,20 @@ impl Service {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(&body.dict);
+        if let Some(edition) = self
+            .edition_of
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&body.dict)
+        {
+            let mut editions = self
+                .editions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if editions.get(&edition) == Some(&body.dict) {
+                editions.remove(&edition);
+            }
+        }
         Ok(Answer {
             record: json!("closed"),
             payload: None,
@@ -385,9 +565,20 @@ impl Service {
     }
 }
 
-/// Whether an operation is bulk-class: two at a time.
+/// Whether an operation is bulk-class: two at a time. The contract-2 learning operations read a body or the whole log,
+/// so they hold a bulk credit like an entry or a resource (`CONTRACT.md` §5).
 pub fn is_bulk(op: &str) -> bool {
-    matches!(op, "entry" | "resource")
+    matches!(
+        op,
+        "entry"
+            | "resource"
+            | "entryGloss"
+            | "exportData"
+            | "studyNote"
+            | "studyNoteAt"
+            | "definitionHash"
+            | "studyReanchor"
+    )
 }
 
 fn package_ids(spec: &PackageSpec) -> Vec<String> {

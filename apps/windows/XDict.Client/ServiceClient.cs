@@ -146,17 +146,31 @@ public sealed class ServiceClient : IDisposable
         SemaphoreSlim? credit = null;
         bool acquired = false, sent = false;
         using var timeout = new CancellationTokenSource();
-        // health scans every record of the whole MDX; it is bulk work, not a lookup, and a lookup deadline killed
-        // the service mid-scan on the multi-million-record dictionaries.
-        TimeSpan deadline = operation is "entry" or "resource" or "health" ? options.BulkDeadline : options.LookupDeadline;
-        if (operation != "import") timeout.CancelAfter(deadline);
+        // The contract's per-operation deadlines (`CONTRACT.md` §5). health scans every record of the whole MDX; it is
+        // bulk work, not a lookup, and a lookup deadline killed the service mid-scan on the multi-million-record
+        // dictionaries.
+        TimeSpan? deadline = operation switch
+        {
+            "import" => null,
+            "entry" or "resource" or "health" => options.BulkDeadline,
+            "entryGloss" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
+            "studyReanchor" => TimeSpan.FromSeconds(15),
+            "exportData" or "ledgerRecord" or "ledgerHistory" or "ledgerRemove" or "ledgerRestore" or "eraseData"
+                or "studyNotes" or "reviewQueue" or "reviewGrade" or "reviewUndo" or "reviewSummary" or "studyConflicts"
+                or "reviewResolve" => TimeSpan.FromSeconds(5),
+            _ => options.LookupDeadline,
+        };
+        if (deadline is { } bound) timeout.CancelAfter(bound);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, generation?.Token ?? default, timeout.Token);
         CancellationToken token = linked.Token;
         try
         {
             token.ThrowIfCancellationRequested();
             current = Connection();
-            credit = operation == "import" ? current.Imports : operation is "entry" or "resource" ? current.Bulk : current.Lookup;
+            credit = operation == "import" ? current.Imports
+                : operation is "entry" or "resource" or "entryGloss" or "exportData" or "studyNote" or "studyNoteAt"
+                    or "definitionHash" or "studyReanchor" ? current.Bulk
+                : current.Lookup;
             await credit.WaitAsync(token).ConfigureAwait(false);
             acquired = true;
             JsonNode? requestBody = JsonSerializer.SerializeToNode(body, Wire.Options);
@@ -167,27 +181,52 @@ public sealed class ServiceClient : IDisposable
                 try
                 {
                     var required = new List<object>(requestFiles);
+
+                    // A reopened service gets its open dictionaries back before the operation is sent. The same
+                    // restore serves an edition-named operation, whose body has no handle to replace: admission
+                    // resolves the edition through the service's own map, and the request still carries its files.
+                    async Task<Reply?> EnsureOpenAsync(OpenPackage package, string key)
+                    {
+                        if (package.Connection == current) return null;
+                        ServiceConnection live = current!;
+                        ulong reopenId = (ulong)Interlocked.Increment(ref nextId);
+                        Reply reopened = await live.Send(Wire.Version, reopenId, "open", package.Body,
+                            () => Materialize(live, package.Files), () => { }, token).WaitAsync(token).ConfigureAwait(false);
+                        if (reopened.Error is { } reopenError)
+                            return Error(id, reopenError.GetProperty("type").GetString() ?? "staleHandle");
+                        if (reopened.Ok?.GetProperty("type").GetString() != "ready")
+                            return Error(id, "needsImport");
+                        if (reopened.Ok.Value.GetProperty("edition").GetString() != package.Edition)
+                            return Error(id, "sourceChanged");
+                        lock (state)
+                            opened[key] = package with {
+                                Connection = live,
+                                Remote = reopened.Ok.Value.GetProperty("dict").GetString()!,
+                            };
+                        return null;
+                    }
+
                     foreach (string dict in DictionaryIds(requestBody).ToArray())
                     {
                         OpenPackage? package;
                         lock (state) opened.TryGetValue(dict, out package);
                         if (package is null) continue;
-                        if (package.Connection != current)
-                        {
-                            ulong reopenId = (ulong)Interlocked.Increment(ref nextId);
-                            Reply reopened = await current.Send(Wire.Version, reopenId, "open", package.Body,
-                                () => Materialize(current, package.Files), () => { }, token).WaitAsync(token).ConfigureAwait(false);
-                            if (reopened.Error is { } reopenError)
-                                return Error(id, reopenError.GetProperty("type").GetString() ?? "staleHandle");
-                            if (reopened.Ok?.GetProperty("type").GetString() != "ready")
-                                return Error(id, "needsImport");
-                            if (reopened.Ok.Value.GetProperty("edition").GetString() != package.Edition)
-                                return Error(id, "sourceChanged");
-                            package = package with { Connection = current, Remote = reopened.Ok.Value.GetProperty("dict").GetString()! };
-                            lock (state) opened[dict] = package;
-                        }
+                        Reply? failure = await EnsureOpenAsync(package, dict);
+                        if (failure is not null) return failure;
+                        lock (state) package = opened[dict];
                         ReplaceDictionary(requestBody, dict, package.Remote);
                         required.AddRange(package.Files);
+                    }
+                    foreach (string edition in EditionIds(operation, requestBody).ToArray())
+                    {
+                        KeyValuePair<string, OpenPackage>? found = null;
+                        lock (state)
+                            foreach (var pair in opened)
+                                if (pair.Value.Edition == edition) { found = pair; break; }
+                        if (found is not { } entry) continue;
+                        Reply? failure = await EnsureOpenAsync(entry.Value, entry.Key);
+                        if (failure is not null) return failure;
+                        required.AddRange(entry.Value.Files);
                     }
                     requestFiles = required.OfType<FileObservation>().DistinctBy(file => file.Id).Cast<object>()
                         .Concat(required.Where(file => file is not FileObservation)).ToArray();
@@ -217,7 +256,7 @@ public sealed class ServiceClient : IDisposable
         catch (OperationCanceledException)
         {
             if (timeout.IsCancellationRequested && sent) current?.Dispose();
-            else if (sent && operation != "import") current?.Abandon(id, deadline - Stopwatch.GetElapsedTime(started));
+            else if (sent && operation != "import") current?.Abandon(id, deadline.GetValueOrDefault() - Stopwatch.GetElapsedTime(started));
             // Import cancellation must reach the core's progress flag even when the caller stops waiting. The reply is
             // awaited: a busy or closed queue answers with a typed error, which a discarded fire-and-forget call hid.
             if (operation == "import" && sent && current is not null && current.IsAlive)
@@ -235,6 +274,7 @@ public sealed class ServiceClient : IDisposable
             return Error(id, timeout.IsCancellationRequested ? "deadline" : "cancelled");
         }
         catch (ServiceFailureException error) { return Error(id, error.ErrorType); }
+        catch (RequestTooLargeException) { return Error(id, "envelopeTooLarge"); }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
             current?.Dispose();
@@ -274,6 +314,22 @@ public sealed class ServiceClient : IDisposable
         if (obj["dict"] is JsonValue value && value.TryGetValue(out string? dict)) yield return dict;
         if (obj["dicts"] is JsonArray dicts)
             foreach (JsonNode? item in dicts) if (item is not null) yield return item.GetValue<string>();
+    }
+
+    /// <summary>The editions a contract-2 operation names instead of a handle (`entryGloss`, `studyNoteAt`, and the
+    /// new edition of `studyReanchor`). They select the dictionary the client reopens, never a substitute.</summary>
+    private static IEnumerable<string> EditionIds(string operation, JsonNode? body)
+    {
+        if (body is not JsonObject obj) yield break;
+        if (operation is "entryGloss" or "studyNoteAt"
+            && obj["entry"] is JsonObject entry
+            && entry["edition"] is JsonValue edition
+            && edition.TryGetValue(out string? named))
+            yield return named;
+        if (operation == "studyReanchor"
+            && obj["newEdition"] is JsonValue next
+            && next.TryGetValue(out string? moved))
+            yield return moved;
     }
 
     private static void ReplaceDictionary(JsonNode? body, string original, string remote)

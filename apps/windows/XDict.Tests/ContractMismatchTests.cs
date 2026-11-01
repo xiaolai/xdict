@@ -46,8 +46,8 @@ public class ContractMismatchTests
             new ServiceClientOptions { Storage = "foreign-" + Guid.NewGuid().ToString("N") });
         Reply reply = client.Call("versions", null);
         Assert.Equal("contractMismatch", reply.Error!.Value.GetProperty("type").GetString());
-        Assert.Equal(1u, reply.Error.Value.GetProperty("contract").GetUInt32());
-        Assert.Equal(2u, reply.Error.Value.GetProperty("service").GetUInt32());
+        Assert.Equal(Wire.Version, reply.Error.Value.GetProperty("contract").GetUInt32());
+        Assert.Equal(Wire.Version + 1, reply.Error.Value.GetProperty("service").GetUInt32());
         var error = Assert.Throws<ServiceFailureException>(() => client.Handshake());
         Assert.Equal("contractMismatch", error.ErrorType);
         foreach (string language in Strings.Languages)

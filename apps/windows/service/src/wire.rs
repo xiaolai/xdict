@@ -1,15 +1,23 @@
 //! The wire contract's Rust side: the envelope, the operation bodies, and what a reply carries
-//! (`apps/windows/contract/CONTRACT.md`, contract 1).
+//! (`apps/windows/contract/CONTRACT.md`, contract 2).
 
 use serde::Deserialize;
 use serde_json::Value;
 
-use xdict_core::{EntryRef, FileIdentity, LinkOrigin, LookupOptions, View};
+use xdict_core::{
+    EntryRef, FileIdentity, LinkOrigin, LookupOptions, Reading, Removal, ReviewPolicy, Stamp,
+    StudyGrade, View,
+};
 
-#[cfg(not(feature = "acceptance-contract2"))]
-pub const CONTRACT: u32 = 1;
-#[cfg(feature = "acceptance-contract2")]
+/// The product's contract. The acceptance build speaks the next one, so a mixed pair has a real mismatch to refuse.
+#[cfg(not(feature = "acceptance-contract3"))]
 pub const CONTRACT: u32 = 2;
+#[cfg(feature = "acceptance-contract3")]
+pub const CONTRACT: u32 = 3;
+
+/// One JSON envelope's ceiling, read before it is decoded (`CONTRACT.md` §5). A maximum history of 400 cards with CJK
+/// contexts must fit; the macOS envelope is the same 4 MiB.
+pub const JSON_MAX: usize = 4 * 1024 * 1024;
 
 /// One received frame: contract, id, operation, the files it may read, and its body.
 #[derive(Debug, Deserialize)]
@@ -141,6 +149,123 @@ pub struct SplitLineageBody {
 #[serde(rename_all = "camelCase")]
 pub struct LineageOfBody {
     pub edition: String,
+}
+
+// MARK: - Contract 2: the learning set
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryGlossBody {
+    pub entry: EntryRef,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerRecordBody {
+    pub reading: Reading,
+    pub operation: String,
+    #[serde(default)]
+    pub target_languages: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerHistoryBody {
+    pub now: f64,
+    pub utc_offset_seconds: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerRemovalBody {
+    pub removal: Removal,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EraseBody {
+    pub stamp: Stamp,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StudyNoteBody {
+    pub dict: String,
+    pub entry: EntryRef,
+    pub text: String,
+    pub name: String,
+    pub stamp: Stamp,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StudyNoteAtBody {
+    pub entry: EntryRef,
+    pub text: String,
+    pub name: String,
+    pub stamp: Stamp,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinitionHashBody {
+    pub dict: String,
+    pub entry: EntryRef,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReanchorBody {
+    pub old_edition: String,
+    pub new_edition: String,
+    pub stamp: Stamp,
+    pub operation_prefix: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueueBody {
+    pub now: f64,
+    pub limit: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradeBody {
+    pub target: String,
+    pub revision: String,
+    pub grade: StudyGrade,
+    pub policy: ReviewPolicy,
+    pub stamp: Stamp,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoBody {
+    pub target: String,
+    pub grade_event: String,
+    pub stamp: Stamp,
+    pub operation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SummaryBody {
+    pub now: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveBody {
+    pub target: String,
+    pub keep: String,
+    pub stamp: Stamp,
+    pub operation: String,
 }
 
 /// The served base every entry URL is rewritten under (ADR-0022; the spike's WebView2 answer).

@@ -20,6 +20,7 @@ public static class ServiceMessages
             };
         }
         if (type == "malformed") return Strings.Get("error.malformed", chosen);
+        if (type == "envelopeTooLarge") return Strings.Get("error.envelopeTooLarge", chosen);
         return For(type, chosen);
     }
 
