@@ -2,6 +2,7 @@
 // until the first-run disclosure has been read (ADR-0023: on for a new reader, after the setup says it is kept
 // locally); the Learning pane owns the switch after that.
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace XDict.Models;
 
@@ -14,6 +15,7 @@ public sealed record LearningSettings
     public List<string>? TargetLanguages { get; init; } = [];
 
     /// <summary>The set the recorder sends, never null even from an older file.</summary>
+    [JsonIgnore]
     public IReadOnlyList<string> Targets => TargetLanguages ?? [];
 
     /// <summary>The review's target recall; the scheduler's own default until the reader changes it.</summary>
@@ -26,6 +28,7 @@ public sealed record LearningSettings
     public bool RemindersEnabled { get; init; } = true;
 
     /// <summary>The validated policy a grade carries, whatever the file said.</summary>
+    [JsonIgnore]
     public ReviewPolicy Policy => new(
         double.IsFinite(ReviewRetention) && ReviewRetention > 0 && ReviewRetention < 1 ? ReviewRetention : 0.9,
         MaximumDays >= 1 ? MaximumDays : 36500);
