@@ -97,6 +97,13 @@ func node(_ element: AXUIElement, depth: Int) -> [String: Any] {
     }
     if let value = string(element, kAXValueAttribute), !value.isEmpty { out["value"] = String(value.prefix(300)) }
     if let enabled = attribute(element, kAXEnabledAttribute) as? Bool, !enabled { out["enabled"] = false }
+    // A view's custom actions are not children, so a dump without this line cannot tell whether a card kept them
+    // (2026-11-01). The app-side API is `accessibilityCustomActions`; over AX the attribute is `AXCustomActions`.
+    if let actions = attribute(element, "AXCustomActions") as? [AXUIElement] {
+        out["customActions"] = actions.compactMap { action in
+            string(action, kAXDescriptionAttribute) ?? string(action, kAXTitleAttribute) ?? "unnamed"
+        }
+    }
     if let box = frame(element) { out["frame"] = box }
     let kids = children(element)
     if role == "AXStaticText" || role == "AXTextField" { out["font"] = font(element) }
