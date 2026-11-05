@@ -144,6 +144,10 @@ fn main() {
             if request.op == "eraseData" && std::env::var_os("XDICT_FAULT_AFTER_ERASE").is_some() {
                 std::process::exit(0);
             }
+            // **Give the credit back before the reply leaves**: the client releases its own credit when it reads the
+            // reply and may send the next request before this thread returns; a permit still held here would answer
+            // that request `busy` although only eight are working. The permit bounds work, not the reply's bytes.
+            drop(_permit);
             writer.reply(id, outcome);
         });
     }
