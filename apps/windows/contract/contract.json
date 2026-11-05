@@ -1,6 +1,6 @@
 {
-  "contract": 4,
-  "status": "current at contract 4 (2026-11-05): entryText; tests/rust and tests/cs decode, validate and re-encode every fixture",
+  "contract": 5,
+  "status": "current at contract 5 (2026-11-06): Explore and its stores; tests/rust and tests/cs decode, validate and re-encode every fixture",
   "transport": {
     "pipe": "a private duplex pair created by the app at each spawn; the service's ends inherited through PROC_THREAD_ATTRIBUTE_HANDLE_LIST",
     "frame": [
@@ -23,7 +23,7 @@
       "files",
       "operation"
     ],
-    "contract": 4,
+    "contract": 5,
     "id": "u64, unique per connection, echoed",
     "files": {
       "id": "uuid, the app's file id",
@@ -42,12 +42,12 @@
   },
   "reply": {
     "ok": {
-      "contract": 4,
+      "contract": 5,
       "id": "echoed",
       "ok": "the operation's record"
     },
     "error": {
-      "contract": 4,
+      "contract": 5,
       "id": "echoed",
       "error": {
         "type": "one of the typed errors",
@@ -322,6 +322,73 @@
         "view"
       ],
       "ok": "EntryText"
+    },
+    "explore": {
+      "operation": [
+        "dicts",
+        "mode",
+        "text",
+        "offset",
+        "limit"
+      ],
+      "ok": "ExploreAnswer"
+    },
+    "collocates": {
+      "operation": [
+        "query",
+        "dicts",
+        "limit"
+      ],
+      "ok": "Collocation[]"
+    },
+    "wordPack": {
+      "operation": null,
+      "ok": "{pack: WordPackInfo?}"
+    },
+    "setWordPack": {
+      "operation": [
+        "file"
+      ],
+      "ok": "{pack: WordPackInfo}"
+    },
+    "clearWordPack": {
+      "operation": null,
+      "ok": "{pack: null}"
+    },
+    "buildWordPack": {
+      "operation": [
+        "sources",
+        "manifest"
+      ],
+      "ok": "{pack: WordPackInfo}"
+    },
+    "examples": {
+      "operation": [
+        "query",
+        "dicts",
+        "limit"
+      ],
+      "ok": "Examples"
+    },
+    "examplesBuild": {
+      "operation": [
+        "dict"
+      ],
+      "ok": "ExamplesBuilt"
+    },
+    "phrases": {
+      "operation": [
+        "sentence",
+        "term",
+        "dicts"
+      ],
+      "ok": "PhraseAnswer"
+    },
+    "phrasesBuild": {
+      "operation": [
+        "dict"
+      ],
+      "ok": "PhrasesBuilt"
     }
   },
   "errors": {
@@ -368,6 +435,16 @@
     "ledgerSeconds": 5,
     "exportSeconds": 5,
     "eraseSeconds": 5,
-    "reviewSeconds": 5
+    "reviewSeconds": 5,
+    "exploreSeconds": 15,
+    "collocatesSeconds": 15,
+    "wordPackSeconds": 5,
+    "clearWordPackSeconds": 5,
+    "setWordPackSeconds": 60,
+    "examplesSeconds": 5,
+    "phrasesSeconds": 5,
+    "examplesBuild": "no deadline; progress and cancel",
+    "phrasesBuild": "no deadline; progress and cancel",
+    "buildWordPack": "no deadline; progress and cancel"
   }
 }

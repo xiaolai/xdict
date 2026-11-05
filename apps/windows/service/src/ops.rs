@@ -17,12 +17,13 @@ use xdict_core::{
 use crate::failure::Failure;
 use crate::handles::{HandleSource, Ledger, admit};
 use crate::wire::{
-    Answer, BASE_URL, BODY_MAX, CONTRACT, CloseBody, DefinitionHashBody, DictBody, EntryBody,
-    EntryGlossBody, EntryTextBody, EraseBody, FileRef, GradeBody, ImportBody, JoinLineageBody,
-    LedgerHistoryBody, LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody,
-    OpenBody, PackageSpec, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody,
-    SplitLineageBody, StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, SyncBody,
-    TextViewBody, UndoBody,
+    Answer, BASE_URL, BODY_MAX, BuildWordPackBody, CONTRACT, CloseBody, CollocatesBody,
+    DefinitionHashBody, DictBody, EntryBody, EntryGlossBody, EntryTextBody, EraseBody,
+    ExamplesBody, ExploreBody, FileRef, GradeBody, ImportBody, JoinLineageBody, LedgerHistoryBody,
+    LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody, OpenBody,
+    PackageSpec, PhrasesBody, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody,
+    SetWordPackBody, SplitLineageBody, StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody,
+    SyncBody, TextViewBody, UndoBody,
 };
 
 /// Slow work tells the app how far it is; the app's answer can stop it.
@@ -83,6 +84,12 @@ fn named_dicts(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
         "entryText" => vec![one::<EntryTextBody>(body)?.dict],
         "resource" => vec![one::<ResourceBody>(body)?.dict],
         "link" => vec![one::<LinkBody>(body)?.dict],
+        // Contract 5's dictionary-named reads: each names handles, so each requires its dictionaries' observations.
+        "explore" => one::<ExploreBody>(body)?.dicts,
+        "collocates" => one::<CollocatesBody>(body)?.dicts,
+        "examples" => one::<ExamplesBody>(body)?.dicts,
+        "phrases" => one::<PhrasesBody>(body)?.dicts,
+        "examplesBuild" | "phrasesBuild" => vec![one::<DictBody>(body)?.dict],
         // Contract 2's handle-named reads: a note's definition and its hash both read the entry, so the dictionary's
         // observations are required exactly as they are for an entry read.
         "studyNote" => vec![one::<StudyNoteBody>(body)?.dict],
@@ -442,6 +449,52 @@ impl Service {
                 let body: SyncBody = decode(&request.operation)?;
                 self.ledger_sync(body, sources)
             }
+            // MARK: contract 5 — Explore and its stores
+            "explore" => {
+                let body: ExploreBody = decode(&request.operation)?;
+                record(self.core.explore(
+                    body.dicts,
+                    body.mode,
+                    body.text,
+                    body.offset,
+                    body.limit,
+                )?)
+            }
+            "collocates" => {
+                let body: CollocatesBody = decode(&request.operation)?;
+                let rows = self.core.collocates(body.query, body.dicts, body.limit)?;
+                record(rows.iter().map(collocation_json).collect::<Vec<_>>())
+            }
+            "wordPack" => record(json!({ "pack": self.core.word_pack() })),
+            "setWordPack" => self.set_word_pack(request, sources),
+            "clearWordPack" => {
+                self.core.detach_word_pack();
+                record(json!({ "pack": null }))
+            }
+            "buildWordPack" => self.build_word_pack(request, events, sources),
+            "examples" => {
+                let body: ExamplesBody = decode(&request.operation)?;
+                record(self.core.examples(body.query, body.dicts, body.limit)?)
+            }
+            "examplesBuild" => {
+                let body: DictBody = decode(&request.operation)?;
+                let progress = self.build_progress(request.id, events);
+                record(self.core.examples_build(body.dict, &progress)?)
+            }
+            "phrases" => {
+                let body: PhrasesBody = decode(&request.operation)?;
+                record(self.core.phrases(
+                    body.sentence,
+                    body.term.location,
+                    body.term.length,
+                    body.dicts,
+                )?)
+            }
+            "phrasesBuild" => {
+                let body: DictBody = decode(&request.operation)?;
+                let progress = self.build_progress(request.id, events);
+                record(self.core.phrases_build(body.dict, &progress)?)
+            }
             other => Err(Failure::Core(CoreError::Malformed {
                 detail: format!("the operation {other} is not in contract {CONTRACT}"),
             })),
@@ -497,6 +550,133 @@ impl Service {
         if let Err(error) = std::fs::remove_dir_all(&root) {
             eprintln!(
                 "the sync staging {} could not be removed: {error}",
+                root.display()
+            );
+        }
+        result
+    }
+
+    /// A long store build's progress: the core's counts to the app, and the app's cancel back. The server loop
+    /// registered this request's flag before the thread ran, as it does for an import.
+    fn build_progress<'a>(&self, id: u64, events: &'a dyn Events) -> ServiceProgress<'a> {
+        ServiceProgress {
+            id,
+            report: true,
+            cancel: self.cancel_state(id),
+            events,
+        }
+    }
+
+    /// Contract 5's pack install: copy the admitted handle into the service's staging profile, let the core validate
+    /// it there, and keep the pack the core loaded. No path the app chose is ever read, and a refusal leaves the pack
+    /// already held in place (the core's own rule).
+    fn set_word_pack(
+        &self,
+        request: &Request,
+        mut sources: HashMap<String, HandleSource>,
+    ) -> Result<Answer, Failure> {
+        let body: SetWordPackBody = decode(&request.operation)?;
+        let source = sources.remove(&body.file.file).ok_or_else(|| {
+            Failure::admission(format!(
+                "the word pack names {}, which the request did not send",
+                body.file.file
+            ))
+        })?;
+        let serial = self.sync_serial.fetch_add(1, Ordering::Relaxed);
+        let root = self
+            .staging
+            .join("word-pack")
+            .join(format!("{}-{serial}", std::process::id()));
+        let result = (|| -> Result<Answer, Failure> {
+            std::fs::create_dir_all(&root)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            let path = root.join("pack.jsonl");
+            source.copy_to(&path)?;
+            let info = self
+                .core
+                .attach_word_pack(path.to_string_lossy().into_owned())?;
+            record(json!({ "pack": info }))
+        })();
+        if let Err(error) = std::fs::remove_dir_all(&root) {
+            eprintln!(
+                "the word-pack staging {} could not be removed: {error}",
+                root.display()
+            );
+        }
+        result
+    }
+
+    /// Contract 5's pack build: the app downloaded the pinned sources and their manifest; the service copies every
+    /// handle into its own staging folder under the names the manifest pins, builds and installs the pack there, and
+    /// removes the folder. The app never supplies a path the service reads.
+    fn build_word_pack(
+        &self,
+        request: &Request,
+        events: &dyn Events,
+        mut sources: HashMap<String, HandleSource>,
+    ) -> Result<Answer, Failure> {
+        let body: BuildWordPackBody = decode(&request.operation)?;
+        if body.sources.len() > 64 {
+            return Err(Failure::admission(format!(
+                "buildWordPack names {} sources; the bound is 64",
+                body.sources.len()
+            )));
+        }
+        let serial = self.sync_serial.fetch_add(1, Ordering::Relaxed);
+        let root = self
+            .staging
+            .join("word-pack-build")
+            .join(format!("{}-{serial}", std::process::id()));
+        let result = (|| -> Result<Answer, Failure> {
+            let raw = root.join("sources");
+            let out = root.join("out");
+            std::fs::create_dir_all(&raw)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            std::fs::create_dir_all(&out)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            let mut staged = std::collections::HashSet::new();
+            for file in &body.sources {
+                let source = sources.remove(&file.file).ok_or_else(|| {
+                    Failure::admission(format!(
+                        "buildWordPack names {}, which the request did not send",
+                        file.file
+                    ))
+                })?;
+                // The manifest pins a plain file name and the core joins it under the raw folder; a source renamed
+                // here would make every pinned SHA-256 fail, so the name is kept exactly or the build is refused.
+                let name = source.name();
+                if !plain_source_name(name) || !staged.insert(name.to_string()) {
+                    return Err(Failure::admission(format!(
+                        "{}: the source name {name:?} cannot be staged for its manifest",
+                        file.file
+                    )));
+                }
+                source.copy_to(&raw.join(name))?;
+            }
+            let manifest = sources.remove(&body.manifest.file).ok_or_else(|| {
+                Failure::admission(format!(
+                    "the manifest names {}, which the request did not send",
+                    body.manifest.file
+                ))
+            })?;
+            let manifest_path = root.join("manifest.json");
+            manifest.copy_to(&manifest_path)?;
+            let output = out.join("xdict-word-pack.jsonl");
+            let progress = self.build_progress(request.id, events);
+            let info = self.core.build_word_pack(
+                raw.to_string_lossy().into_owned(),
+                manifest_path.to_string_lossy().into_owned(),
+                output.to_string_lossy().into_owned(),
+                &progress,
+            )?;
+            record(json!({ "pack": info }))
+        })();
+        if let Err(error) = std::fs::remove_dir_all(&root) {
+            eprintln!(
+                "the word-pack build staging {} could not be removed: {error}",
                 root.display()
             );
         }
@@ -702,6 +882,48 @@ pub fn is_bulk(op: &str) -> bool {
             | "definitionHash"
             | "studyReanchor"
     )
+}
+
+/// One collocation as the wire carries it: the core's frame vocabulary under the contract's camelCase names. The core
+/// type does not implement serde (it belongs to the entry crate), so this is the one mapping.
+fn collocation_json(row: &xdict_core::collocations::Collocation) -> Value {
+    json!({
+        "lemma": row.lemma,
+        "frame": frame_name(row.frame),
+        "partner": row.partner,
+        "dict": row.dict,
+        "entry": row.entry,
+    })
+}
+
+fn frame_name(frame: xdict_core::collocations::Frame) -> &'static str {
+    use xdict_core::collocations::Frame;
+    match frame {
+        Frame::Adjective => "adjective",
+        Frame::Adverb => "adverb",
+        Frame::Noun => "noun",
+        Frame::Verb => "verb",
+        Frame::Verbs => "verbs",
+        Frame::Preposition => "preposition",
+        Frame::Phrases => "phrases",
+        Frame::AdjectivePlusHeadword => "adjectivePlusHeadword",
+        Frame::VerbPlusHeadword => "verbPlusHeadword",
+        Frame::HeadwordPlusVerb => "headwordPlusVerb",
+        Frame::HeadwordPlusNoun => "headwordPlusNoun",
+        Frame::NounPlusHeadword => "nounPlusHeadword",
+        Frame::PhraseOfHeadword => "phraseOfHeadword",
+    }
+}
+
+/// Whether a pack source's name is one the manifest can pin: a plain file name (`manifest.rs`'s own rule), never a
+/// path or a name with a separator. The manifest joins it under the staging folder, so anything else is a refusal.
+fn plain_source_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 /// The staging name a peer log is copied under: its own file name when it is safe, one `.xdlog` suffix, and an

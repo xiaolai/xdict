@@ -1,19 +1,20 @@
 //! The wire contract's Rust side: the envelope, the operation bodies, and what a reply carries
-//! (`apps/windows/contract/CONTRACT.md`, contract 4).
+//! (`apps/windows/contract/CONTRACT.md`, contract 5).
 
 use serde::Deserialize;
 use serde_json::Value;
 
+use xdict_core::words::WordMode;
 use xdict_core::{
     EntryRef, FileIdentity, LinkOrigin, LookupOptions, Reading, Removal, ReviewPolicy, Stamp,
     StudyGrade, View,
 };
 
 /// The product's contract. The acceptance build speaks the next one, so a mixed pair has a real mismatch to refuse.
-#[cfg(not(feature = "acceptance-contract5"))]
-pub const CONTRACT: u32 = 4;
-#[cfg(feature = "acceptance-contract5")]
+#[cfg(not(feature = "acceptance-contract6"))]
 pub const CONTRACT: u32 = 5;
+#[cfg(feature = "acceptance-contract6")]
+pub const CONTRACT: u32 = 6;
 
 /// One JSON envelope's ceiling, read before it is decoded (`CONTRACT.md` §5). A maximum history of 400 cards with CJK
 /// contexts must fit; the macOS envelope is the same 4 MiB.
@@ -297,6 +298,59 @@ pub struct ResolveBody {
 #[derive(Debug, Deserialize)]
 pub struct SyncBody {
     pub device: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExploreBody {
+    pub dicts: Vec<String>,
+    pub mode: WordMode,
+    pub text: String,
+    pub offset: u32,
+    pub limit: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollocatesBody {
+    pub query: String,
+    pub dicts: Vec<String>,
+    pub limit: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExamplesBody {
+    pub query: String,
+    pub dicts: Vec<String>,
+    pub limit: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PhraseTerm {
+    pub location: u64,
+    pub length: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhrasesBody {
+    pub sentence: String,
+    pub term: PhraseTerm,
+    pub dicts: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetWordPackBody {
+    pub file: FileRef,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildWordPackBody {
+    pub sources: Vec<FileRef>,
+    pub manifest: FileRef,
 }
 
 /// The served base every entry URL is rewritten under (ADR-0022; the spike's WebView2 answer).

@@ -117,8 +117,17 @@ fn main() {
             continue;
         }
         let import = request.op == "import";
+        // Contract 5's store builds are long, cancellable work like an import: each takes its own one-at-a-time
+        // credit and registers the cancel flag before its thread can run.
+        let build = matches!(
+            request.op.as_str(),
+            "examplesBuild" | "phrasesBuild" | "buildWordPack"
+        );
+        let long = import || build;
         let class = if import {
             2
+        } else if build {
+            3
         } else if is_bulk(&request.op) {
             0
         } else {
@@ -131,8 +140,8 @@ fn main() {
             );
             continue;
         };
-        // The cancel's one owner is this loop: registered before the import thread can run, removed after it.
-        if import {
+        // The cancel's one owner is this loop: registered before the long thread can run, removed after it.
+        if long {
             service.register_cancel(id);
         }
         let service = service.clone();
@@ -141,7 +150,7 @@ fn main() {
             let _permit = permit;
             let _active = active;
             let outcome = service.run(&request, writer.as_ref());
-            if import {
+            if long {
                 service.finish_cancel(id);
             }
             // Test artifact only: the operation has committed, the reply is lost. The client must not retry the

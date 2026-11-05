@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
-    <!-- The Windows shell's version: Provenance.txt, the MSI and its file name all read it from here. 0.3.0 is the
-         sync release (contract 3); 0.2.0 was the learning release (contract 2, tagged from its own commit). -->
-    <Version>0.3.0</Version>
+    <!-- The Windows shell's version: Provenance.txt, the MSI and its file name all read it from here. 0.4.0 is the
+         Explore release (contract 5); 0.3.0 was the AI and sync release (contract 4). -->
+    <Version>0.4.0</Version>
   </PropertyGroup>
 </Project>

@@ -1,9 +1,10 @@
-# The Windows wire contract — contract 4
+# The Windows wire contract — contract 5
 
-**2026-11-05** · Status: **current, contract 4** — every fixture in `fixtures.jsonl` is decoded, checked against this
+**2026-11-05** · Status: **current, contract 5** — every fixture in `fixtures.jsonl` is decoded, checked against this
 schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 added
 the learning set (history, notes, review, export/erase, the entry gloss) and raised the JSON envelope to 4 MiB.
-Contract 3 added `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox; contract 4 adds `entryText`, the bounded plain text with spans, senses and the cut. Normative for
+Contract 3 added `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox; contract 4 adds `entryText`, the bounded plain text with spans, senses and the cut; contract 5 adds Explore and its
+stores (`explore`, `collocates`, the word pack, `examples` and `phrases`). Normative for
 `apps/windows/`; decisions in ADR-0022, ADR-0023/0037 and ADR-0004.
 
 ## 1. Transport
@@ -46,7 +47,7 @@ product-visible bound rather than a connection the client must drop.
   service last saw; an observation older than the newest for that file never replaces it. A writable handle on any
   other operation, or a second one on `ledgerSync`, is `admission`.
 
-A reply is `{"contract":4,"id":17,"ok":{...}}` or `{"contract":4,"id":17,"error":{"type":"...",...}}`. A reply that
+A reply is `{"contract":5,"id":17,"ok":{...}}` or `{"contract":5,"id":17,"error":{"type":"...",...}}`. A reply that
 carries bytes announces them in the JSON: `"bulk":{"transfer":<u64>,"length":<u64>,"mime":"..."}`, and the kind-2
 frame with that transfer id follows before any other reply on the connection. At most two bulk replies are in
 flight; a third request is `busy` until one completes.
@@ -93,6 +94,16 @@ are macOS-only, ADR-0011).
 | `studyConflicts` | — | `[CardConflict]` |
 | `reviewResolve` | `{"target","keep","stamp":Stamp,"operation"}` | `ReviewOutcome` |
 | `ledgerSync` | `{"device":"<safe name>"}` | `SyncReport` (`exported`,`peers`,`added`,`skipped`) |
+| `explore` | `{"dicts":[..],"mode":ExploreMode,"text","offset","limit"}` | `ExploreAnswer` (`state`,`rows`,`next`,`exhausted`) |
+| `collocates` | `{"query","dicts":[..],"limit"}` | `[Collocation]` (`lemma`,`frame`,`partner`,`dict`,`entry`) |
+| `wordPack` | — | `{"pack":WordPackInfo?}` |
+| `setWordPack` | `{"file":FileRef}` | `{"pack":WordPackInfo}` |
+| `clearWordPack` | — | `{"pack":null}` |
+| `buildWordPack` | `{"sources":[FileRef],"manifest":FileRef}` | `{"pack":WordPackInfo}` |
+| `examples` | `{"query","dicts":[..],"limit"}` | `Examples` (`hits`,`total`,`notReady`,`capped`) |
+| `examplesBuild` | `{"dict"}` | `ExamplesBuilt` (`edition`,`pairs`,`roles`,`fallback`,`entries`,`failed`,`noChinese`,`cached`) |
+| `phrases` | `{"sentence","term":{"location","length"},"dicts":[..]}` | `PhraseAnswer` (`state`,`matches`,`coverage`,`total`,`capped`) |
+| `phrasesBuild` | `{"dict"}` | `PhrasesBuilt` (`edition`,`phrases`,`cached`) |
 
 `FileRef` is `{"file":"<uuid>"}`, naming an entry of `files`. `EntryRef` is `{"edition","key","occurrence"}`.
 
@@ -113,9 +124,19 @@ another edition. `exportData`'s JSON document is the reply's bulk payload, so th
 view's ceiling, never a base from the request. The records, enums and error shapes are the core's serde shapes
 (`core/xdict-core/src/types.rs`, camelCase and a `type` tag), which the fixtures below quote.
 
+**Explore and its stores (contract 5).** `ExploreMode` is the core's `WordMode`: `endsWith`, `fuzzy(maxDistance)`,
+`rhyme`, `inflections`, `derivations`, `roots(maxDepth)`, `synonyms` and `antonyms`, as a `type`-tagged object.
+`explore`, `collocates`, `examples` and `phrases` are reads over open dictionaries and carry their observations.
+`setWordPack` copies the admitted pack handle into the service's staging folder and installs it from there;
+`buildWordPack` copies the pinned sources and the manifest into staging under the names the manifest pins, builds
+and installs the pack there, then removes the folder. A damaged pack, a source that fails its pinned SHA-256, a
+cancelled build and a failed install keep the pack already held; the app never supplies a path the service reads.
+`examplesBuild`, `phrasesBuild` and `buildWordPack` have no deadline: they report progress like an import and stop
+by `cancel`. The pack and every store are the service's alone; no dictionary content crosses the pipe.
+
 **Progress and cancellation.** An import with `"progress":true` sends kind-1 events
-`{"contract":4,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
-kind-1 frame `{"contract":4,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
+`{"contract":5,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
+kind-1 frame `{"contract":5,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
 answers `cancelled` and registers nothing.
 
 ## 4. Typed errors
@@ -134,6 +155,9 @@ shell words every sentence**; a service never sends one.
 - Deadlines: lookup-class 10 s, import none (the app cancels), bulk 30 s. Contract 2: `entryGloss`, `studyNote`,
   `entryText`, `entryGloss`, `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` and `ledgerSync` 15 s; `ledgerRecord`, `ledgerHistory`,
   `ledgerRemove`/`Restore`, `exportData`, `eraseData`, `studyNotes`, the review calls and `studyConflicts` 5 s.
+  Contract 5: `explore` and `collocates` 15 s; `wordPack` and `clearWordPack` 5 s; `setWordPack` 60 s (installing a
+  183 MB pack reads and validates it); `examples` and `phrases` 5 s; `examplesBuild`, `phrasesBuild` and
+  `buildWordPack` none (progress and `cancel`).
   The bulk class adds `entryText` to contract 2's set: `entry`, `resource`, `entryText`, `entryGloss`, `exportData`, `studyNote`,
   `studyNoteAt`, `definitionHash` and `studyReanchor` (not `ledgerSync`; its bytes cross by handles, not a payload).
 - A killed service makes every handle stale; the app starts a new service, re-duplicates the handles and re-opens.

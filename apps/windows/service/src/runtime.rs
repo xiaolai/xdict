@@ -102,10 +102,12 @@ impl Events for Writer {
     }
 }
 
-pub struct WorkGate(Mutex<[usize; 3]>);
+pub struct WorkGate(Mutex<[usize; 4]>);
 impl WorkGate {
     pub fn new() -> Self {
-        Self(Mutex::new([2, 8, 1]))
+        // bulk, lookup, import, and the long store builds (one at a time: each reads a whole dictionary and reports
+        // progress until it is stopped).
+        Self(Mutex::new([2, 8, 1, 1]))
     }
     pub fn take(self: &Arc<Self>, class: usize) -> Option<Permit> {
         let mut slots = self.0.lock().unwrap_or_else(|p| p.into_inner());

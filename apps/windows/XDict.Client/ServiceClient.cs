@@ -174,10 +174,15 @@ public sealed class ServiceClient : IDisposable
         // dictionaries.
         TimeSpan? deadline = operation switch
         {
-            "import" => null,
+            // No deadline: the app cancels. An import and contract 5's store builds report progress and stop by cancel.
+            "import" or "examplesBuild" or "phrasesBuild" or "buildWordPack" => null,
             "entry" or "resource" or "health" => options.BulkDeadline,
             "entryGloss" or "entryText" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
             "studyReanchor" or "ledgerSync" => TimeSpan.FromSeconds(15),
+            // Installing a pack reads and validates the whole file (macOS's install deadline).
+            "setWordPack" => TimeSpan.FromSeconds(60),
+            "explore" or "collocates" => TimeSpan.FromSeconds(15),
+            "wordPack" or "clearWordPack" or "examples" or "phrases" => TimeSpan.FromSeconds(5),
             "exportData" or "ledgerRecord" or "ledgerHistory" or "ledgerRemove" or "ledgerRestore" or "eraseData"
                 or "studyNotes" or "reviewQueue" or "reviewGrade" or "reviewUndo" or "reviewSummary" or "studyConflicts"
                 or "reviewResolve" => TimeSpan.FromSeconds(5),
@@ -278,11 +283,13 @@ public sealed class ServiceClient : IDisposable
         }
         catch (OperationCanceledException)
         {
+            bool longOperation = operation is "import" or "examplesBuild" or "phrasesBuild" or "buildWordPack";
             if (timeout.IsCancellationRequested && sent) current?.Dispose();
-            else if (sent && operation != "import") current?.Abandon(id, deadline.GetValueOrDefault() - Stopwatch.GetElapsedTime(started));
-            // Import cancellation must reach the core's progress flag even when the caller stops waiting. The reply is
-            // awaited: a busy or closed queue answers with a typed error, which a discarded fire-and-forget call hid.
-            if (operation == "import" && sent && current is not null && current.IsAlive)
+            else if (sent && !longOperation) current?.Abandon(id, deadline.GetValueOrDefault() - Stopwatch.GetElapsedTime(started));
+            // A long operation's cancellation must reach the core's progress flag even when the caller stops waiting.
+            // The reply is awaited: a busy or closed queue answers with a typed error, which a discarded
+            // fire-and-forget call hid.
+            if (longOperation && sent && current is not null && current.IsAlive)
             {
                 // The contract's answer path: the next progress event carries cancel:true to the core.
                 current.CancelImport(id);
