@@ -14,19 +14,28 @@ public sealed partial class LearningView : UserControl
     private static readonly double[] Retentions = [0.80, 0.85, 0.90, 0.95];
 
     private readonly Window owner;
+    private readonly LibraryStore store;
     private readonly ServiceClient client;
     private readonly ReviewReminders? reminders;
     private LearningSettings settings;
     private bool loading = true;
 
-    public LearningView(Window owner, ServiceClient client, ReviewReminders? reminders = null)
+    public LearningView(Window owner, LibraryStore store, ServiceClient client, ReviewReminders? reminders = null)
     {
         InitializeComponent();
         this.owner = owner;
+        this.store = store;
         this.client = client;
         this.reminders = reminders;
         settings = LearningSettings.Load();
         Heading.Text = Strings.Get("settings.learning");
+        HistorySwitch.Header = Strings.Get("learning.history");
+        HistoryDetail.Text = Strings.Get("learning.historyDetail");
+        HistorySwitch.IsOn = settings.HistoryEnabled;
+        LanguagesLabel.Text = Strings.Get("learning.languages");
+        LanguagesDetail.Text = Strings.Get("learning.languagesDetail");
+        NoLanguages.Text = Strings.Get("learning.noLanguages");
+        BuildLanguages();
         RetentionLabel.Text = Strings.Get("learning.retention");
         RetentionDetail.Text = Strings.Get("learning.retentionDetail");
         Reminders.Header = Strings.Get("learning.reminders");
@@ -88,6 +97,52 @@ public sealed partial class LearningView : UserControl
     {
         try { await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:notifications")); }
         catch (Exception error) { Status.Text = Strings.Format("learning.settingsFailed", error.Message); }
+    }
+
+    private void BuildLanguages()
+    {
+        LanguageList.Children.Clear();
+        string[] languages = store.Dictionaries.Where(item => item.Enabled)
+            .SelectMany(item => new[] { item.SearchLanguage, item.ExplainLanguage })
+            .Where(language => !string.IsNullOrWhiteSpace(language))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(language => language, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        foreach (string language in languages)
+        {
+            var box = new CheckBox
+            {
+                Content = language,
+                Tag = language,
+                IsChecked = settings.Targets.Contains(language, StringComparer.OrdinalIgnoreCase),
+            };
+            box.Checked += OnLanguageToggled;
+            box.Unchecked += OnLanguageToggled;
+            LanguageList.Children.Add(box);
+        }
+        NoLanguages.Visibility = languages.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnHistoryToggled(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        settings = settings with
+        {
+            HistoryEnabled = HistorySwitch.IsOn,
+            HistoryDisclosed = HistorySwitch.IsOn ? true : settings.HistoryDisclosed,
+        };
+        Save();
+    }
+
+    private void OnLanguageToggled(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        string[] chosen = LanguageList.Children.OfType<CheckBox>()
+            .Where(box => box.IsChecked == true && box.Tag is string)
+            .Select(box => (string)box.Tag)
+            .ToArray();
+        settings = settings with { TargetLanguages = chosen.ToList() };
+        Save();
     }
 
     private void OnRetentionChanged(object sender, SelectionChangedEventArgs e)

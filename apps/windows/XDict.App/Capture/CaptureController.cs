@@ -42,6 +42,7 @@ public sealed class CaptureController : IDisposable
         tray = new TrayIcon();
         tray.LookupRequested += () => AskGuarded(CaptureTrigger.Menu);
         tray.OpenRequested += () => openInApp("", 0);
+        tray.HistoryRequested += () => HistoryRequested?.Invoke();
         tray.ReviewRequested += () => ReviewRequested?.Invoke();
         tray.SettingsRequested += () => SettingsRequested?.Invoke();
         tray.ExitRequested += () =>
@@ -57,6 +58,9 @@ public sealed class CaptureController : IDisposable
 
     /// <summary>The capture panel's Ask action, with the captured sentence and the entry it drew.</summary>
     public event Action<MeaningRequest>? MeaningRequested;
+
+    /// <summary>The tray's History item; the main window owns the history window.</summary>
+    public event Action? HistoryRequested;
 
     /// <summary>The tray's Review item; the main window owns the review window and the single instance.</summary>
     public event Action? ReviewRequested;

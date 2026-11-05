@@ -6,6 +6,18 @@
         <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceXxl}">
             <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
             <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <ToggleSwitch x:Name="HistorySwitch" Toggled="OnHistoryToggled"
+                              AutomationProperties.AutomationId="SettingsHistoryEnabled" />
+                <TextBlock x:Name="HistoryDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock x:Name="LanguagesLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="LanguagesDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <StackPanel x:Name="LanguageList" Spacing="{StaticResource XDictSpaceXxs}" />
+                <TextBlock x:Name="NoLanguages" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
                 <TextBlock x:Name="RetentionLabel" FontSize="{StaticResource XDictTextBody}" />
                 <TextBlock x:Name="RetentionDetail" FontSize="{StaticResource XDictTextCallout}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />

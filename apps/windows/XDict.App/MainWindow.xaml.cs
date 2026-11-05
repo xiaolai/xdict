@@ -31,6 +31,8 @@ public sealed partial class MainWindow : Window
     private readonly SemaphoreSlim showGate = new(1, 1);
     private SettingsWindow? settingsWindow;
     private ReviewWindow? reviewWindow;
+    private HistoryWindow? historyWindow;
+    private readonly TaskCompletionSource windowLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private MediaPlayer? player;
     private readonly Trail trail = new();
     private readonly ReadingPreferenceStore readingPreferences = new(ReadingPreferenceStore.DefaultPath);
@@ -62,6 +64,7 @@ public sealed partial class MainWindow : Window
         StatusText.Text = Strings.Get("app.starting");
         // The tray owns the process: closing the main window hides it, so the shortcut, the tray and the review
         // window keep working. Quit is the tray's Exit item, a second launch's activation, or the launch harness.
+        Root.Loaded += (_, _) => windowLoaded.TrySetResult();
         AppWindow.Closing += OnMainWindowClosing;
         // The client outlives this window: a Settings window can still be open and uses it; the process exit closes it.
         Closed += (_, _) => { capture?.Dispose(); capture = null; paneLease.Reset(); };
@@ -100,6 +103,7 @@ public sealed partial class MainWindow : Window
 #endif
             await SetupSearchAsync(started);
             if (reviewLab) await PrepareReviewLabAsync();
+            else if (probe is null) await FirstRunDisclosureAsync();
         }
         catch (LibraryUnreadableException error)
         {
@@ -371,6 +375,7 @@ public sealed partial class MainWindow : Window
             (term, scroll) => _ = GuardAsync(() => OpenFromTrayAsync(term, scroll)));
         capture.SettingsRequested += () => OpenSettings(this, new RoutedEventArgs());
         capture.ReviewRequested += OpenReview;
+        capture.HistoryRequested += OpenHistory;
         capture.MeaningRequested += OpenMeaning;
         capture.ExitRequested += Quit;
         reminders = new ReviewReminders(started, OpenReview);
@@ -813,6 +818,28 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>The tray's History item: one history window over the live service.</summary>
+    private void OpenHistory()
+    {
+        if (client is null)
+        {
+            StatusText.Text = Strings.Get("app.serviceFailed");
+            return;
+        }
+        if (historyWindow is not null)
+        {
+            historyWindow.Activate();
+            return;
+        }
+        historyWindow = new HistoryWindow(client,
+            card => _ = GuardAsync(() => OpenHistoryCardAsync(card)));
+        historyWindow.Closed += (_, _) => historyWindow = null;
+        historyWindow.Activate();
+    }
+
+    private Task OpenHistoryCardAsync(HistoryCard card) =>
+        OpenEntryRefAsync(card.Reading.Edition, card.Reading.EntryKey, card.Reading.Occurrence, card.Reading.Surface);
+
     /// <summary>The capture panel's Ask action: one meaning window over the captured sentence and the entry it drew.</summary>
     private void OpenMeaning(Capture.MeaningRequest request)
     {
@@ -890,12 +917,15 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Opens the card's exact entry: its key and occurrence, not the first hit of its headword.</summary>
-    private async Task OpenStudyCardAsync(StudyCard card)
+    private Task OpenStudyCardAsync(StudyCard card) =>
+        OpenEntryRefAsync(card.Target.Edition, card.Target.EntryKey, card.Target.Occurrence, card.Target.EntryKey);
+
+    private async Task OpenEntryRefAsync(string edition, string key, uint occurrence, string query)
     {
         if (session is null) return;
         Activate();
         var found = new List<SearchHit>();
-        await session.LookupEachAsync(card.Target.EntryKey, card.Target.Edition, 50, page =>
+        await session.LookupEachAsync(key, edition, 50, page =>
         {
             lock (found) found.AddRange(page.Hits);
         });
@@ -903,18 +933,46 @@ public sealed partial class MainWindow : Window
         lock (found)
         {
             hit = found.FirstOrDefault(item =>
-                item.Entry.TryGetProperty("key", out JsonElement key) &&
-                key.GetString() == card.Target.EntryKey &&
-                item.Entry.TryGetProperty("occurrence", out JsonElement occurrence) &&
-                occurrence.GetUInt32() == card.Target.Occurrence);
+                item.Entry.TryGetProperty("key", out JsonElement foundKey) &&
+                foundKey.GetString() == key &&
+                item.Entry.TryGetProperty("occurrence", out JsonElement foundOccurrence) &&
+                foundOccurrence.GetUInt32() == occurrence);
         }
         if (hit is null)
         {
             StatusText.Text = Strings.Get("review.entryNotFound");
             return;
         }
-        SearchBox.Text = card.Target.EntryKey;
-        await ShowAsync(hit.Edition, hit.Entry, card.Target.EntryKey, record: true);
+        SearchBox.Text = query;
+        await ShowAsync(hit.Edition, hit.Entry, query, record: true);
+    }
+
+    /// <summary>The first-run privacy choice: the history stays off until this is answered, and the answer is written.</summary>
+    private async Task FirstRunDisclosureAsync()
+    {
+        if (client is null) return;
+        try
+        {
+            var history = new HistorySession(client);
+            if (!history.NeedsDisclosure) return;
+            await windowLoaded.Task;
+            if (Root.XamlRoot is null) return;
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Root.XamlRoot,
+                Title = Strings.Get("history.disclosure.title"),
+                Content = Strings.Get("history.disclosure"),
+                PrimaryButtonText = Strings.Get("history.disclosure.keep"),
+                CloseButtonText = Strings.Get("history.disclosure.off"),
+            };
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary) history.Disclose();
+            else (LearningSettings.Load() with { HistoryDisclosed = true, HistoryEnabled = false }).Save();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = Strings.Format("history.failed", error.Message);
+        }
     }
 
     /// <summary>Reopens the session against the library as it now stands; the scope box follows.</summary>

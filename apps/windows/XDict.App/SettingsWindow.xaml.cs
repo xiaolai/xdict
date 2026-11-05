@@ -33,7 +33,7 @@ public sealed partial class SettingsWindow : Window
         dictionaries = new DictionariesView(store, client, this);
         dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
         reading = new ReadingSpeechView();
-        learning = new LearningView(this, client, reminders);
+        learning = new LearningView(this, store, client, reminders);
         ai = new AIView(this);
         general = new GeneralView(capture);
         foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, ai, general }) Pages.Children.Add(page);
