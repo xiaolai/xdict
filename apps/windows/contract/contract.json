@@ -1,6 +1,6 @@
 {
-  "contract": 3,
-  "status": "current at contract 3 (2026-11-05): sync; tests/rust and tests/cs decode, validate and re-encode every fixture",
+  "contract": 4,
+  "status": "current at contract 4 (2026-11-05): entryText; tests/rust and tests/cs decode, validate and re-encode every fixture",
   "transport": {
     "pipe": "a private duplex pair created by the app at each spawn; the service's ends inherited through PROC_THREAD_ATTRIBUTE_HANDLE_LIST",
     "frame": [
@@ -23,7 +23,7 @@
       "files",
       "operation"
     ],
-    "contract": 3,
+    "contract": 4,
     "id": "u64, unique per connection, echoed",
     "files": {
       "id": "uuid, the app's file id",
@@ -42,12 +42,12 @@
   },
   "reply": {
     "ok": {
-      "contract": 3,
+      "contract": 4,
       "id": "echoed",
       "ok": "the operation's record"
     },
     "error": {
-      "contract": 3,
+      "contract": 4,
       "id": "echoed",
       "error": {
         "type": "one of the typed errors",
@@ -314,6 +314,14 @@
         "device"
       ],
       "ok": "SyncReport"
+    },
+    "entryText": {
+      "operation": [
+        "dict",
+        "entry",
+        "view"
+      ],
+      "ok": "EntryText"
     }
   },
   "errors": {

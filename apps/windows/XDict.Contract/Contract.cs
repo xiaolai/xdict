@@ -8,7 +8,7 @@ namespace XDict.Contract;
 public static class Wire
 {
     /// <summary>Raised by any change to the envelope, an operation, a record, a limit or an error.</summary>
-    public const uint Version = 3;
+    public const uint Version = 4;
 
     /// <summary>One JSON envelope's ceiling, read before it is decoded. 4 MiB since contract 2: a maximum history,
     /// the notes and the conflicts travel whole, or are refused as a product-visible bound.</summary>

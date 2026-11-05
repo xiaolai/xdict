@@ -176,7 +176,7 @@ public sealed class ServiceClient : IDisposable
         {
             "import" => null,
             "entry" or "resource" or "health" => options.BulkDeadline,
-            "entryGloss" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
+            "entryGloss" or "entryText" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
             "studyReanchor" or "ledgerSync" => TimeSpan.FromSeconds(15),
             "exportData" or "ledgerRecord" or "ledgerHistory" or "ledgerRemove" or "ledgerRestore" or "eraseData"
                 or "studyNotes" or "reviewQueue" or "reviewGrade" or "reviewUndo" or "reviewSummary" or "studyConflicts"
@@ -191,8 +191,8 @@ public sealed class ServiceClient : IDisposable
             token.ThrowIfCancellationRequested();
             current = Connection();
             credit = operation == "import" ? current.Imports
-                : operation is "entry" or "resource" or "entryGloss" or "exportData" or "studyNote" or "studyNoteAt"
-                    or "definitionHash" or "studyReanchor" ? current.Bulk
+                : operation is "entry" or "resource" or "entryText" or "entryGloss" or "exportData" or "studyNote"
+                    or "studyNoteAt" or "definitionHash" or "studyReanchor" ? current.Bulk
                 : current.Lookup;
             await credit.WaitAsync(token).ConfigureAwait(false);
             acquired = true;

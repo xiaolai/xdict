@@ -1,5 +1,5 @@
 //! The wire contract's Rust side: the envelope, the operation bodies, and what a reply carries
-//! (`apps/windows/contract/CONTRACT.md`, contract 3).
+//! (`apps/windows/contract/CONTRACT.md`, contract 4).
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -10,10 +10,10 @@ use xdict_core::{
 };
 
 /// The product's contract. The acceptance build speaks the next one, so a mixed pair has a real mismatch to refuse.
-#[cfg(not(feature = "acceptance-contract4"))]
-pub const CONTRACT: u32 = 3;
-#[cfg(feature = "acceptance-contract4")]
+#[cfg(not(feature = "acceptance-contract5"))]
 pub const CONTRACT: u32 = 4;
+#[cfg(feature = "acceptance-contract5")]
+pub const CONTRACT: u32 = 5;
 
 /// One JSON envelope's ceiling, read before it is decoded (`CONTRACT.md` §5). A maximum history of 400 cards with CJK
 /// contexts must fit; the macOS envelope is the same 4 MiB.
@@ -110,6 +110,26 @@ pub struct EntryBody {
     pub dict: String,
     pub entry: EntryRef,
     pub view: View,
+}
+
+/// Contract 4: the entry view's ceiling, the text's budget and the reader's style choice. The service replaces the
+/// base URL and bounds both ceilings; the app never chooses the served base.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextViewBody {
+    pub base_url: String,
+    pub max_body_bytes: u64,
+    pub max_text_bytes: u64,
+    #[serde(default)]
+    pub original_style: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryTextBody {
+    pub dict: String,
+    pub entry: EntryRef,
+    pub view: TextViewBody,
 }
 
 #[derive(Debug, Deserialize)]

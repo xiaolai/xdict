@@ -11,17 +11,18 @@ use serde_json::{Value, json};
 
 use xdict_core::{
     ByteSource, Config, Core, CoreError, Location, MAX_SYNC_BYTES, Missing, Opened, Package,
-    Progress, Resource, View,
+    Progress, Resource, TextView, View,
 };
 
 use crate::failure::Failure;
 use crate::handles::{HandleSource, Ledger, admit};
 use crate::wire::{
     Answer, BASE_URL, BODY_MAX, CONTRACT, CloseBody, DefinitionHashBody, DictBody, EntryBody,
-    EntryGlossBody, EraseBody, FileRef, GradeBody, ImportBody, JoinLineageBody, LedgerHistoryBody,
-    LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody, OpenBody,
-    PackageSpec, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody, SplitLineageBody,
-    StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, SyncBody, UndoBody,
+    EntryGlossBody, EntryTextBody, EraseBody, FileRef, GradeBody, ImportBody, JoinLineageBody,
+    LedgerHistoryBody, LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody,
+    OpenBody, PackageSpec, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody,
+    SplitLineageBody, StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, SyncBody,
+    TextViewBody, UndoBody,
 };
 
 /// Slow work tells the app how far it is; the app's answer can stop it.
@@ -79,6 +80,7 @@ fn named_dicts(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
         "lookup" => one::<LookupBody>(body)?.dicts,
         "suggest" => one::<SuggestBody>(body)?.dicts,
         "entry" => vec![one::<EntryBody>(body)?.dict],
+        "entryText" => vec![one::<EntryTextBody>(body)?.dict],
         "resource" => vec![one::<ResourceBody>(body)?.dict],
         "link" => vec![one::<LinkBody>(body)?.dict],
         // Contract 2's handle-named reads: a note's definition and its hash both read the entry, so the dictionary's
@@ -284,6 +286,13 @@ impl Service {
                 record(self.core.suggest(body.prefix, body.dicts, body.limit)?)
             }
             "entry" => self.entry(request),
+            "entryText" => {
+                let body: EntryTextBody = decode(&request.operation)?;
+                record(
+                    self.core
+                        .entry_text(body.dict, body.entry, text_view(body.view)?)?,
+                )
+            }
             "link" => {
                 let body: LinkBody = decode(&request.operation)?;
                 let view = view(body.view)?;
@@ -685,6 +694,7 @@ pub fn is_bulk(op: &str) -> bool {
         op,
         "entry"
             | "resource"
+            | "entryText"
             | "entryGloss"
             | "exportData"
             | "studyNote"
@@ -717,6 +727,32 @@ fn package_ids(spec: &PackageSpec) -> Vec<String> {
 }
 
 /// The render context, with the service's base: no request can move it.
+/// The contract's text budget: the macOS `Limits.maxTextBytes`.
+const TEXT_MAX: u64 = 1 << 20;
+
+/// The entry-text view: the service's base, the body ceiling and the text budget both bounded, never the request's.
+fn text_view(requested: TextViewBody) -> Result<TextView, Failure> {
+    let _ = requested.base_url;
+    if requested.max_body_bytes == 0 || requested.max_body_bytes > BODY_MAX {
+        return Err(Failure::admission(format!(
+            "the view's body ceiling {} is outside 1..={BODY_MAX}",
+            requested.max_body_bytes
+        )));
+    }
+    if requested.max_text_bytes == 0 || requested.max_text_bytes > TEXT_MAX {
+        return Err(Failure::admission(format!(
+            "the text budget {} is outside 1..={TEXT_MAX}",
+            requested.max_text_bytes
+        )));
+    }
+    Ok(TextView {
+        base_url: BASE_URL.to_string(),
+        max_body_bytes: requested.max_body_bytes,
+        max_text_bytes: requested.max_text_bytes,
+        original_style: requested.original_style,
+    })
+}
+
 fn view(requested: View) -> Result<View, Failure> {
     if requested.max_body_bytes == 0 || requested.max_body_bytes > BODY_MAX {
         return Err(Failure::admission(format!(

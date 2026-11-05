@@ -1,9 +1,9 @@
-# The Windows wire contract — contract 3
+# The Windows wire contract — contract 4
 
-**2026-11-05** · Status: **current, contract 3** — every fixture in `fixtures.jsonl` is decoded, checked against this
+**2026-11-05** · Status: **current, contract 4** — every fixture in `fixtures.jsonl` is decoded, checked against this
 schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 added
 the learning set (history, notes, review, export/erase, the entry gloss) and raised the JSON envelope to 4 MiB.
-Contract 3 adds `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox. Normative for
+Contract 3 added `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox; contract 4 adds `entryText`, the bounded plain text with spans, senses and the cut. Normative for
 `apps/windows/`; decisions in ADR-0022, ADR-0023/0037 and ADR-0004.
 
 ## 1. Transport
@@ -28,7 +28,7 @@ product-visible bound rather than a connection the client must drop.
 ## 2. The envelope
 
 ```json
-{"contract": 3, "id": 17, "op": "lookup", "files": [], "operation": { ... }}
+{"contract": 4, "id": 17, "op": "lookup", "files": [], "operation": { ... }}
 ```
 
 - `contract` and `id` come first and are read before anything else. A `contract` other than the service's is
@@ -46,7 +46,7 @@ product-visible bound rather than a connection the client must drop.
   service last saw; an observation older than the newest for that file never replaces it. A writable handle on any
   other operation, or a second one on `ledgerSync`, is `admission`.
 
-A reply is `{"contract":3,"id":17,"ok":{...}}` or `{"contract":3,"id":17,"error":{"type":"...",...}}`. A reply that
+A reply is `{"contract":4,"id":17,"ok":{...}}` or `{"contract":4,"id":17,"error":{"type":"...",...}}`. A reply that
 carries bytes announces them in the JSON: `"bulk":{"transfer":<u64>,"length":<u64>,"mime":"..."}`, and the kind-2
 frame with that transfer id follows before any other reply on the connection. At most two bulk replies are in
 flight; a third request is `busy` until one completes.
@@ -66,6 +66,7 @@ are macOS-only, ADR-0011).
 | `lookup` | `{"query","dicts":[..],"options":{"limit","offset","mode":"reader"|"link","generation"}}` | `Page` |
 | `suggest` | `{"prefix","dicts":[..],"limit"}` | `[string]` |
 | `entry` | `{"dict","entry":EntryRef,"view":View}` | `Entry`, with `bulk` |
+| `entryText` | `{"dict","entry":EntryRef,"view":{"baseUrl","maxBodyBytes","maxTextBytes","originalStyle"}}` | `EntryText` (`text`,`spans`,`senses`,`style`,`complete`,`omittedBytes`,`cutAt`) |
 | `link` | `{"dict","url","origin":LinkOrigin,"view":View}` | `Link` |
 | `resource` | `{"dict","path","view":View}` | `Resource`, with `bulk` when found |
 | `health` | `{"dict"}` | `Health` |
@@ -113,8 +114,8 @@ view's ceiling, never a base from the request. The records, enums and error shap
 (`core/xdict-core/src/types.rs`, camelCase and a `type` tag), which the fixtures below quote.
 
 **Progress and cancellation.** An import with `"progress":true` sends kind-1 events
-`{"contract":3,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
-kind-1 frame `{"contract":3,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
+`{"contract":4,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
+kind-1 frame `{"contract":4,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
 answers `cancelled` and registers nothing.
 
 ## 4. Typed errors
@@ -131,9 +132,9 @@ shell words every sentence**; a service never sends one.
 - Two bulk replies in flight; eight lookup-class calls in flight; one import at a time; a **service-wide** gate
   admits work across connections, and a stalled call past its deadline frees its slot by a new connection.
 - Deadlines: lookup-class 10 s, import none (the app cancels), bulk 30 s. Contract 2: `entryGloss`, `studyNote`,
-  `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` and `ledgerSync` 15 s; `ledgerRecord`, `ledgerHistory`,
+  `entryText`, `entryGloss`, `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` and `ledgerSync` 15 s; `ledgerRecord`, `ledgerHistory`,
   `ledgerRemove`/`Restore`, `exportData`, `eraseData`, `studyNotes`, the review calls and `studyConflicts` 5 s.
-  The bulk class is unchanged from contract 2: `entry`, `resource`, `entryGloss`, `exportData`, `studyNote`,
+  The bulk class adds `entryText` to contract 2's set: `entry`, `resource`, `entryText`, `entryGloss`, `exportData`, `studyNote`,
   `studyNoteAt`, `definitionHash` and `studyReanchor` (not `ledgerSync`; its bytes cross by handles, not a payload).
 - A killed service makes every handle stale; the app starts a new service, re-duplicates the handles and re-opens.
   The service exits when idle with no request, import or reply in flight; the app restarts it on demand.
