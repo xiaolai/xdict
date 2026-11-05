@@ -40,12 +40,16 @@ public sealed class CaptureController : IDisposable
         tray = new TrayIcon();
         tray.LookupRequested += () => AskGuarded(CaptureTrigger.Menu);
         tray.OpenRequested += () => openInApp("", 0);
+        tray.ReviewRequested += () => ReviewRequested?.Invoke();
         tray.SettingsRequested += () => SettingsRequested?.Invoke();
         tray.ExitRequested += () => Microsoft.UI.Xaml.Application.Current.Exit();
         book.OnEnd(OnEnded);
     }
 
     public event Action? SettingsRequested;
+
+    /// <summary>The tray's Review item; the main window owns the review window and the single instance.</summary>
+    public event Action? ReviewRequested;
 
     public CaptureSettings Settings => settings;
     public bool HotkeyRegistered => hotkey.Registered;

@@ -1,0 +1,113 @@
+<Window
+    x:Class="XDict.App.ReviewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="Root" IsTabStop="True" KeyDown="OnKeyDown"
+          Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Border Padding="{StaticResource XDictSpaceXxl}">
+            <Grid RowSpacing="{StaticResource XDictSpaceL}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Spacing="{StaticResource XDictSpaceXs}">
+                    <TextBlock x:Name="TitleText" FontSize="{StaticResource XDictTextHeadline}"
+                               FontWeight="SemiBold" AutomationProperties.AutomationId="ReviewTitle" />
+                    <TextBlock x:Name="SummaryText" FontSize="{StaticResource XDictTextCallout}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" AutomationProperties.AutomationId="ReviewSummary" />
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="{StaticResource XDictSpaceM}">
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                CornerRadius="{StaticResource XDictRadiusL}"
+                                Padding="{StaticResource XDictSpaceL}">
+                            <StackPanel Spacing="{StaticResource XDictSpaceSm}">
+                                <TextBlock x:Name="WordText" FontSize="{StaticResource XDictTextCardWord}"
+                                           FontWeight="SemiBold" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="ReviewWord" />
+                                <TextBlock x:Name="MetaText" FontSize="{StaticResource XDictTextCardMeta}"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="GlossText" FontSize="{StaticResource XDictTextCardGloss}"
+                                           TextWrapping="Wrap" Visibility="Collapsed"
+                                           IsTextSelectionEnabled="True"
+                                           AutomationProperties.AutomationId="ReviewGloss" />
+                                <TextBlock x:Name="UnavailableText" FontSize="{StaticResource XDictTextCardMeta}"
+                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                           TextWrapping="Wrap" Visibility="Collapsed"
+                                           AutomationProperties.AutomationId="ReviewUnavailable" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                            <TextBlock x:Name="NoteLabel" FontSize="{StaticResource XDictTextCallout}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBox x:Name="NoteBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="{StaticResource XDictSizeHistoryCardMinHeight}"
+                                     TextChanged="OnNoteChanged"
+                                     AutomationProperties.AutomationId="ReviewNote" />
+                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                                <Button x:Name="SaveNoteButton" Click="OnSaveNote"
+                                        AutomationProperties.AutomationId="ReviewSaveNote" />
+                                <TextBlock x:Name="NoteStatus" FontSize="{StaticResource XDictTextCardMeta}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel x:Name="ConflictsPanel" Spacing="{StaticResource XDictSpaceXs}"
+                                    Visibility="Collapsed">
+                            <TextBlock x:Name="ConflictsHeading" FontSize="{StaticResource XDictTextCallout}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <StackPanel x:Name="ConflictRows" Spacing="{StaticResource XDictSpaceSm}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel Grid.Row="2" Spacing="{StaticResource XDictSpaceSm}">
+                    <Button x:Name="ShowButton" Click="OnShowAnswer" HorizontalAlignment="Stretch"
+                            AutomationProperties.AutomationId="ReviewShowAnswer" />
+                    <Grid x:Name="AnswerGrid" ColumnSpacing="{StaticResource XDictSpaceSm}"
+                          Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="AgainButton" Grid.Column="0" Click="OnAgain"
+                                MinWidth="{StaticResource XDictSizeButtonMinWidth}"
+                                AutomationProperties.AutomationId="ReviewAgain" />
+                        <Button x:Name="HardButton" Grid.Column="1" Click="OnHard"
+                                MinWidth="{StaticResource XDictSizeButtonMinWidth}"
+                                AutomationProperties.AutomationId="ReviewHard" />
+                        <Button x:Name="GoodButton" Grid.Column="2" Click="OnGood"
+                                MinWidth="{StaticResource XDictSizeButtonMinWidth}"
+                                AutomationProperties.AutomationId="ReviewGood" />
+                        <Button x:Name="EasyButton" Grid.Column="3" Click="OnEasy"
+                                MinWidth="{StaticResource XDictSizeButtonMinWidth}"
+                                AutomationProperties.AutomationId="ReviewEasy" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <Button x:Name="UndoButton" Click="OnUndo"
+                            AutomationProperties.AutomationId="ReviewUndo" />
+                    <Button x:Name="OpenButton" Click="OnOpenEntry"
+                            AutomationProperties.AutomationId="ReviewOpenEntry" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="4" x:Name="StatusText" FontSize="{StaticResource XDictTextCardMeta}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" AutomationProperties.AutomationId="ReviewStatus" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

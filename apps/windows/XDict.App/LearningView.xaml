@@ -1,0 +1,35 @@
+<UserControl
+    x:Class="XDict.App.LearningView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceXxl}">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="RetentionLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="RetentionDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <ComboBox x:Name="Retention" MinWidth="{StaticResource XDictSizeButtonMinWidth}"
+                          SelectionChanged="OnRetentionChanged"
+                          AutomationProperties.AutomationId="SettingsReviewRetention" />
+            </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="ExportLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="ExportDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button x:Name="ExportButton" Click="OnExport"
+                        AutomationProperties.AutomationId="SettingsExportLearning" />
+            </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="EraseLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="EraseDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Button x:Name="EraseButton" Click="OnErase"
+                        AutomationProperties.AutomationId="SettingsEraseLearning" />
+            </StackPanel>
+            <TextBlock x:Name="Status" FontSize="{StaticResource XDictTextCallout}"
+                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="SettingsLearningStatus" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -14,6 +14,7 @@ public sealed partial class SettingsWindow : Window
 
     private readonly DictionariesView dictionaries;
     private readonly ReadingSpeechView reading;
+    private readonly LearningView learning;
     private readonly GeneralView general;
 
     public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null)
@@ -24,12 +25,14 @@ public sealed partial class SettingsWindow : Window
         Title = Strings.Get("settings.title");
         DictionariesItem.Content = Strings.Get("settings.dictionaries");
         ReadingItem.Content = Strings.Get("settings.reading");
+        LearningItem.Content = Strings.Get("settings.learning");
         GeneralItem.Content = Strings.Get("settings.general");
         dictionaries = new DictionariesView(store, client, this);
         dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
         reading = new ReadingSpeechView();
+        learning = new LearningView(this, client);
         general = new GeneralView(capture);
-        foreach (UIElement page in new UIElement[] { dictionaries, reading, general }) Pages.Children.Add(page);
+        foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, general }) Pages.Children.Add(page);
         Nav.SelectedItem = DictionariesItem;
         Show(dictionaries);
     }
@@ -40,6 +43,7 @@ public sealed partial class SettingsWindow : Window
         Show((item.Tag as string) switch
         {
             "reading" => reading,
+            "learning" => learning,
             "general" => general,
             _ => dictionaries,
         });
@@ -49,6 +53,7 @@ public sealed partial class SettingsWindow : Window
     {
         dictionaries.Visibility = page == dictionaries ? Visibility.Visible : Visibility.Collapsed;
         reading.Visibility = page == reading ? Visibility.Visible : Visibility.Collapsed;
+        learning.Visibility = page == learning ? Visibility.Visible : Visibility.Collapsed;
         general.Visibility = page == general ? Visibility.Visible : Visibility.Collapsed;
     }
 }

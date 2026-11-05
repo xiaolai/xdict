@@ -37,7 +37,10 @@ public class SettingsStringsTests
     public void EverySettingsRouteIsNamedForAutomation()
     {
         string xaml = File.ReadAllText(Path.Combine(AppRoot(), "SettingsWindow.xaml"));
-        foreach (string id in new[] { "SettingsNav", "SettingsDictionaries", "SettingsReading", "SettingsGeneral" })
+        foreach (string id in new[]
+                 {
+                     "SettingsNav", "SettingsDictionaries", "SettingsReading", "SettingsLearning", "SettingsGeneral",
+                 })
             Assert.Contains("AutomationProperties.AutomationId=\"" + id + "\"", xaml);
     }
 

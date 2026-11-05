@@ -15,6 +15,7 @@ internal sealed class TrayIcon : IDisposable
 
     public event Action? LookupRequested;
     public event Action? OpenRequested;
+    public event Action? ReviewRequested;
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
 
@@ -81,17 +82,19 @@ internal sealed class TrayIcon : IDisposable
         {
             Win32.AppendMenuW(menu, Win32.MF_STRING, 1, Strings.Get("capture.lookup"));
             Win32.AppendMenuW(menu, Win32.MF_STRING, 2, Strings.Get("capture.open"));
-            Win32.AppendMenuW(menu, Win32.MF_STRING, 3, Strings.Get("capture.settings"));
+            Win32.AppendMenuW(menu, Win32.MF_STRING, 3, Strings.Get("capture.review"));
             Win32.AppendMenuW(menu, Win32.MF_SEPARATOR, 0, "");
-            Win32.AppendMenuW(menu, Win32.MF_STRING, 4, Strings.Get("capture.exit"));
+            Win32.AppendMenuW(menu, Win32.MF_STRING, 4, Strings.Get("capture.settings"));
+            Win32.AppendMenuW(menu, Win32.MF_STRING, 5, Strings.Get("capture.exit"));
             int command = Win32.TrackPopupMenu(menu, Win32.TPM_RETURNCMD | Win32.TPM_NONOTIFY,
                 point.X, point.Y, 0, window.Handle, IntPtr.Zero);
             switch (command)
             {
                 case 1: LookupRequested?.Invoke(); break;
                 case 2: OpenRequested?.Invoke(); break;
-                case 3: SettingsRequested?.Invoke(); break;
-                case 4: ExitRequested?.Invoke(); break;
+                case 3: ReviewRequested?.Invoke(); break;
+                case 4: SettingsRequested?.Invoke(); break;
+                case 5: ExitRequested?.Invoke(); break;
             }
         }
         finally { Win32.DestroyMenu(menu); }

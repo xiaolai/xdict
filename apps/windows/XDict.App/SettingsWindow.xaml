@@ -10,6 +10,8 @@
                                 AutomationProperties.AutomationId="SettingsDictionaries" />
             <NavigationViewItem x:Name="ReadingItem" Tag="reading"
                                 AutomationProperties.AutomationId="SettingsReading" />
+            <NavigationViewItem x:Name="LearningItem" Tag="learning"
+                                AutomationProperties.AutomationId="SettingsLearning" />
             <NavigationViewItem x:Name="GeneralItem" Tag="general"
                                 AutomationProperties.AutomationId="SettingsGeneral" />
         </NavigationView.MenuItems>

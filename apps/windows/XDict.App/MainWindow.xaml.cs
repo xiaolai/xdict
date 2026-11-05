@@ -29,6 +29,7 @@ public sealed partial class MainWindow : Window
     private string? currentHeadword;
     private readonly SemaphoreSlim showGate = new(1, 1);
     private SettingsWindow? settingsWindow;
+    private ReviewWindow? reviewWindow;
     private MediaPlayer? player;
     private readonly Trail trail = new();
     private readonly ReadingPreferenceStore readingPreferences = new(ReadingPreferenceStore.DefaultPath);
@@ -360,6 +361,7 @@ public sealed partial class MainWindow : Window
         capture = new Capture.CaptureController(started, store, session,
             (term, scroll) => _ = GuardAsync(() => LookupFromCaptureAsync(term, scroll)));
         capture.SettingsRequested += () => OpenSettings(this, new RoutedEventArgs());
+        capture.ReviewRequested += OpenReview;
         // A refused shortcut or tray is said, and stays said: the ready sentence used to overwrite it at once.
         string captureNotice = !capture.Start() ? Strings.Get("capture.hotkeyTaken")
             : !capture.TrayVisible ? Strings.Get("capture.trayRefused") : "";
@@ -767,6 +769,55 @@ public sealed partial class MainWindow : Window
             await GuardAsync(RefreshSessionAsync);
         };
         settingsWindow.Activate();
+    }
+
+    /// <summary>The tray's Review item: one review window over the live service and the open dictionaries.</summary>
+    private void OpenReview()
+    {
+        if (client is null || store is null || session is null)
+        {
+            StatusText.Text = Strings.Get("app.serviceFailed");
+            return;
+        }
+        if (reviewWindow is not null)
+        {
+            reviewWindow.Activate();
+            return;
+        }
+        reviewWindow = new ReviewWindow(client, store,
+            edition => session.Dictionaries.FirstOrDefault(item => item.Edition == edition)?.Handle,
+            edition => session.Dictionaries.Any(item => item.Edition == edition),
+            card => _ = GuardAsync(() => OpenStudyCardAsync(card)));
+        reviewWindow.Closed += (_, _) => reviewWindow = null;
+        reviewWindow.Activate();
+    }
+
+    /// <summary>Opens the card's exact entry: its key and occurrence, not the first hit of its headword.</summary>
+    private async Task OpenStudyCardAsync(StudyCard card)
+    {
+        if (session is null) return;
+        Activate();
+        var found = new List<SearchHit>();
+        await session.LookupEachAsync(card.Target.EntryKey, card.Target.Edition, 50, page =>
+        {
+            lock (found) found.AddRange(page.Hits);
+        });
+        SearchHit? hit;
+        lock (found)
+        {
+            hit = found.FirstOrDefault(item =>
+                item.Entry.TryGetProperty("key", out JsonElement key) &&
+                key.GetString() == card.Target.EntryKey &&
+                item.Entry.TryGetProperty("occurrence", out JsonElement occurrence) &&
+                occurrence.GetUInt32() == card.Target.Occurrence);
+        }
+        if (hit is null)
+        {
+            StatusText.Text = Strings.Get("review.entryNotFound");
+            return;
+        }
+        SearchBox.Text = card.Target.EntryKey;
+        await ShowAsync(hit.Edition, hit.Entry, card.Target.EntryKey, record: true);
     }
 
     /// <summary>Reopens the session against the library as it now stands; the scope box follows.</summary>
