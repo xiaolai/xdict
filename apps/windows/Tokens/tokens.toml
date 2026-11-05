@@ -1,0 +1,86 @@
+# XDict's design tokens for the Windows shell: the one source of every length, size, text role, colour and motion the
+# shell draws with. The Windows values are Fluent's own where Fluent has one (the system's text styles and semantic
+# brushes), and XDict's choice with a reason where it does not (ADR-0003: tokens are per shell, never shared across
+# platforms).
+#
+#   python -I Tools/tokens.py gen             write XDict.App/Tokens.g.cs and XDict.App/Tokens.xaml
+#   python -I Tools/tokens.py gen --check     fail if either generated file is stale
+#   python -I Tools/tokens.py check           fail on a literal that should be a token (existing debt is baselined)
+#   python -I Tools/tokens.py check --report  print the debt and every finding, exit 0
+#   python -I Tools/tokens.py check --write-baseline   record the current debt (a deliberate act, reviewed)
+#
+# Every token carries `system` (the platform's own resource or scale: Fluent's, which follows the reader's theme,
+# contrast and accent) or `why` (XDict's own choice, said in a sentence). The generator refuses a token with neither.
+# `[groups]` declares each group: its kind, the C# enum it becomes, and its XAML key prefix.
+
+[groups]
+space = { kind = "length", cs = "Space", xaml = "XDictSpace", doc = "The spacing scale: stack spacing and the padding between things that belong together." }
+radius = { kind = "length", cs = "Radius", xaml = "XDictRadius", doc = "Corner radii." }
+text = { kind = "number", cs = "Text", xaml = "XDictText", doc = "Text role sizes in effective pixels, at Fluent's roles where one fits." }
+size = { kind = "length", cs = "Size", xaml = "XDictSize", doc = "Fixed widths and heights of the learning surfaces." }
+line = { kind = "length", cs = "Line", xaml = "XDictLine", doc = "Rule and outline widths." }
+opacity = { kind = "number", cs = "Opacity", xaml = "XDictOpacity", doc = "Alpha values a surface is drawn at." }
+motion = { kind = "number", cs = "Motion", xaml = "XDictMotion", doc = "Timings the shell runs itself, in milliseconds (undo is in seconds)." }
+colour = { kind = "colour", cs = "Colour", xaml = "XDictColour", doc = "The Fluent semantic brushes, by their theme-resource key; the reader's theme and accent decide the pixels." }
+
+[space]
+xxs = { value = 2, why = "The scale's smallest step: a label over its caption, two lines that read as one." }
+xs = { value = 4, why = "Half the base step: items of one group, a caption under its control." }
+s = { value = 6, why = "Between a glyph or badge and the text it leads, on the first baseline." }
+sm = { value = 8, system = "Fluent's 4-pixel grid: controls side by side, a form's rows." }
+m = { value = 12, system = "Fluent's 4-pixel grid: between groups of one pane." }
+l = { value = 16, system = "Fluent's 4-pixel grid: between sections; a pane's padding." }
+xl = { value = 20, why = "A pane's horizontal padding: the Fluent page margin." }
+xxl = { value = 24, system = "Fluent's 4-pixel grid: around a stand-alone message or a pane's content." }
+xxxl = { value = 32, why = "The largest gap: a section in a scrolling settings page, the space above a title." }
+
+[radius]
+s = { value = 4, system = "Fluent's ControlCornerRadius (4)." }
+m = { value = 8, system = "Fluent's OverlayCornerRadius (8)." }
+l = { value = 12, why = "A card's corner: Fluent's 8 is a control, its 16 a window; 12 is the card's own surface." }
+xl = { value = 16, why = "A window or flyout corner: Fluent's 16 on Windows 11." }
+
+[text]
+title = { value = 28, system = "Fluent's Title text style." }
+headline = { value = 20, system = "Fluent's Subtitle text style." }
+body = { value = 14, system = "Fluent's Body text style." }
+callout = { value = 12, system = "Fluent's Caption text style." }
+caption = { value = 12, system = "Fluent's Caption text style, for metadata." }
+cardWord = { value = 20, why = "A history card's word: the card's headline, one step under the window title." }
+cardGloss = { value = 14, why = "A card's gloss: the body size, so a one-line answer reads at the dictionary's own scale." }
+cardMeta = { value = 12, why = "A card's provenance: the caption size, quieter than the word and the gloss." }
+
+[size]
+historyCard = { value = 360, why = "The history card's width: a sentence a line, the drawer's own width." }
+historyCardMinHeight = { value = 96, why = "A card's least height: the word, one gloss line, one context line." }
+drawerWidth = { value = 360, why = "The history drawer's width: the card's width, docked to the screen's edge." }
+reviewWidth = { value = 480, why = "The review window's width: a card's word, the reader's note and four answers without wrapping the buttons." }
+reviewHeight = { value = 560, why = "The review window's opening height: the card, its note and the two answer rows." }
+reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling." }
+buttonMinWidth = { value = 96, why = "An answer button's least width: one word and its key hint, so the four answers line up." }
+
+[line]
+hairline = { value = 1, system = "A Fluent divider's one effective pixel." }
+
+[opacity]
+cardBorder = { value = 0.38, why = "A history card's tinted border: visible as a tint, never as a rule." }
+cardShadow = { value = 0.12, why = "A history card's shadow: enough to lift the card off the surface, never a drop shadow." }
+
+[motion]
+drawerOpen = { value = 250, why = "The drawer's slide in: quick enough to feel attached to the click, slow enough to read as moving." }
+drawerClose = { value = 200, why = "The drawer's slide out: it leaves faster than it arrives and without a bounce." }
+fade = { value = 150, why = "A state change under Reduce Motion: a fade, not a cut." }
+undoSeconds = { value = 8, why = "How long a removed card's Undo stays offered: long enough to notice, short enough not to sit there." }
+
+[colour]
+textPrimary = { system = "TextFillColorPrimaryBrush" }
+textSecondary = { system = "TextFillColorSecondaryBrush" }
+textTertiary = { system = "TextFillColorTertiaryBrush" }
+accent = { system = "AccentFillColorDefaultBrush" }
+link = { system = "AccentTextFillColorPrimaryBrush" }
+cardBackground = { system = "CardBackgroundFillColorDefaultBrush" }
+controlFill = { system = "ControlFillColorDefaultBrush" }
+subtleFill = { system = "SubtleFillColorSecondaryBrush" }
+separator = { system = "DividerStrokeColorDefaultBrush" }
+danger = { system = "SystemFillColorCriticalBrush" }
+pageBackground = { system = "ApplicationPageBackgroundThemeBrush" }

@@ -1,0 +1,7 @@
+# The literals the Windows shell carried before the token catalogue; a rise fails the check.
+XDict.App/CapturePanel.xaml	3
+XDict.App/DictionariesView.xaml	6
+XDict.App/GeneralView.xaml	6
+XDict.App/MainWindow.xaml	6
+XDict.App/ReadingSpeechView.xaml	5
+XDict.App/ReadingSpeechView.xaml.cs	1

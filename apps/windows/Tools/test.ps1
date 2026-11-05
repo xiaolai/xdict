@@ -8,6 +8,10 @@ $layout = Get-XDictLayout
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'test' -Full:$Full -Action {
+    & python -I (Join-Path $PSScriptRoot 'tokens.py') gen --check
+    if ($LASTEXITCODE -ne 0) { throw 'the Windows token files are stale' }
+    & python -I (Join-Path $PSScriptRoot 'tokens.py') check
+    if ($LASTEXITCODE -ne 0) { throw 'the Windows token check found a literal' }
     cargo fmt --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --check
     if ($LASTEXITCODE -ne 0) { throw 'the service formatting failed' }
     cargo test --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml')
