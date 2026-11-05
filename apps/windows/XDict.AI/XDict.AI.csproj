@@ -5,4 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../conformance/ai/defaults/*.txt">
+      <LogicalName>XDict.AI.defaults.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

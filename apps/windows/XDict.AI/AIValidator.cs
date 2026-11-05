@@ -6,11 +6,12 @@ using System.Text.Json;
 namespace XDict.AI;
 
 public sealed record AIValidationResult(string Status, string? Outcome, string? Translation, string? Explanation,
-    string? Code)
+    string? Code, IReadOnlyList<string> Quotes)
 {
-    public static AIValidationResult Ok(string outcome, string? translation = null, string? explanation = null) =>
-        new("ok", outcome, translation, explanation, null);
-    public static AIValidationResult Invalid(string code) => new("invalid", null, null, null, code);
+    public static AIValidationResult Ok(string outcome, string? translation = null, string? explanation = null,
+        IReadOnlyList<string>? quotes = null) =>
+        new("ok", outcome, translation, explanation, null, quotes ?? []);
+    public static AIValidationResult Invalid(string code) => new("invalid", null, null, null, code, []);
 }
 
 public static class AIValidator
@@ -102,7 +103,7 @@ public static class AIValidator
 
         if (!Explanation(explanation!, MaxExplanationBytes, allowEmpty: false))
             return AIValidationResult.Invalid("answer.explanation");
-        return AIValidationResult.Ok(outcome!, explanation: explanation);
+        return AIValidationResult.Ok(outcome!, explanation: explanation, quotes: quoteList);
     }
 
     private static AIValidationResult TranslationAnswer(JsonElement answer)
