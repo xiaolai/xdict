@@ -1,5 +1,5 @@
 // Generated from Tokens/tokens.toml by Tools/tokens.py; do not edit.
-// source sha256: 6234b2b52a8387a5b3faf8410dbd09792fc92ab2d93015657c047671077b36b7
+// source sha256: 9010c25fa4dfca2a573c09238ad33500ee2ce5ebefc9206b4704be3ac6f8078e
 namespace XDict.App;
 
 internal static class Tokens
@@ -64,6 +64,7 @@ internal static class Tokens
         internal const int DrawerOpen = 250;
         internal const int DrawerClose = 200;
         internal const int Fade = 150;
+        internal const int SaveDebounce = 250;
         internal const int UndoSeconds = 8;
     }
 

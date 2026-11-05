@@ -13,10 +13,14 @@ public sealed partial class SettingsWindow : Window
     public event Action? LibraryChanged;
 
     private readonly DictionariesView dictionaries;
-    private readonly ReadingSpeechView reading;
+    private readonly ReadingView reading;
+    private readonly SpeechView speech;
+    private readonly LookupView lookup;
     private readonly LearningView learning;
     private readonly AIView ai;
     private readonly GeneralView general;
+    private readonly SetupView setup;
+    private readonly AboutView about;
 
     public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null,
         ReviewReminders? reminders = null)
@@ -27,16 +31,28 @@ public sealed partial class SettingsWindow : Window
         Title = Strings.Get("settings.title");
         DictionariesItem.Content = Strings.Get("settings.dictionaries");
         ReadingItem.Content = Strings.Get("settings.reading");
+        SpeechItem.Content = Strings.Get("settings.speech");
+        LookupItem.Content = Strings.Get("settings.lookup");
         LearningItem.Content = Strings.Get("settings.learning");
         AiItem.Content = Strings.Get("settings.ai");
         GeneralItem.Content = Strings.Get("settings.general");
+        SetupItem.Content = Strings.Get("settings.setup");
+        AboutItem.Content = Strings.Get("settings.about");
         dictionaries = new DictionariesView(store, client, this);
         dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
-        reading = new ReadingSpeechView();
+        reading = new ReadingView();
+        speech = new SpeechView();
+        lookup = new LookupView(capture);
         learning = new LearningView(this, store, client, reminders);
         ai = new AIView(this);
-        general = new GeneralView(capture);
-        foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, ai, general }) Pages.Children.Add(page);
+        general = new GeneralView();
+        setup = new SetupView(store);
+        about = new AboutView();
+        foreach (UIElement page in new UIElement[]
+                 {
+                     dictionaries, reading, speech, lookup, learning, ai, general, setup, about,
+                 })
+            Pages.Children.Add(page);
         Nav.SelectedItem = DictionariesItem;
         Show(dictionaries);
     }
@@ -47,9 +63,13 @@ public sealed partial class SettingsWindow : Window
         Show((item.Tag as string) switch
         {
             "reading" => reading,
+            "speech" => speech,
+            "lookup" => lookup,
             "learning" => learning,
             "ai" => ai,
             "general" => general,
+            "setup" => setup,
+            "about" => about,
             _ => dictionaries,
         });
     }
@@ -58,8 +78,12 @@ public sealed partial class SettingsWindow : Window
     {
         dictionaries.Visibility = page == dictionaries ? Visibility.Visible : Visibility.Collapsed;
         reading.Visibility = page == reading ? Visibility.Visible : Visibility.Collapsed;
+        speech.Visibility = page == speech ? Visibility.Visible : Visibility.Collapsed;
+        lookup.Visibility = page == lookup ? Visibility.Visible : Visibility.Collapsed;
         learning.Visibility = page == learning ? Visibility.Visible : Visibility.Collapsed;
         ai.Visibility = page == ai ? Visibility.Visible : Visibility.Collapsed;
         general.Visibility = page == general ? Visibility.Visible : Visibility.Collapsed;
+        setup.Visibility = page == setup ? Visibility.Visible : Visibility.Collapsed;
+        about.Visibility = page == about ? Visibility.Visible : Visibility.Collapsed;
     }
 }

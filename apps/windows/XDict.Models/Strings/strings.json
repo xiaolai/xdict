@@ -309,7 +309,19 @@
     "learning.historyDetail": "XDict keeps the sentence you looked up, the word and the dictionary on this PC only. It is never uploaded.",
     "learning.languages": "Target languages",
     "learning.languagesDetail": "Only readings in these languages are kept; none checked keeps every language.",
-    "learning.noLanguages": "Add a dictionary to choose languages."
+    "learning.noLanguages": "Add a dictionary to choose languages.",
+    "settings.speech": "Speech",
+    "settings.lookup": "Lookup",
+    "settings.setup": "Setup",
+    "settings.about": "About",
+    "setup.windows": "Windows {0}",
+    "setup.dictionaries": "{0} dictionaries",
+    "setup.ai": "AI source: {0}",
+    "setup.history": "Reading history: {0}",
+    "setup.on": "on",
+    "setup.off": "off",
+    "about.version": "Version {0}",
+    "about.acknowledgements": "Acknowledgements and licences"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -621,6 +633,18 @@
     "learning.historyDetail": "XDict 只在本机保存你查询时的句子、单词和词典；不会上传。",
     "learning.languages": "目标语言",
     "learning.languagesDetail": "只保留这些语言的阅读；全部不选表示所有语言。",
-    "learning.noLanguages": "添加词典后即可选择语言。"
+    "learning.noLanguages": "添加词典后即可选择语言。",
+    "settings.speech": "语音",
+    "settings.lookup": "查询",
+    "settings.setup": "初始设置",
+    "settings.about": "关于",
+    "setup.windows": "Windows 版本 {0}",
+    "setup.dictionaries": "{0} 本词典",
+    "setup.ai": "AI 来源：{0}",
+    "setup.history": "阅读记录：{0}",
+    "setup.on": "已开启",
+    "setup.off": "已关闭",
+    "about.version": "版本 {0}",
+    "about.acknowledgements": "致谢与许可"
   }
 }

@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="XDict.App.LookupView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceL}">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="HotkeyLabel" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <TextBlock x:Name="HotkeyText" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="SettingsHotkeyValue" />
+                    <Button x:Name="ChangeHotkeyButton" Click="OnChangeHotkey"
+                            AutomationProperties.AutomationId="SettingsChangeHotkey" />
+                </StackPanel>
+            </StackPanel>
+            <TextBlock x:Name="Status" FontSize="{StaticResource XDictTextCallout}"
+                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="SettingsLookupStatus" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

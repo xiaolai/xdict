@@ -1,0 +1,11 @@
+<UserControl
+    x:Class="XDict.App.SetupView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceL}">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel x:Name="Rows" Spacing="{StaticResource XDictSpaceXs}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

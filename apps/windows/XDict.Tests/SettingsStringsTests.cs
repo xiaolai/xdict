@@ -39,8 +39,8 @@ public class SettingsStringsTests
         string xaml = File.ReadAllText(Path.Combine(AppRoot(), "SettingsWindow.xaml"));
         foreach (string id in new[]
                  {
-                     "SettingsNav", "SettingsDictionaries", "SettingsReading", "SettingsLearning", "SettingsAI",
-                     "SettingsGeneral",
+                     "SettingsNav", "SettingsDictionaries", "SettingsReading", "SettingsSpeech", "SettingsLookup",
+                     "SettingsLearning", "SettingsAI", "SettingsGeneral", "SettingsSetup", "SettingsAbout",
                  })
             Assert.Contains("AutomationProperties.AutomationId=\"" + id + "\"", xaml);
     }

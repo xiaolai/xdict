@@ -78,11 +78,18 @@ try {
     $settings = Find-Window 'SettingsNav'
     $result.settings = $null -ne $settings
     if ($settings) {
-        foreach ($id in 'SettingsDictionaries', 'SettingsReading', 'SettingsGeneral') {
+        $routeIds = @('SettingsDictionaries', 'SettingsReading', 'SettingsSpeech', 'SettingsLookup',
+            'SettingsLearning', 'SettingsAI', 'SettingsGeneral', 'SettingsSetup', 'SettingsAbout')
+        foreach ($id in $routeIds) {
             $item = & $byId $settings $id
             if ($item) { $result.routes += $id }
         }
-        $controls = @{ SettingsDictionaries = 'AddFileButton'; SettingsReading = 'SettingsZoom'; SettingsGeneral = 'SettingsTheme' }
+        $controls = @{
+            SettingsDictionaries = 'AddFileButton'; SettingsReading = 'SettingsZoom';
+            SettingsSpeech = 'SettingsUseRecordings'; SettingsLookup = 'SettingsHotkeyValue';
+            SettingsLearning = 'SettingsReviewRetention'; SettingsAI = 'SettingsAiSource';
+            SettingsGeneral = 'SettingsTheme'; SettingsSetup = 'SetupAi'; SettingsAbout = 'SettingsAboutVersion'
+        }
         foreach ($route in $controls.Keys) {
             $item = & $byId $settings $route
             if (-not $item) { continue }
@@ -128,10 +135,12 @@ finally {
     if ($uia.PSObject.Properties['error'] -and $uia.error) { throw "the settings harness failed: $($uia.error)" }
     if (-not $uia.main) { throw 'the main window was not found' }
     if (-not $uia.settings) { throw 'the Settings window did not open' }
-    foreach ($id in 'SettingsDictionaries', 'SettingsReading', 'SettingsGeneral') {
+    $routeIds = @('SettingsDictionaries', 'SettingsReading', 'SettingsSpeech', 'SettingsLookup',
+        'SettingsLearning', 'SettingsAI', 'SettingsGeneral', 'SettingsSetup', 'SettingsAbout')
+    foreach ($id in $routeIds) {
         if ($uia.routes -notcontains $id) { throw "the Settings navigation has no $id" }
     }
-    foreach ($route in 'SettingsDictionaries', 'SettingsReading', 'SettingsGeneral') {
+    foreach ($route in $routeIds) {
         if (-not $uia.routeControls.$route) { throw "the $route route showed not its own control" }
     }
     if ($uia.keyboardRoute -eq '') { throw 'the keyboard did not move the route selection' }

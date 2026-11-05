@@ -10,12 +10,20 @@
                                 AutomationProperties.AutomationId="SettingsDictionaries" />
             <NavigationViewItem x:Name="ReadingItem" Tag="reading"
                                 AutomationProperties.AutomationId="SettingsReading" />
+            <NavigationViewItem x:Name="SpeechItem" Tag="speech"
+                                AutomationProperties.AutomationId="SettingsSpeech" />
+            <NavigationViewItem x:Name="LookupItem" Tag="lookup"
+                                AutomationProperties.AutomationId="SettingsLookup" />
             <NavigationViewItem x:Name="LearningItem" Tag="learning"
                                 AutomationProperties.AutomationId="SettingsLearning" />
             <NavigationViewItem x:Name="AiItem" Tag="ai"
                                 AutomationProperties.AutomationId="SettingsAI" />
             <NavigationViewItem x:Name="GeneralItem" Tag="general"
                                 AutomationProperties.AutomationId="SettingsGeneral" />
+            <NavigationViewItem x:Name="SetupItem" Tag="setup"
+                                AutomationProperties.AutomationId="SettingsSetup" />
+            <NavigationViewItem x:Name="AboutItem" Tag="about"
+                                AutomationProperties.AutomationId="SettingsAbout" />
         </NavigationView.MenuItems>
         <Grid x:Name="Pages" />
     </NavigationView>

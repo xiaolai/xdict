@@ -1,0 +1,14 @@
+<UserControl
+    x:Class="XDict.App.AboutView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceL}">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <TextBlock x:Name="VersionText" FontSize="{StaticResource XDictTextBody}"
+                       AutomationProperties.AutomationId="SettingsAboutVersion" />
+            <Button x:Name="AcknowledgementsButton" Click="OnAcknowledgements"
+                    AutomationProperties.AutomationId="SettingsAboutAcknowledgements" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
