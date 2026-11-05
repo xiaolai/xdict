@@ -7,6 +7,8 @@ internal sealed class TrayIcon : IDisposable
 {
     public const int CallbackMessage = Win32.WM_APP + 1;
     private const uint IconId = 1;
+    // Explorer broadcasts this after a restart; the old icon's registration died with it, and the icon must return.
+    private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
     private readonly MessageWindow window;
     private readonly Win32.WndProc procedure;
     private IntPtr icon;
@@ -63,6 +65,16 @@ internal sealed class TrayIcon : IDisposable
 
     private IntPtr OnMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam)
     {
+        if (message == TaskbarCreated)
+        {
+            // One more add, not a second icon: Explorer forgot every icon, and the shell's list is empty again.
+            if (added)
+            {
+                var data = Data();
+                added = Win32.Shell_NotifyIconW(Win32.NIM_ADD, ref data);
+            }
+            return IntPtr.Zero;
+        }
         if (message == CallbackMessage)
         {
             uint evt = (uint)lParam & 0xFFFF;

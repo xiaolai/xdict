@@ -28,6 +28,7 @@ public sealed class CaptureController : IDisposable
     private Win32.HookProc? escapeHook;
     private IntPtr escape;
     private CaptureSettings settings = new();
+    private bool disposed;
 
     public CaptureController(ServiceClient client, LibraryStore store, SearchSession session, Action<string, double> openInApp)
     {
@@ -42,7 +43,12 @@ public sealed class CaptureController : IDisposable
         tray.OpenRequested += () => openInApp("", 0);
         tray.ReviewRequested += () => ReviewRequested?.Invoke();
         tray.SettingsRequested += () => SettingsRequested?.Invoke();
-        tray.ExitRequested += () => Microsoft.UI.Xaml.Application.Current.Exit();
+        tray.ExitRequested += () =>
+        {
+            // The main window settles the session and the windows; a lab without that owner still has to exit.
+            if (ExitRequested is { } exit) exit();
+            else Microsoft.UI.Xaml.Application.Current.Exit();
+        };
         book.OnEnd(OnEnded);
     }
 
@@ -50,6 +56,9 @@ public sealed class CaptureController : IDisposable
 
     /// <summary>The tray's Review item; the main window owns the review window and the single instance.</summary>
     public event Action? ReviewRequested;
+
+    /// <summary>Quit: the tray owns the process, so only this item or the launch harness ends it.</summary>
+    public event Action? ExitRequested;
 
     public CaptureSettings Settings => settings;
     public bool HotkeyRegistered => hotkey.Registered;
@@ -438,6 +447,8 @@ public sealed class CaptureController : IDisposable
 
     public void Dispose()
     {
+        if (disposed) return;
+        disposed = true;
         // A panel still up owns a window and a low-level hook; nulling the field alone left both until exit.
         panel?.Dismiss();
         RemoveEscape();

@@ -1,5 +1,6 @@
 // The main window: search the library's dictionaries, read an entry, and walk the trail.
 using System.Text.Json;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -34,6 +35,7 @@ public sealed partial class MainWindow : Window
     private readonly Trail trail = new();
     private readonly ReadingPreferenceStore readingPreferences = new(ReadingPreferenceStore.DefaultPath);
     private Capture.CaptureController? capture;
+    private bool quitting;
 
     public MainWindow()
     {
@@ -55,8 +57,11 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(LibraryButton, Strings.Get("settings.title"));
         UpdateTrail();
         StatusText.Text = Strings.Get("app.starting");
+        // The tray owns the process: closing the main window hides it, so the shortcut, the tray and the review
+        // window keep working. Quit is the tray's Exit item, a second launch's activation, or the launch harness.
+        AppWindow.Closing += OnMainWindowClosing;
         // The client outlives this window: a Settings window can still be open and uses it; the process exit closes it.
-        Closed += (_, _) => { capture?.Dispose(); paneLease.Reset(); };
+        Closed += (_, _) => { capture?.Dispose(); capture = null; paneLease.Reset(); };
         _ = StartAsync();
     }
 
@@ -359,9 +364,10 @@ public sealed partial class MainWindow : Window
             .Select(item => item.Name + " (" + item.State + ")"));
         // Capture runs whether or not a dictionary is ready: the shortcut and the tray belong to the reader.
         capture = new Capture.CaptureController(started, store, session,
-            (term, scroll) => _ = GuardAsync(() => LookupFromCaptureAsync(term, scroll)));
+            (term, scroll) => _ = GuardAsync(() => OpenFromTrayAsync(term, scroll)));
         capture.SettingsRequested += () => OpenSettings(this, new RoutedEventArgs());
         capture.ReviewRequested += OpenReview;
+        capture.ExitRequested += Quit;
         // A refused shortcut or tray is said, and stays said: the ready sentence used to overwrite it at once.
         string captureNotice = !capture.Start() ? Strings.Get("capture.hotkeyTaken")
             : !capture.TrayVisible ? Strings.Get("capture.trayRefused") : "";
@@ -771,6 +777,44 @@ public sealed partial class MainWindow : Window
         settingsWindow.Activate();
     }
 
+    /// <summary>The main window is hidden by X, never destroyed: the tray and the shortcut must find it again.</summary>
+    public void ShowMainWindow()
+    {
+        AppWindow.Show();
+        Activate();
+    }
+
+    private async Task OpenFromTrayAsync(string term, double scroll)
+    {
+        ShowMainWindow();
+        if (term.Length == 0) return;
+        await LookupFromCaptureAsync(term, scroll);
+    }
+
+    private void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (quitting) return;
+        args.Cancel = true;
+        AppWindow.Hide();
+    }
+
+    /// <summary>Quit, from the tray or the launch harness: settle the tray, the panes, the service and every window.</summary>
+    public void Quit()
+    {
+        if (quitting) return;
+        quitting = true;
+        try { capture?.Dispose(); } catch (Exception) { }
+        capture = null;
+        paneLease.Reset();
+        reviewWindow?.CloseForQuit();
+        reviewWindow = null;
+        try { settingsWindow?.Close(); } catch (Exception) { }
+        settingsWindow = null;
+        client?.Dispose();
+        client = null;
+        Application.Current.Exit();
+    }
+
     /// <summary>The tray's Review item: one review window over the live service and the open dictionaries.</summary>
     private void OpenReview()
     {
@@ -823,7 +867,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Reopens the session against the library as it now stands; the scope box follows.</summary>
     private async Task RefreshSessionAsync()
     {
-        if (session is null || store is null) return;
+        if (quitting || session is null || store is null) return;
         string? chosen = SelectedEdition();
         await session.OpenAsync(store.Dictionaries);
         // Reading & Speech is global: a stored edition preference follows the settings from now on. The old handle
@@ -853,10 +897,6 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            client?.Dispose();
-            Application.Current.Exit();
-        });
+        DispatcherQueue.TryEnqueue(Quit);
     }
 }

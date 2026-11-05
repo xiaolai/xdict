@@ -48,6 +48,9 @@ internal static partial class Win32
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint RegisterWindowMessageW(string name);
+
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromRect(ref RECT rect, uint flags);
 

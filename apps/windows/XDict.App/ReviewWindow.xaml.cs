@@ -410,6 +410,13 @@ public sealed partial class ReviewWindow : Window
         }
     }
 
+    /// <summary>Quit closes the review without the note prompt; the process is ending and the note is unsaved by the reader's choice.</summary>
+    public void CloseForQuit()
+    {
+        closeConfirmed = true;
+        Close();
+    }
+
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (closeConfirmed || draft?.IsDirty != true)
