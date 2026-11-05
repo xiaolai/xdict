@@ -58,9 +58,8 @@ public sealed class CodexCliSource(AICliConfig config)
             using (var status = new AIProcess(config.Executable, ["login", "status"], config.Work,
                        AICliEnvironment.For("CODEX_HOME", config.Home)))
             {
-                string text = await status.RunAsync("", TimeSpan.FromSeconds(30), cancellation).ConfigureAwait(false);
-                if (!text.Contains("Logged in", StringComparison.OrdinalIgnoreCase))
-                    return new AICliStatus(false, null, "not signed in in XDict's Codex home");
+                // The official command exits 0 only when logged in; its sentence is not the contract.
+                _ = await status.RunAsync("", TimeSpan.FromSeconds(30), cancellation).ConfigureAwait(false);
             }
             using var version = new AIProcess(config.Executable, ["--version"], config.Work,
                 AICliEnvironment.For("CODEX_HOME", config.Home));
@@ -154,19 +153,30 @@ public sealed class ClaudeCliSource(AICliConfig config)
             {
                 string text = await status.RunAsync("", TimeSpan.FromSeconds(30), cancellation).ConfigureAwait(false);
                 // The official command exits 0 only when signed in; the JSON names the method, not a secret.
-                if (text.Contains("\"authMethod\":\"none\"", StringComparison.Ordinal))
+                if (text.Contains("\"authMethod\":\"none\"", StringComparison.Ordinal) ||
+                    text.Contains("\"loggedIn\":false", StringComparison.Ordinal))
                     return new AICliStatus(false, null, "not signed in in XDict's Claude configuration");
             }
             using var version = new AIProcess(config.Executable, ["--version"], config.Work,
                 AICliEnvironment.For("CLAUDE_CONFIG_DIR", config.Home));
             string found = (await version.RunAsync("", TimeSpan.FromSeconds(30), cancellation)
                 .ConfigureAwait(false)).Trim();
+            // --permission-prompts (the unattended-run flag used here) needs 2.1.259 or later.
+            if (TryVersion(found) is { } parsed && parsed < new Version(2, 1, 259))
+                return new AICliStatus(false, found, "Claude Code 2.1.259 or later is required");
             return new AICliStatus(true, found);
         }
         catch (AIProviderException error) when (error.Error == AIProviderError.CliFailed)
         {
             return new AICliStatus(false, null, "not signed in in XDict's Claude configuration");
         }
+    }
+
+    private static Version? TryVersion(string text)
+    {
+        int end = 0;
+        while (end < text.Length && (char.IsAsciiDigit(text[end]) || text[end] == '.')) end++;
+        return Version.TryParse(text[..end], out Version? parsed) ? parsed : null;
     }
 
     private void Prepare()
