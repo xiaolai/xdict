@@ -81,7 +81,7 @@ try {
     }
     Write-Host ("versions: core {0}, protocol {1}, index format {2}, normalization {3}" -f
         $versions.core, $versions.protocol, $versions.indexFormat, $versions.normalization)
-    if ($versions.protocol -ne 1) { throw ("the service answered protocol {0}, expected 1" -f $versions.protocol) }
+    if ($versions.protocol -ne 2) { throw ("the service answered protocol {0}, expected 2" -f $versions.protocol) }
     if ([string]::IsNullOrWhiteSpace($versions.core)) { throw 'the service answered no core version' }
 
     Set-Content -LiteralPath $quitPath -Value '' -Encoding Ascii
