@@ -58,6 +58,7 @@ reviewWidth = { value = 480, why = "The review window's width: a card's word, th
 reviewHeight = { value = 560, why = "The review window's opening height: the card, its note and the two answer rows." }
 reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling." }
 buttonMinWidth = { value = 96, why = "An answer button's least width: one word and its key hint, so the four answers line up." }
+findWidth = { value = 320, why = "The find field's width: a phrase at body size, narrow enough to leave the entry readable." }
 
 [line]
 hairline = { value = 1, system = "A Fluent divider's one effective pixel." }

@@ -52,6 +52,14 @@ public sealed partial class MainWindow : Window
         BackButton.Content = Strings.Get("search.back");
         ForwardButton.Content = Strings.Get("search.forward");
         ReturnButton.Content = Strings.Get("search.return");
+        FindBox.PlaceholderText = Strings.Get("find.placeholder");
+        FindPrevious.Content = Strings.Get("find.previous");
+        FindNext.Content = Strings.Get("find.next");
+        FindClose.Content = Strings.Get("find.close");
+        AutomationProperties.SetName(FindBox, Strings.Get("find.placeholder"));
+        AutomationProperties.SetName(FindPrevious, Strings.Get("find.previous"));
+        AutomationProperties.SetName(FindNext, Strings.Get("find.next"));
+        AutomationProperties.SetName(FindClose, Strings.Get("find.close"));
         SearchBox.PlaceholderText = Strings.Get("search.placeholder");
         AutomationProperties.SetName(SearchBox, Strings.Get("search.query"));
         AutomationProperties.SetName(ScopeBox, Strings.Get("search.scope"));
@@ -755,6 +763,56 @@ public sealed partial class MainWindow : Window
     {
         args.Handled = true;
         SearchBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Find in the entry (Ctrl+F): WebView2's own page find, not a copy of the text it searches.</summary>
+    private void FindAccel(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        FindBar.Visibility = Visibility.Visible;
+        FindBox.Focus(FocusState.Programmatic);
+        FindBox.SelectAll();
+    }
+
+    private async void OnFindTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (FindBar.Visibility == Visibility.Visible) await FindInEntryAsync(forward: true);
+    }
+
+    private async void OnFindKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Escape)
+        {
+            e.Handled = true;
+            OnFindClose(this, new RoutedEventArgs());
+        }
+        else if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            await FindInEntryAsync(forward: !shift);
+        }
+    }
+
+    private async void OnFindNext(object sender, RoutedEventArgs e) => await FindInEntryAsync(forward: true);
+
+    private async void OnFindPrevious(object sender, RoutedEventArgs e) => await FindInEntryAsync(forward: false);
+
+    private void OnFindClose(object sender, RoutedEventArgs e)
+    {
+        FindBar.Visibility = Visibility.Collapsed;
+        paneLease.Pane?.View.Focus(FocusState.Programmatic);
+    }
+
+    private async Task FindInEntryAsync(bool forward)
+    {
+        string text = FindBox.Text;
+        if (text.Length == 0 || paneLease.Pane?.View.CoreWebView2 is not { } core) return;
+        // The page's own find: the selection the reader sees is the browser's, and the entry tree is untouched.
+        string script = "window.find(" + JsonSerializer.Serialize(text) + ", false, "
+            + (forward ? "false" : "true") + ", true, false, false, false)";
+        await core.ExecuteScriptAsync(script);
     }
 
     private void OpenSettings(object sender, RoutedEventArgs e)

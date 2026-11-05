@@ -7,7 +7,8 @@
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="GoBackAccel" />
             <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="GoForwardAccel" />
-            <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FocusSearchAccel" />
+            <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FindAccel" />
+            <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="FocusSearchAccel" />
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -30,7 +31,22 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <ListView x:Name="Results" SelectionChanged="OnResultSelected" KeyDown="OnResultsKeyDown" />
-            <Grid x:Name="EntryHost" Grid.Column="1" />
+            <Grid Grid.Column="1" RowSpacing="{StaticResource XDictSpaceXs}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel x:Name="FindBar" Orientation="Horizontal" Visibility="Collapsed"
+                            Spacing="{StaticResource XDictSpaceSm}"
+                            Padding="{StaticResource XDictSpaceM}">
+                    <TextBox x:Name="FindBox" Width="{StaticResource XDictSizeFind}"
+                             TextChanged="OnFindTextChanged" KeyDown="OnFindKeyDown" />
+                    <Button x:Name="FindPrevious" Click="OnFindPrevious" />
+                    <Button x:Name="FindNext" Click="OnFindNext" />
+                    <Button x:Name="FindClose" Click="OnFindClose" />
+                </StackPanel>
+                <Grid x:Name="EntryHost" Grid.Row="1" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

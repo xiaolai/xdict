@@ -321,7 +321,11 @@
     "setup.on": "on",
     "setup.off": "off",
     "about.version": "Version {0}",
-    "about.acknowledgements": "Acknowledgements and licences"
+    "about.acknowledgements": "Acknowledgements and licences",
+    "find.placeholder": "Find in entry",
+    "find.previous": "Previous",
+    "find.next": "Next",
+    "find.close": "Close find"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -645,6 +649,10 @@
     "setup.on": "已开启",
     "setup.off": "已关闭",
     "about.version": "版本 {0}",
-    "about.acknowledgements": "致谢与许可"
+    "about.acknowledgements": "致谢与许可",
+    "find.placeholder": "在词条内查找",
+    "find.previous": "上一个",
+    "find.next": "下一个",
+    "find.close": "关闭查找"
   }
 }

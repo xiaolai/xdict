@@ -1,5 +1,5 @@
 // Generated from Tokens/tokens.toml by Tools/tokens.py; do not edit.
-// source sha256: 9010c25fa4dfca2a573c09238ad33500ee2ce5ebefc9206b4704be3ac6f8078e
+// source sha256: d69a0ff67538514d102326085740081669955194c4c02271ef3aa513944ee329
 namespace XDict.App;
 
 internal static class Tokens
@@ -46,6 +46,7 @@ internal static class Tokens
         internal const double ReviewHeight = 560;
         internal const double ReviewMinHeight = 420;
         internal const double ButtonMinWidth = 96;
+        internal const double FindWidth = 320;
     }
 
     internal static class Line
