@@ -1,6 +1,6 @@
 # The Windows wire contract — contract 5
 
-**2026-11-05** · Status: **current, contract 5** — every fixture in `fixtures.jsonl` is decoded, checked against this
+**2026-11-06** · Status: **current, contract 5** — every fixture in `fixtures.jsonl` is decoded, checked against this
 schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 added
 the learning set (history, notes, review, export/erase, the entry gloss) and raised the JSON envelope to 4 MiB.
 Contract 3 added `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox; contract 4 adds `entryText`, the bounded plain text with spans, senses and the cut; contract 5 adds Explore and its
