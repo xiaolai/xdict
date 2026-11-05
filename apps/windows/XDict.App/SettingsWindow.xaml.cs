@@ -17,7 +17,8 @@ public sealed partial class SettingsWindow : Window
     private readonly LearningView learning;
     private readonly GeneralView general;
 
-    public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null)
+    public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null,
+        ReviewReminders? reminders = null)
     {
         InitializeComponent();
         // Every window follows the saved theme, not only the main window that applied it before opening this one.
@@ -30,7 +31,7 @@ public sealed partial class SettingsWindow : Window
         dictionaries = new DictionariesView(store, client, this);
         dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
         reading = new ReadingSpeechView();
-        learning = new LearningView(this, client);
+        learning = new LearningView(this, client, reminders);
         general = new GeneralView(capture);
         foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, general }) Pages.Children.Add(page);
         Nav.SelectedItem = DictionariesItem;

@@ -29,6 +29,15 @@ public sealed record ReviewReminderPlan(
 {
     public bool CanDeliver => Permission == ReminderPermission.Granted && Kind != ReminderKind.None;
 
+    /// <summary>The permission Windows reports, as the model's states; an unknown value is never a yes.</summary>
+    public static ReminderPermission PermissionOf(string setting) => setting switch
+    {
+        "Enabled" => ReminderPermission.Granted,
+        "DisabledForApplication" or "DisabledForUser" or "DisabledByGroupPolicy" => ReminderPermission.Denied,
+        "Unsupported" => ReminderPermission.Unsupported,
+        _ => ReminderPermission.Unspecified,
+    };
+
     /// <summary>Due cards remind now; otherwise the next due date, or an overdue one already passed.</summary>
     public static ReviewReminderPlan Plan(double now, ReviewSummary summary, ReminderPermission permission, bool enabled)
     {

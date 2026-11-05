@@ -15,18 +15,24 @@ public sealed partial class LearningView : UserControl
 
     private readonly Window owner;
     private readonly ServiceClient client;
+    private readonly ReviewReminders? reminders;
     private LearningSettings settings;
     private bool loading = true;
 
-    public LearningView(Window owner, ServiceClient client)
+    public LearningView(Window owner, ServiceClient client, ReviewReminders? reminders = null)
     {
         InitializeComponent();
         this.owner = owner;
         this.client = client;
+        this.reminders = reminders;
         settings = LearningSettings.Load();
         Heading.Text = Strings.Get("settings.learning");
         RetentionLabel.Text = Strings.Get("learning.retention");
         RetentionDetail.Text = Strings.Get("learning.retentionDetail");
+        Reminders.Header = Strings.Get("learning.reminders");
+        RemindersDetail.Text = Strings.Get("learning.remindersDetail");
+        Reminders.IsOn = settings.RemindersEnabled;
+        NotificationSettings.Content = Strings.Get("learning.openNotificationSettings");
         ExportLabel.Text = Strings.Get("learning.export");
         ExportDetail.Text = Strings.Get("learning.exportDetail");
         ExportButton.Content = Strings.Get("learning.exportAction");
@@ -39,6 +45,44 @@ public sealed partial class LearningView : UserControl
             value => Math.Abs(value - settings.ReviewRetention) < 0.001);
         Retention.SelectedIndex = selected < 0 ? 2 : selected;
         loading = false;
+        UpdateReminderState();
+    }
+
+    private void OnRemindersToggled(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        settings = settings with { RemindersEnabled = Reminders.IsOn };
+        Save();
+        _ = reminders?.RefreshAsync();
+        UpdateReminderState();
+    }
+
+    /// <summary>The capability and Windows' permission are said where the reader chooses reminders (AGENTS.md).</summary>
+    private void UpdateReminderState()
+    {
+        NotificationSettings.Visibility = Visibility.Collapsed;
+        if (reminders is null || !reminders.Supported || reminders.Permission == ReminderPermission.Unsupported)
+        {
+            Reminders.IsEnabled = false;
+            RemindersStatus.Text = Strings.Get("learning.remindersUnsupported");
+            return;
+        }
+        Reminders.IsEnabled = true;
+        if (reminders.Permission == ReminderPermission.Denied)
+        {
+            RemindersStatus.Text = Strings.Get("learning.remindersBlocked");
+            NotificationSettings.Visibility = Visibility.Visible;
+            return;
+        }
+        RemindersStatus.Text = reminders.Permission == ReminderPermission.Unspecified
+            ? Strings.Get("learning.remindersAsk")
+            : "";
+    }
+
+    private async void OnNotificationSettings(object sender, RoutedEventArgs e)
+    {
+        try { await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:notifications")); }
+        catch (Exception error) { Status.Text = Strings.Format("learning.settingsFailed", error.Message); }
     }
 
     private void OnRetentionChanged(object sender, SelectionChangedEventArgs e)

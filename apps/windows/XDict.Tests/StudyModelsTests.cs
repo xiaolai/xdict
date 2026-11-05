@@ -149,6 +149,18 @@ public class StudyModelsTests
     }
 
     [Fact]
+    public void WindowsNotificationSettingsMapToTheReminderPermission()
+    {
+        Assert.Equal(ReminderPermission.Granted, ReviewReminderPlan.PermissionOf("Enabled"));
+        Assert.Equal(ReminderPermission.Denied, ReviewReminderPlan.PermissionOf("DisabledForApplication"));
+        Assert.Equal(ReminderPermission.Denied, ReviewReminderPlan.PermissionOf("DisabledForUser"));
+        Assert.Equal(ReminderPermission.Denied, ReviewReminderPlan.PermissionOf("DisabledByGroupPolicy"));
+        Assert.Equal(ReminderPermission.Unsupported, ReviewReminderPlan.PermissionOf("Unsupported"));
+        // A value this build does not know is not permission to show a notification.
+        Assert.Equal(ReminderPermission.Unspecified, ReviewReminderPlan.PermissionOf("SomethingNew"));
+    }
+
+    [Fact]
     public void TheTargetKeyIsTheReviewsIdentity()
     {
         var target = new StudyTarget("lineage-1", "run", 2, "entry", "edition-1", "hash");

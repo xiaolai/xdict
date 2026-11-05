@@ -14,6 +14,17 @@
                           AutomationProperties.AutomationId="SettingsReviewRetention" />
             </StackPanel>
             <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <ToggleSwitch x:Name="Reminders" Toggled="OnRemindersToggled"
+                              AutomationProperties.AutomationId="SettingsReviewReminders" />
+                <TextBlock x:Name="RemindersDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock x:Name="RemindersStatus" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsReviewRemindersStatus" />
+                <Button x:Name="NotificationSettings" Click="OnNotificationSettings" Visibility="Collapsed"
+                        AutomationProperties.AutomationId="SettingsNotificationSettings" />
+            </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
                 <TextBlock x:Name="ExportLabel" FontSize="{StaticResource XDictTextBody}" />
                 <TextBlock x:Name="ExportDetail" FontSize="{StaticResource XDictTextCallout}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />

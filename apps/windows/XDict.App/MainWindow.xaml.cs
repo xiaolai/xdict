@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private readonly Trail trail = new();
     private readonly ReadingPreferenceStore readingPreferences = new(ReadingPreferenceStore.DefaultPath);
     private Capture.CaptureController? capture;
+    private ReviewReminders? reminders;
     private bool quitting;
     // The review UIA lab: erase the learning store, write one note so a card is due, and open the review window.
     private readonly bool reviewLab = Environment.GetCommandLineArgs().Contains("--review-lab");
@@ -371,6 +372,8 @@ public sealed partial class MainWindow : Window
         capture.SettingsRequested += () => OpenSettings(this, new RoutedEventArgs());
         capture.ReviewRequested += OpenReview;
         capture.ExitRequested += Quit;
+        reminders = new ReviewReminders(started, OpenReview);
+        reminders.Start();
         // A refused shortcut or tray is said, and stays said: the ready sentence used to overwrite it at once.
         string captureNotice = !capture.Start() ? Strings.Get("capture.hotkeyTaken")
             : !capture.TrayVisible ? Strings.Get("capture.trayRefused") : "";
@@ -763,7 +766,7 @@ public sealed partial class MainWindow : Window
         {
             live = store ?? LibraryStore.Load();
             store ??= live;
-            settingsWindow = new SettingsWindow(live, client, capture);
+            settingsWindow = new SettingsWindow(live, client, capture, reminders);
         }
         catch (LibraryUnreadableException error)
         {
@@ -814,6 +817,8 @@ public sealed partial class MainWindow : Window
     {
         AppWindow.Show();
         Activate();
+        // A resume or a tray reopen is the moment to re-read the due date; the timer may have slept through it.
+        _ = reminders?.RefreshAsync();
     }
 
     private async Task OpenFromTrayAsync(string term, double scroll)
@@ -837,6 +842,8 @@ public sealed partial class MainWindow : Window
         quitting = true;
         try { capture?.Dispose(); } catch (Exception) { }
         capture = null;
+        reminders?.Dispose();
+        reminders = null;
         paneLease.Reset();
         reviewWindow?.CloseForQuit();
         reviewWindow = null;
@@ -864,6 +871,7 @@ public sealed partial class MainWindow : Window
             edition => session.Dictionaries.FirstOrDefault(item => item.Edition == edition)?.Handle,
             edition => session.Dictionaries.Any(item => item.Edition == edition),
             card => _ = GuardAsync(() => OpenStudyCardAsync(card)));
+        reviewWindow.Changed += () => _ = reminders?.RefreshAsync();
         reviewWindow.Closed += (_, _) => reviewWindow = null;
         reviewWindow.Activate();
     }

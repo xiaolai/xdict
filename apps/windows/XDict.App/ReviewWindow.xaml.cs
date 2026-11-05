@@ -27,6 +27,9 @@ public sealed partial class ReviewWindow : Window
     private bool askingToDiscard;
     private bool closeConfirmed;
 
+    /// <summary>A grade, an undo or a resolution moved the next due date; the reminder plan reads it again.</summary>
+    public event Action? Changed;
+
     public ReviewWindow(ServiceClient client, LibraryStore store, Func<string, string?> handle,
         Func<string, bool> editionAvailable, Action<StudyCard>? openEntry = null)
     {
@@ -219,6 +222,7 @@ public sealed partial class ReviewWindow : Window
             Say(Strings.Get(outcome.Ineligible ? "review.ineligible" : "review.graded"));
             ShowCurrent();
             await LoadConflictsAsync();
+            Changed?.Invoke();
         }
         catch (Exception error)
         {
@@ -249,6 +253,7 @@ public sealed partial class ReviewWindow : Window
             Say(Strings.Get("review.undone"));
             ShowCurrent();
             await LoadConflictsAsync();
+            Changed?.Invoke();
         }
         catch (Exception error)
         {
@@ -369,6 +374,7 @@ public sealed partial class ReviewWindow : Window
             Say(Strings.Get("review.resolved"));
             ShowCurrent();
             await LoadConflictsAsync();
+            Changed?.Invoke();
         }
         catch (Exception error)
         {
