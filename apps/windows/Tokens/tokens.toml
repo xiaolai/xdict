@@ -59,6 +59,9 @@ reviewHeight = { value = 560, why = "The review window's opening height: the car
 reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling." }
 buttonMinWidth = { value = 96, why = "An answer button's least width: one word and its key hint, so the four answers line up." }
 findWidth = { value = 320, why = "The find field's width: a phrase at body size, narrow enough to leave the entry readable." }
+exploreWidth = { value = 560, why = "The Explore window's width: a word, its dictionary and its reason on one row." }
+exploreHeight = { value = 640, why = "The Explore window's opening height: the controls and a page of rows." }
+exploreMinHeight = { value = 420, why = "The Explore window's least height: the controls and enough rows to choose from." }
 
 [line]
 hairline = { value = 1, system = "A Fluent divider's one effective pixel." }

@@ -22,6 +22,7 @@
             <Button x:Name="BackButton" Click="GoBack" />
             <Button x:Name="ForwardButton" Click="GoForward" />
             <Button x:Name="ReturnButton" Click="GoReturn" />
+            <Button x:Name="ExploreButton" Click="OpenExplore" />
             <Button x:Name="LibraryButton" Click="OpenSettings" />
         </StackPanel>
         <TextBlock x:Name="StatusText" Grid.Row="1" Margin="12,0,12,8" TextWrapping="Wrap" />

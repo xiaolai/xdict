@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     private SettingsWindow? settingsWindow;
     private ReviewWindow? reviewWindow;
     private HistoryWindow? historyWindow;
+    private ExploreWindow? exploreWindow;
     private readonly TaskCompletionSource windowLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private MediaPlayer? player;
     private readonly Trail trail = new();
@@ -49,6 +50,7 @@ public sealed partial class MainWindow : Window
         ThemeApplier.Apply(Root, AppSettings.Load().Theme);
         Title = Strings.Get("app.title");
         LibraryButton.Content = Strings.Get("settings.title");
+        ExploreButton.Content = Strings.Get("explore.title");
         BackButton.Content = Strings.Get("search.back");
         ForwardButton.Content = Strings.Get("search.forward");
         ReturnButton.Content = Strings.Get("search.return");
@@ -68,6 +70,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(ForwardButton, Strings.Get("search.forward"));
         AutomationProperties.SetName(ReturnButton, Strings.Get("search.return"));
         AutomationProperties.SetName(LibraryButton, Strings.Get("settings.title"));
+        AutomationProperties.SetName(ExploreButton, Strings.Get("explore.title"));
         UpdateTrail();
         StatusText.Text = Strings.Get("app.starting");
         // The tray owns the process: closing the main window hides it, so the shortcut, the tray and the review
@@ -897,6 +900,35 @@ public sealed partial class MainWindow : Window
 
     private Task OpenHistoryCardAsync(HistoryCard card) =>
         OpenEntryRefAsync(card.Reading.Edition, card.Reading.EntryKey, card.Reading.Occurrence, card.Reading.Surface);
+
+    /// <summary>Explore over the dictionaries the session opened; a row opens its entry in this window.</summary>
+    private void OpenExplore(object sender, RoutedEventArgs e)
+    {
+        if (client is null || session is null)
+        {
+            StatusText.Text = Strings.Get("app.serviceFailed");
+            return;
+        }
+        if (exploreWindow is not null)
+        {
+            exploreWindow.Activate();
+            return;
+        }
+        exploreWindow = new ExploreWindow(client, session.Dictionaries.ToList(),
+            entry => _ = GuardAsync(() => OpenExploredAsync(entry)));
+        exploreWindow.Closed += (_, _) => exploreWindow = null;
+        exploreWindow.Activate();
+    }
+
+    private async Task OpenExploredAsync(JsonElement entry)
+    {
+        if (session is null) return;
+        string edition = entry.GetProperty("edition").GetString() ?? "";
+        if (!session.Dictionaries.Any(dictionary => dictionary.Edition == edition)) return;
+        string key = entry.TryGetProperty("key", out JsonElement value) ? value.GetString() ?? "" : "";
+        await ShowAsync(edition, entry, key, record: true);
+        Activate();
+    }
 
     /// <summary>The capture panel's Ask action: one meaning window over the captured sentence and the entry it drew.</summary>
     private void OpenMeaning(Capture.MeaningRequest request)
