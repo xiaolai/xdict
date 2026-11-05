@@ -11,6 +11,9 @@ public sealed record LearningSettings
     /// <summary>Off until the first-run disclosure acknowledges it. With it off the recorder writes nothing at all.</summary>
     public bool HistoryEnabled { get; init; }
 
+    /// <summary>Whether the reader has seen the first-run local-storage disclosure.</summary>
+    public bool HistoryDisclosed { get; init; }
+
     /// <summary>The reader's target languages; empty keeps every language (plan §2.7).</summary>
     public List<string>? TargetLanguages { get; init; } = [];
 
