@@ -1,0 +1,88 @@
+<UserControl
+    x:Class="XDict.App.AIView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceXxl}">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="SourceLabel" FontSize="{StaticResource XDictTextBody}" />
+                <ComboBox x:Name="Source" MinWidth="{StaticResource XDictSizeReviewWidth}"
+                          SelectionChanged="OnSourceChanged"
+                          AutomationProperties.AutomationId="SettingsAiSource" />
+                <TextBlock x:Name="SourceDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel x:Name="HttpPanel" Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="ProfileLabel" FontSize="{StaticResource XDictTextBody}" />
+                <ComboBox x:Name="Profile" MinWidth="{StaticResource XDictSizeReviewWidth}"
+                          SelectionChanged="OnProfileChanged"
+                          AutomationProperties.AutomationId="SettingsAiProfile" />
+                <TextBlock x:Name="ModelLabel" FontSize="{StaticResource XDictTextBody}" />
+                <ComboBox x:Name="Model" MinWidth="{StaticResource XDictSizeReviewWidth}" IsEditable="True"
+                          LostFocus="OnModelLostFocus"
+                          AutomationProperties.AutomationId="SettingsAiModel" />
+                <TextBlock x:Name="EndpointLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBox x:Name="Endpoint" LostFocus="OnEndpointLostFocus"
+                         AutomationProperties.AutomationId="SettingsAiEndpoint" />
+                <TextBlock x:Name="KeyLabel" FontSize="{StaticResource XDictTextBody}" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <PasswordBox x:Name="KeyBox" MinWidth="{StaticResource XDictSizeReviewWidth}"
+                                 AutomationProperties.AutomationId="SettingsAiKey" />
+                    <Button x:Name="SaveKeyButton" Click="OnSaveKey"
+                            AutomationProperties.AutomationId="SettingsAiSaveKey" />
+                    <Button x:Name="RemoveKeyButton" Click="OnRemoveKey"
+                            AutomationProperties.AutomationId="SettingsAiRemoveKey" />
+                </StackPanel>
+                <TextBlock x:Name="KeyStatus" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           AutomationProperties.AutomationId="SettingsAiKeyStatus" />
+                <Button x:Name="CheckHttpButton" Click="OnCheckHttp"
+                        AutomationProperties.AutomationId="SettingsAiCheckHttp" />
+            </StackPanel>
+
+            <StackPanel x:Name="ConsentPanel" Spacing="{StaticResource XDictSpaceXs}">
+                <ToggleSwitch x:Name="EntrySwitch" Toggled="OnEntryToggled"
+                              AutomationProperties.AutomationId="SettingsAiEntry" />
+                <TextBlock x:Name="EntryDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock x:Name="LanguageLabel" FontSize="{StaticResource XDictTextBody}" />
+                <ComboBox x:Name="AnswerLanguage" MinWidth="{StaticResource XDictSizeReviewWidth}"
+                          SelectionChanged="OnLanguageChanged"
+                          AutomationProperties.AutomationId="SettingsAiLanguage" />
+                <ToggleSwitch x:Name="Preview" Toggled="OnPreviewToggled"
+                              AutomationProperties.AutomationId="SettingsAiPreview" />
+                <ToggleSwitch x:Name="AskOnOpen" Toggled="OnAskOnOpenToggled"
+                              AutomationProperties.AutomationId="SettingsAiAskOnOpen" />
+            </StackPanel>
+
+            <StackPanel x:Name="CliPanel" Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="CodexLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="CodexPathText" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsAiCodexPath" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <Button x:Name="BrowseCodexButton" Click="OnBrowseCodex"
+                            AutomationProperties.AutomationId="SettingsAiBrowseCodex" />
+                    <Button x:Name="CheckCodexButton" Click="OnCheckCodex"
+                            AutomationProperties.AutomationId="SettingsAiCheckCodex" />
+                </StackPanel>
+                <TextBlock x:Name="ClaudeLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="ClaudePathText" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsAiClaudePath" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <Button x:Name="BrowseClaudeButton" Click="OnBrowseClaude"
+                            AutomationProperties.AutomationId="SettingsAiBrowseClaude" />
+                    <Button x:Name="CheckClaudeButton" Click="OnCheckClaude"
+                            AutomationProperties.AutomationId="SettingsAiCheckClaude" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock x:Name="Status" FontSize="{StaticResource XDictTextCallout}"
+                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="SettingsAiStatus" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

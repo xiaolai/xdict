@@ -15,6 +15,7 @@ public sealed partial class SettingsWindow : Window
     private readonly DictionariesView dictionaries;
     private readonly ReadingSpeechView reading;
     private readonly LearningView learning;
+    private readonly AIView ai;
     private readonly GeneralView general;
 
     public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null,
@@ -27,13 +28,15 @@ public sealed partial class SettingsWindow : Window
         DictionariesItem.Content = Strings.Get("settings.dictionaries");
         ReadingItem.Content = Strings.Get("settings.reading");
         LearningItem.Content = Strings.Get("settings.learning");
+        AiItem.Content = Strings.Get("settings.ai");
         GeneralItem.Content = Strings.Get("settings.general");
         dictionaries = new DictionariesView(store, client, this);
         dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
         reading = new ReadingSpeechView();
         learning = new LearningView(this, client, reminders);
+        ai = new AIView(this);
         general = new GeneralView(capture);
-        foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, general }) Pages.Children.Add(page);
+        foreach (UIElement page in new UIElement[] { dictionaries, reading, learning, ai, general }) Pages.Children.Add(page);
         Nav.SelectedItem = DictionariesItem;
         Show(dictionaries);
     }
@@ -45,6 +48,7 @@ public sealed partial class SettingsWindow : Window
         {
             "reading" => reading,
             "learning" => learning,
+            "ai" => ai,
             "general" => general,
             _ => dictionaries,
         });
@@ -55,6 +59,7 @@ public sealed partial class SettingsWindow : Window
         dictionaries.Visibility = page == dictionaries ? Visibility.Visible : Visibility.Collapsed;
         reading.Visibility = page == reading ? Visibility.Visible : Visibility.Collapsed;
         learning.Visibility = page == learning ? Visibility.Visible : Visibility.Collapsed;
+        ai.Visibility = page == ai ? Visibility.Visible : Visibility.Collapsed;
         general.Visibility = page == general ? Visibility.Visible : Visibility.Collapsed;
     }
 }

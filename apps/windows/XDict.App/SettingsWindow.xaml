@@ -12,6 +12,8 @@
                                 AutomationProperties.AutomationId="SettingsReading" />
             <NavigationViewItem x:Name="LearningItem" Tag="learning"
                                 AutomationProperties.AutomationId="SettingsLearning" />
+            <NavigationViewItem x:Name="AiItem" Tag="ai"
+                                AutomationProperties.AutomationId="SettingsAI" />
             <NavigationViewItem x:Name="GeneralItem" Tag="general"
                                 AutomationProperties.AutomationId="SettingsGeneral" />
         </NavigationView.MenuItems>
