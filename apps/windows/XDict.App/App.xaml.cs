@@ -56,6 +56,9 @@ public partial class App : Application
         }
         // A pane folder a stopping WebView2 would not release is collected here, a day later.
         PaneFactory.SweepStale(TimeSpan.FromDays(1));
+        // An upgrade from the x86 install path leaves the Run value naming the removed copy; the reader's own launch
+        // is the one moment it can be repointed without writing another user's registry.
+        StartupRegistration.Repair();
         window = new MainWindow();
         dispatcher = window.DispatcherQueue;
         window.Activate();

@@ -2,6 +2,9 @@
 <!-- The unpackaged Windows installer: the self-contained publish beside its service, a Start-menu shortcut, and an
      Add/Remove Programs entry. Built by Tools/installer.ps1; signed with bundle.ps1's certificate thumbprint. -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- `installer.ps1` builds this with `-arch x64`, which puts ProgramFiles64Folder in C:\Program Files. 0.1.6 and
+       0.2.0 were built without it, so WiX resolved the 64-bit folder to the x86 view; the upgrade removes that older
+       product after this one is installed, and the app repoints its own per-user Run value on first launch. -->
   <Package Name="XDict" Manufacturer="XDict" Version="$(var.Version)" UpgradeCode="41C24C37-620F-46DC-A1E0-BF1D638ADE6E"
            Scope="perMachine" Compressed="yes" InstallerVersion="500">
     <!-- Remove the old product only after the new one is installed: a failed upgrade then leaves the reader's

@@ -21,7 +21,9 @@ $version = $version.Trim()
 if ([string]::IsNullOrWhiteSpace($Out)) { $Out = Join-Path $layout.AppRoot ('out\XDict-' + $version + '-x64.msi') }
 $wix = (Get-Command wix -ErrorAction SilentlyContinue)
 if (-not $wix) { throw 'WiX is not installed: dotnet tool install --global wix' }
-& $wix.Source build (Join-Path $PSScriptRoot 'installer.wxs') -d Version=$version -d PublishDir=$Bundle -o $Out
+# -arch x64 is the installer's platform: without it WiX resolves ProgramFiles64Folder to the x86 view, as 0.1.6
+# and 0.2.0 did. The upgrade test starts from that x86 install.
+& $wix.Source build (Join-Path $PSScriptRoot 'installer.wxs') -arch x64 -d Version=$version -d PublishDir=$Bundle -o $Out
 if ($LASTEXITCODE -ne 0) { throw 'the MSI build failed' }
 if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     & (Join-Path $PSScriptRoot 'sign.ps1') -Path $Out -CertificateThumbprint $CertificateThumbprint
