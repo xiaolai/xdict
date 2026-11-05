@@ -20,6 +20,7 @@ public sealed partial class DictionariesView : UserControl
     private readonly ServiceClient client;
     private readonly bool askLanguages;
     private CancellationTokenSource? importing;
+    private CancellationTokenSource? building;
     private List<LibraryDictionary> rows = [];
 
     public DictionariesView(LibraryStore store, ServiceClient client, Window owner, bool askLanguages = true)
@@ -42,6 +43,8 @@ public sealed partial class DictionariesView : UserControl
         WordPackLabel.Text = Strings.Get("library.wordPack");
         WordPackInstall.Content = Strings.Get("library.wordPack.install");
         WordPackRemove.Content = Strings.Get("library.wordPack.remove");
+        WordPackBuild.Content = Strings.Get("library.wordPack.build");
+        WordPackCancel.Content = Strings.Get("library.wordPack.cancel");
         RelinkMissing();
         Refresh();
         _ = Guarded(RefreshWordPackAsync);
@@ -72,6 +75,7 @@ public sealed partial class DictionariesView : UserControl
             : Strings.Get("library.wordPack.none");
         WordPackInstall.IsEnabled = true;
         WordPackRemove.IsEnabled = installed;
+        WordPackBuild.IsEnabled = true;
     }
 
     private async void InstallWordPack(object sender, RoutedEventArgs e) => await Guarded(async () =>
@@ -114,6 +118,126 @@ public sealed partial class DictionariesView : UserControl
         }
         ShowWordPack(reply.Ok!.Value.GetProperty("pack"));
     });
+
+    /// <summary>
+    /// Downloads the pinned sources and notices into a fresh folder, verifies each against the embedded manifest,
+    /// writes the manifest for the service, and asks the service to build and install the pack. The service sees only
+    /// handles; the network is this side's, as ADR-0003 requires.
+    /// </summary>
+    private async void BuildWordPack(object sender, RoutedEventArgs e) => await Guarded(async () =>
+    {
+        if (building is not null) return;
+        IReadOnlyList<WordPackSource> sources = WordPackSources.All();
+        long totalBytes = sources.Sum(source => source.Bytes);
+        long megabytes = (totalBytes + (1 << 20) - 1) >> 20;
+        var confirm = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = Strings.Get("library.wordPack.confirmTitle"),
+            Content = Strings.Format("library.wordPack.confirm", megabytes),
+            PrimaryButtonText = Strings.Get("library.wordPack.build"),
+            CloseButtonText = Strings.Get("library.wordPack.cancel"),
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var cancellation = new CancellationTokenSource();
+        building = cancellation;
+        string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "XDict", "WordPack", "build-" + Guid.NewGuid().ToString("N"));
+        var ids = new List<string>();
+        ulong buildId = 0;
+        string? note = null;
+        void Sent(ulong id, string operation)
+        {
+            if (operation == "buildWordPack") Interlocked.Exchange(ref buildId, id);
+        }
+        void OnBuildProgress(ulong id, ulong done, ulong total)
+        {
+            if (id != Interlocked.Read(ref buildId)) return;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                WordPackBar.IsIndeterminate = false;
+                WordPackBar.Value = total == 0 ? 0 : 100.0 * done / total;
+                WordPackStatus.Text = Strings.Format("library.wordPack.building", (int)WordPackBar.Value);
+            });
+        }
+        client.RequestSent += Sent;
+        client.LongOperationProgress += OnBuildProgress;
+        WordPackBuild.IsEnabled = false;
+        WordPackInstall.IsEnabled = false;
+        WordPackRemove.IsEnabled = false;
+        WordPackCancel.Visibility = Visibility.Visible;
+        WordPackBar.Visibility = Visibility.Visible;
+        WordPackBar.IsIndeterminate = false;
+        WordPackBar.Value = 0;
+        try
+        {
+            Directory.CreateDirectory(root);
+            var download = new Progress<WordPackProgress>(progress =>
+            {
+                WordPackBar.Value = progress.BytesTotal == 0 ? 0 : 100.0 * progress.BytesDone / progress.BytesTotal;
+                WordPackStatus.Text = Strings.Format("library.wordPack.downloading",
+                    progress.FilesDone, progress.FilesTotal);
+            });
+            IReadOnlyList<string> files = await WordPackSources.DownloadAsync(root, sources, progress: download,
+                cancellation: cancellation.Token);
+            string manifestPath = Path.Combine(root, "manifest.json");
+            await File.WriteAllTextAsync(manifestPath, WordPackSources.ManifestText, cancellation.Token);
+            var refs = new List<object>();
+            foreach (string path in files)
+            {
+                string id = "pack-" + ids.Count;
+                ids.Add(id);
+                client.Observe(id, Path.GetFileName(path), path);
+                refs.Add(new { file = id });
+            }
+            const string manifestId = "pack-manifest";
+            ids.Add(manifestId);
+            client.Observe(manifestId, "manifest.json", manifestPath);
+            WordPackBar.IsIndeterminate = true;
+            WordPackStatus.Text = Strings.Format("library.wordPack.building", 0);
+            Reply reply = await client.CallAsync("buildWordPack",
+                new { sources = refs, manifest = new { file = manifestId } },
+                cancellation: cancellation.Token);
+            if (reply.Error is { } error)
+            {
+                note = error.GetProperty("type").GetString() == "cancelled"
+                    ? Strings.Get("library.wordPack.cancelled")
+                    : ServiceMessages.For(error);
+            }
+            else
+            {
+                note = Strings.Get("library.wordPack.built");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            note = Strings.Get("library.wordPack.cancelled");
+        }
+        catch (WordPackDownloadException error)
+        {
+            note = error.Message;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or HttpRequestException)
+        {
+            note = Strings.Format("library.failed", "", error.Message);
+        }
+        finally
+        {
+            client.RequestSent -= Sent;
+            client.LongOperationProgress -= OnBuildProgress;
+            foreach (string id in ids) client.Release(id);
+            building = null;
+            try { Directory.Delete(root, true); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            WordPackCancel.Visibility = Visibility.Collapsed;
+            WordPackBar.Visibility = Visibility.Collapsed;
+            await RefreshWordPackAsync();
+            if (note is not null) WordPackStatus.Text = note;
+        }
+    });
+
+    private void CancelWordPackBuild(object sender, RoutedEventArgs e) => building?.Cancel();
 
     /// <summary>A folder the reader moved: each missing package is looked for one level above its own folder's parent,
     /// where the moved folder now sits, and its files follow the identity recorded at import.</summary>

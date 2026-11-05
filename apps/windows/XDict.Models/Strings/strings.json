@@ -385,7 +385,15 @@
     "entry.tab": "Entry",
     "search.allLoading": "Showing the word in every dictionary…",
     "search.allShown": "{0} dictionaries show this word",
-    "search.allShownFailed": "{0} dictionaries show this word; {1} could not be read"
+    "search.allShownFailed": "{0} dictionaries show this word; {1} could not be read",
+    "library.wordPack.build": "Build word data…",
+    "library.wordPack.cancel": "Cancel",
+    "library.wordPack.confirmTitle": "Build the word data?",
+    "library.wordPack.confirm": "{0} MB will be downloaded from the pinned upstream sources and built on this PC. XDict hosts no word data.",
+    "library.wordPack.downloading": "Downloading file {0} of {1}…",
+    "library.wordPack.building": "Building word data… {0}%",
+    "library.wordPack.built": "Word data is built and installed.",
+    "library.wordPack.cancelled": "The build was cancelled; nothing was installed."
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -773,6 +781,14 @@
     "entry.tab": "词条",
     "search.allLoading": "正在所有词典中显示这个词…",
     "search.allShown": "{0} 部词典收录了这个词",
-    "search.allShownFailed": "{0} 部词典收录了这个词；{1} 部无法读取"
+    "search.allShownFailed": "{0} 部词典收录了这个词；{1} 部无法读取",
+    "library.wordPack.build": "构建词库数据…",
+    "library.wordPack.cancel": "取消",
+    "library.wordPack.confirmTitle": "构建词库数据？",
+    "library.wordPack.confirm": "将从固定的上游来源下载 {0} MB，并在这台电脑上构建。XDict 不托管任何词库数据。",
+    "library.wordPack.downloading": "正在下载第 {0}/{1} 个文件…",
+    "library.wordPack.building": "正在构建词库数据… {0}%",
+    "library.wordPack.built": "词库数据已构建并安装。",
+    "library.wordPack.cancelled": "构建已取消；未安装任何内容。"
   }
 }

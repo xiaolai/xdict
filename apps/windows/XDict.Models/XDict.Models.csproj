@@ -9,5 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Strings/strings.json" LogicalName="XDict.Models.strings.json" />
+    <EmbeddedResource Include="../../../core/xdict-core/tools/word_lexicon_sources.json"
+                      LogicalName="XDict.Models.word-pack-sources.json" />
   </ItemGroup>
 </Project>

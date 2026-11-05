@@ -25,16 +25,24 @@
         </StackPanel>
         <ListView x:Name="Dictionaries" Grid.Row="1" Margin="12,0" SelectionMode="Single"
                   AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop" />
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}"
+        <StackPanel Grid.Row="2" Spacing="{StaticResource XDictSpaceXs}"
                     Padding="{StaticResource XDictSpaceM}">
-            <TextBlock x:Name="WordPackLabel" VerticalAlignment="Center"
-                       FontSize="{StaticResource XDictTextCallout}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <Button x:Name="WordPackInstall" Click="InstallWordPack"
-                    AutomationProperties.AutomationId="SettingsWordPackInstall" />
-            <Button x:Name="WordPackRemove" Click="RemoveWordPack"
-                    AutomationProperties.AutomationId="SettingsWordPackRemove" />
-            <TextBlock x:Name="WordPackStatus" VerticalAlignment="Center" TextWrapping="Wrap"
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                <TextBlock x:Name="WordPackLabel" VerticalAlignment="Center"
+                           FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="WordPackInstall" Click="InstallWordPack"
+                        AutomationProperties.AutomationId="SettingsWordPackInstall" />
+                <Button x:Name="WordPackRemove" Click="RemoveWordPack"
+                        AutomationProperties.AutomationId="SettingsWordPackRemove" />
+                <Button x:Name="WordPackBuild" Click="BuildWordPack"
+                        AutomationProperties.AutomationId="SettingsWordPackBuild" />
+                <Button x:Name="WordPackCancel" Click="CancelWordPackBuild" Visibility="Collapsed"
+                        AutomationProperties.AutomationId="SettingsWordPackCancel" />
+            </StackPanel>
+            <ProgressBar x:Name="WordPackBar" Maximum="100" Visibility="Collapsed"
+                         AutomationProperties.AutomationId="SettingsWordPackProgress" />
+            <TextBlock x:Name="WordPackStatus" TextWrapping="Wrap"
                        FontSize="{StaticResource XDictTextCardMeta}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>

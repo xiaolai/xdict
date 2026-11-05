@@ -129,12 +129,17 @@ pub struct Service {
     /// The service-owned folders a sync's input and output meet in; the reader's folder never has a path here.
     staging: PathBuf,
     sync_serial: AtomicU64,
+    /// Serialises the first exploration's load of the persisted pack, so two calls do not parse 183 MB twice.
+    pack_lock: Mutex<()>,
 }
 
 impl Service {
     pub fn new(core: Core, staging: PathBuf) -> Self {
-        // A killed sync leaves its own folder; the next service start sweeps them all before any work runs.
+        // A killed sync or pack operation leaves its own folder; the next service start sweeps them all before any
+        // work runs. The persisted pack is not staging and is never swept.
         let _ = std::fs::remove_dir_all(staging.join("ledger-sync"));
+        let _ = std::fs::remove_dir_all(staging.join("word-pack-staging"));
+        let _ = std::fs::remove_dir_all(staging.join("word-pack-build"));
         Self {
             core,
             ledger: Arc::new(Ledger::default()),
@@ -144,6 +149,7 @@ impl Service {
             cancels: Mutex::new(HashMap::new()),
             staging,
             sync_serial: AtomicU64::new(0),
+            pack_lock: Mutex::new(()),
         }
     }
 
@@ -451,6 +457,7 @@ impl Service {
             }
             // MARK: contract 5 — Explore and its stores
             "explore" => {
+                self.ensure_pack_loaded();
                 let body: ExploreBody = decode(&request.operation)?;
                 record(self.core.explore(
                     body.dicts,
@@ -465,10 +472,22 @@ impl Service {
                 let rows = self.core.collocates(body.query, body.dicts, body.limit)?;
                 record(rows.iter().map(collocation_json).collect::<Vec<_>>())
             }
-            "wordPack" => record(json!({ "pack": self.core.word_pack() })),
+            "wordPack" => {
+                self.ensure_pack_loaded();
+                record(json!({ "pack": self.core.word_pack() }))
+            }
             "setWordPack" => self.set_word_pack(request, sources),
             "clearWordPack" => {
                 self.core.detach_word_pack();
+                let installed = self.installed_pack();
+                if let Err(error) = std::fs::remove_file(&installed)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                {
+                    eprintln!(
+                        "the installed word pack {} could not be removed: {error}",
+                        installed.display()
+                    );
+                }
                 record(json!({ "pack": null }))
             }
             "buildWordPack" => self.build_word_pack(request, events, sources),
@@ -585,7 +604,7 @@ impl Service {
         let serial = self.sync_serial.fetch_add(1, Ordering::Relaxed);
         let root = self
             .staging
-            .join("word-pack")
+            .join("word-pack-staging")
             .join(format!("{}-{serial}", std::process::id()));
         let result = (|| -> Result<Answer, Failure> {
             std::fs::create_dir_all(&root)
@@ -596,6 +615,12 @@ impl Service {
             let info = self
                 .core
                 .attach_word_pack(path.to_string_lossy().into_owned())?;
+            if let Err(error) = self.persist_pack(&path) {
+                eprintln!(
+                    "the installed word pack could not be persisted: {}",
+                    error.to_value()
+                );
+            }
             record(json!({ "pack": info }))
         })();
         if let Err(error) = std::fs::remove_dir_all(&root) {
@@ -672,6 +697,12 @@ impl Service {
                 output.to_string_lossy().into_owned(),
                 &progress,
             )?;
+            if let Err(error) = self.persist_pack(&output) {
+                eprintln!(
+                    "the built word pack could not be persisted: {}",
+                    error.to_value()
+                );
+            }
             record(json!({ "pack": info }))
         })();
         if let Err(error) = std::fs::remove_dir_all(&root) {
@@ -832,6 +863,63 @@ impl Service {
             sidecars.push(take(file)?);
         }
         Ok(Package { mdx, mdd, sidecars })
+    }
+
+    /// The first word-pack question on a restarted service loads the persisted pack: the service was idle, not
+    /// gone, and a missing pack would otherwise turn every pack mode into "not installed". A corrupt file is
+    /// removed after one refusal.
+    fn ensure_pack_loaded(&self) {
+        if self.core.word_pack().is_some() {
+            return;
+        }
+        let installed = self.installed_pack();
+        if !installed.is_file() {
+            return;
+        }
+        let _guard = self
+            .pack_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.core.word_pack().is_some() {
+            return;
+        }
+        if let Err(error) = self
+            .core
+            .attach_word_pack(installed.to_string_lossy().into_owned())
+        {
+            eprintln!(
+                "the installed word pack {} could not be loaded: {error:?}",
+                installed.display()
+            );
+            let _ = std::fs::remove_file(&installed);
+        }
+    }
+
+    /// The pack the service keeps across restarts: app data, never the reader's file and never a staging folder.
+    fn installed_pack(&self) -> PathBuf {
+        self.staging.join("word-pack").join("installed.jsonl")
+    }
+
+    /// Copies a pack the core has just loaded into the persistent file, replacing the previous one only after the
+    /// copy is whole. A failure leaves the pack held in memory and is logged; the operation itself has succeeded.
+    fn persist_pack(&self, from: &Path) -> Result<(), Failure> {
+        let directory = self.staging.join("word-pack");
+        std::fs::create_dir_all(&directory)
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        let target = directory.join("installed.jsonl");
+        let temp = directory.join("installed.jsonl.tmp");
+        std::fs::copy(from, &temp)
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        if target.exists() {
+            std::fs::remove_file(&target)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+        }
+        std::fs::rename(&temp, &target)
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)
     }
 
     /// The flag for this id when one was registered before the import started; otherwise a fresh, unregistered one.

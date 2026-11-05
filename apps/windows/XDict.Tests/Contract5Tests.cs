@@ -138,6 +138,41 @@ public class Contract5Tests
     }
 
     [Fact]
+    public void TheInstalledPackSurvivesAServiceRestart()
+    {
+        string storage = "pack-restart-" + Guid.NewGuid().ToString("N");
+        string service = Environment.GetEnvironmentVariable("XDICT_SERVICE")!;
+        string packPath = Path.Combine(Path.GetTempPath(), "xdict-pack-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        string header = """
+            {"type":"header","schema":"xdict-word-pack","version":2,"language":"en","sources":[{"id":"test","name":"Test","url":"https://example.invalid/x","version":"1","sha256":"0000000000000000000000000000000000000000000000000000000000000000","licence":"CC0-1.0","attribution":"The contract test"}]}
+            """;
+        File.WriteAllText(packPath, header + "\n");
+        try
+        {
+            using (var first = new ServiceClient(service, new ServiceClientOptions { Storage = storage }))
+            {
+                first.Handshake();
+                object[] files = [first.Observe("pack", "pack.jsonl", packPath)];
+                Reply installed = first.Call("setWordPack", new { file = new { file = "pack" } }, files);
+                Assert.Null(installed.Error);
+                Assert.Equal(2u, Ok(installed).GetProperty("pack").GetProperty("version").GetUInt32());
+            }
+            // A disposed client closes the pipe; the next service starts from the same data folder and has to load
+            // the pack the first one persisted.
+            using var second = new ServiceClient(service, new ServiceClientOptions { Storage = storage });
+            second.Handshake();
+            Reply restored = second.Call("wordPack", null);
+            Assert.Null(restored.Error);
+            Assert.Equal(JsonValueKind.Object, Ok(restored).GetProperty("pack").ValueKind);
+            Assert.Equal(2u, Ok(restored).GetProperty("pack").GetProperty("version").GetUInt32());
+            Reply cleared = second.Call("clearWordPack", null);
+            Assert.Null(cleared.Error);
+            Assert.Equal(JsonValueKind.Null, Ok(second.Call("wordPack", null)).GetProperty("pack").ValueKind);
+        }
+        finally { File.Delete(packPath); }
+    }
+
+    [Fact]
     public void TheStoreBuildsAnswerAndCanBeAskedAgain()
     {
         var (client, dict, edition, files) = OpenTiny();

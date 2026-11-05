@@ -21,6 +21,9 @@ public sealed record ServiceClientOptions
     public string Storage { get; init; } = "service";
     public TimeSpan LookupDeadline { get; init; } = TimeSpan.FromSeconds(10);
     public TimeSpan BulkDeadline { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>The first pack question after a service restart loads the persisted 183 MB pack, so Explore and the
+    /// Settings row get the install's budget rather than the lookup's.</summary>
+    public TimeSpan WordPackDeadline { get; init; } = TimeSpan.FromSeconds(60);
     internal string Arguments { get; init; } = "";
 }
 
@@ -66,6 +69,10 @@ public sealed class ServiceClient : IDisposable
 
     /// <summary>An import's bytes read and its total, as the service reports them (`done` of `total`).</summary>
     public event Action<ulong, ulong>? ImportProgress;
+
+    /// <summary>The same progress with the request id, for a caller that started a long operation besides an import:
+    /// the word pack's build reports progress under its own request.</summary>
+    public event Action<ulong, ulong, ulong>? LongOperationProgress;
 
     public RequestGeneration NewGeneration(string scope)
     {
@@ -146,7 +153,11 @@ public sealed class ServiceClient : IDisposable
                 try
                 {
                     connection = new ServiceConnection(executable, options.Storage, options.Arguments);
-                    connection.Progress += (_, done, total) => ImportProgress?.Invoke(done, total);
+                    connection.Progress += (id, done, total) =>
+                    {
+                        ImportProgress?.Invoke(done, total);
+                        LongOperationProgress?.Invoke(id, done, total);
+                    };
                 }
                 catch (Exception e) when (e is Win32Exception or FileNotFoundException or UnauthorizedAccessException)
                 { throw new ServiceFailureException("closed"); }
@@ -180,9 +191,9 @@ public sealed class ServiceClient : IDisposable
             "entryGloss" or "entryText" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
             "studyReanchor" or "ledgerSync" => TimeSpan.FromSeconds(15),
             // Installing a pack reads and validates the whole file (macOS's install deadline).
-            "setWordPack" => TimeSpan.FromSeconds(60),
-            "explore" or "collocates" => TimeSpan.FromSeconds(15),
-            "wordPack" or "clearWordPack" or "examples" or "phrases" => TimeSpan.FromSeconds(5),
+            "setWordPack" or "wordPack" or "explore" => options.WordPackDeadline,
+            "collocates" => TimeSpan.FromSeconds(15),
+            "clearWordPack" or "examples" or "phrases" => TimeSpan.FromSeconds(5),
             "exportData" or "ledgerRecord" or "ledgerHistory" or "ledgerRemove" or "ledgerRestore" or "eraseData"
                 or "studyNotes" or "reviewQueue" or "reviewGrade" or "reviewUndo" or "reviewSummary" or "studyConflicts"
                 or "reviewResolve" => TimeSpan.FromSeconds(5),
