@@ -57,7 +57,8 @@
                                         AutomationProperties.AutomationId="ReviewSaveNote" />
                                 <TextBlock x:Name="NoteStatus" FontSize="{StaticResource XDictTextCardMeta}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                           VerticalAlignment="Center" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="ReviewNoteStatus" />
                             </StackPanel>
                         </StackPanel>
 

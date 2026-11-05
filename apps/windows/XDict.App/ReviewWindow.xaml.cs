@@ -67,19 +67,32 @@ public sealed partial class ReviewWindow : Window
     private async Task GuardAsync(Func<Task> work)
     {
         try { await work(); }
-        catch (Exception error) { StatusText.Text = Describe(error); }
+        catch (Exception error) { Say(Describe(error)); }
+    }
+
+    /// <summary>The sentence is also the control's accessible name: UIA readers and the review harness read it whole.</summary>
+    private void Say(string text)
+    {
+        StatusText.Text = text;
+        AutomationProperties.SetName(StatusText, text);
+    }
+
+    private void SayNote(string text)
+    {
+        NoteStatus.Text = text;
+        AutomationProperties.SetName(NoteStatus, text);
     }
 
     private async Task LoadAsync()
     {
-        StatusText.Text = "";
+        Say("");
         try
         {
             await session.LoadAsync();
         }
         catch (Exception error)
         {
-            StatusText.Text = Strings.Format("review.loadFailed", Describe(error));
+            Say(Strings.Format("review.loadFailed", Describe(error)));
             ShowCurrent();
             return;
         }
@@ -101,7 +114,7 @@ public sealed partial class ReviewWindow : Window
             UnavailableText.Visibility = Visibility.Collapsed;
             NoteBox.Text = "";
             NoteBox.IsEnabled = false;
-            NoteStatus.Text = "";
+            SayNote("");
             ShowButton.Visibility = Visibility.Collapsed;
             AnswerGrid.Visibility = Visibility.Collapsed;
             UndoButton.IsEnabled = false;
@@ -121,7 +134,7 @@ public sealed partial class ReviewWindow : Window
         UnavailableText.Visibility = available ? Visibility.Collapsed : Visibility.Visible;
         NoteBox.IsEnabled = true;
         NoteBox.Text = shown.Note.Text;
-        NoteStatus.Text = "";
+        SayNote("");
         ShowButton.Visibility = Visibility.Visible;
         ShowButton.IsEnabled = true;
         AnswerGrid.Visibility = Visibility.Collapsed;
@@ -193,7 +206,7 @@ public sealed partial class ReviewWindow : Window
         if (busy || shown is null) return;
         if (!session.Revealed)
         {
-            StatusText.Text = Strings.Get("review.revealFirst");
+            Say(Strings.Get("review.revealFirst"));
             return;
         }
         // The note belongs to the card being graded; a dirty one is written first or the grade does not happen.
@@ -203,13 +216,13 @@ public sealed partial class ReviewWindow : Window
         try
         {
             ReviewOutcome outcome = await session.GradeAsync(grade);
-            StatusText.Text = Strings.Get(outcome.Ineligible ? "review.ineligible" : "review.graded");
+            Say(Strings.Get(outcome.Ineligible ? "review.ineligible" : "review.graded"));
             ShowCurrent();
             await LoadConflictsAsync();
         }
         catch (Exception error)
         {
-            StatusText.Text = Strings.Format("review.gradeFailed", Describe(error));
+            Say(Strings.Format("review.gradeFailed", Describe(error)));
         }
         finally
         {
@@ -225,7 +238,7 @@ public sealed partial class ReviewWindow : Window
         if (busy) return;
         if (session.LastGradeEvent is null)
         {
-            StatusText.Text = Strings.Get("review.nothingToUndo");
+            Say(Strings.Get("review.nothingToUndo"));
             return;
         }
         busy = true;
@@ -233,13 +246,13 @@ public sealed partial class ReviewWindow : Window
         try
         {
             await session.UndoAsync();
-            StatusText.Text = Strings.Get("review.undone");
+            Say(Strings.Get("review.undone"));
             ShowCurrent();
             await LoadConflictsAsync();
         }
         catch (Exception error)
         {
-            StatusText.Text = Strings.Format("review.undoFailed", Describe(error));
+            Say(Strings.Format("review.undoFailed", Describe(error)));
         }
         finally
         {
@@ -253,7 +266,7 @@ public sealed partial class ReviewWindow : Window
         if (draft is null) return;
         draft.Edit(NoteBox.Text);
         SaveNoteButton.IsEnabled = draft.IsDirty;
-        NoteStatus.Text = draft.IsDirty ? Strings.Get("review.noteUnsaved") : "";
+        SayNote(draft.IsDirty ? Strings.Get("review.noteUnsaved") : "");
     }
 
     private async void OnSaveNote(object sender, RoutedEventArgs e) => await SaveNoteAsync();
@@ -266,12 +279,12 @@ public sealed partial class ReviewWindow : Window
         {
             await draft.SaveAsync(client, DictionaryName(shown), handle(shown.Target.Edition));
             SaveNoteButton.IsEnabled = false;
-            NoteStatus.Text = Strings.Get("review.noteSaved");
+            SayNote(Strings.Get("review.noteSaved"));
             return true;
         }
         catch (Exception error)
         {
-            NoteStatus.Text = Strings.Format("review.noteFailed", Describe(error));
+            SayNote(Strings.Format("review.noteFailed", Describe(error)));
             return false;
         }
     }
@@ -353,13 +366,13 @@ public sealed partial class ReviewWindow : Window
         try
         {
             await session.ResolveAsync(conflict, keep);
-            StatusText.Text = Strings.Get("review.resolved");
+            Say(Strings.Get("review.resolved"));
             ShowCurrent();
             await LoadConflictsAsync();
         }
         catch (Exception error)
         {
-            StatusText.Text = Strings.Format("review.resolveFailed", Describe(error));
+            Say(Strings.Format("review.resolveFailed", Describe(error)));
         }
         finally
         {

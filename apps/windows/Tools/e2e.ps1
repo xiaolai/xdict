@@ -20,6 +20,7 @@ $stages = @(
     @{ Name = 'trail'; Script = 'trail-lab.ps1'; Args = @() },
     @{ Name = 'sound'; Script = 'sound-lab.ps1'; Args = @() },
     @{ Name = 'sound-links'; Script = 'sound-link-lab.ps1'; Args = @() },
+    @{ Name = 'review'; Script = 'review-uia.ps1'; Args = @() },
     @{ Name = 'selection'; Script = 'capture-lab.ps1'; Args = @(if ($SkipElevated) { '-SkipElevated' }) },
     @{ Name = 'setup'; Script = 'settings-uia.ps1'; Args = @() },
     @{ Name = 'setup-225'; Script = 'settings-uia.ps1'; Args = @('-Scale', '225') }

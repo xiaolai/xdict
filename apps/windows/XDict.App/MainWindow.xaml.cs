@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
     private readonly ReadingPreferenceStore readingPreferences = new(ReadingPreferenceStore.DefaultPath);
     private Capture.CaptureController? capture;
     private bool quitting;
+    // The review UIA lab: erase the learning store, write one note so a card is due, and open the review window.
+    private readonly bool reviewLab = Environment.GetCommandLineArgs().Contains("--review-lab");
 
     public MainWindow()
     {
@@ -96,6 +98,7 @@ public sealed partial class MainWindow : Window
             }
 #endif
             await SetupSearchAsync(started);
+            if (reviewLab) await PrepareReviewLabAsync();
         }
         catch (LibraryUnreadableException error)
         {
@@ -775,6 +778,35 @@ public sealed partial class MainWindow : Window
             await GuardAsync(RefreshSessionAsync);
         };
         settingsWindow.Activate();
+    }
+
+    /// <summary>The review UIA lab's setup: a clean learning store and one note, so the queue has a card to grade.</summary>
+    private async Task PrepareReviewLabAsync()
+    {
+        if (client is null || session is null || store is null) return;
+        try
+        {
+            await new DataExport(client).EraseAsync();
+            LibraryDictionary? dictionary = store.Dictionaries.FirstOrDefault(item =>
+                item.Enabled && session.Dictionaries.Any(opened => opened.Edition == item.Edition));
+            if (dictionary is null) return;
+            Reply note = await client.CallAsync("studyNoteAt", new
+            {
+                entry = new { edition = dictionary.Edition, key = "run", occurrence = 0u },
+                text = "review lab",
+                name = dictionary.DisplayName,
+                stamp = new { at = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), device = DeviceIdentity.Current() },
+                operation = "review-lab-" + Guid.NewGuid().ToString("N"),
+            });
+            if (note.Error is { } error) throw new ServiceFailureException(
+                error.TryGetProperty("type", out JsonElement kind) ? kind.GetString() ?? "internal" : "internal", error);
+            OpenReview();
+        }
+        catch (Exception error)
+        {
+            StatusText.Text = Strings.Format("review.loadFailed",
+                error is ServiceFailureException failure ? ServiceMessages.For(failure.ErrorType) : error.Message);
+        }
     }
 
     /// <summary>The main window is hidden by X, never destroyed: the tray and the shortcut must find it again.</summary>
