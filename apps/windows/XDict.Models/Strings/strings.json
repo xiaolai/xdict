@@ -382,7 +382,10 @@
     "library.wordPack.install": "Install…",
     "library.wordPack.remove": "Remove",
     "library.wordPack.installing": "Installing the word pack…",
-    "entry.tab": "Entry"
+    "entry.tab": "Entry",
+    "search.allLoading": "Showing the word in every dictionary…",
+    "search.allShown": "{0} dictionaries show this word",
+    "search.allShownFailed": "{0} dictionaries show this word; {1} could not be read"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -767,6 +770,9 @@
     "library.wordPack.install": "安装…",
     "library.wordPack.remove": "移除",
     "library.wordPack.installing": "正在安装词库包…",
-    "entry.tab": "词条"
+    "entry.tab": "词条",
+    "search.allLoading": "正在所有词典中显示这个词…",
+    "search.allShown": "{0} 部词典收录了这个词",
+    "search.allShownFailed": "{0} 部词典收录了这个词；{1} 部无法读取"
   }
 }

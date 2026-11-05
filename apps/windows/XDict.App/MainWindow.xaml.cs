@@ -54,7 +54,15 @@ public sealed partial class MainWindow : Window
         public JsonElement? Entry { get; set; }
         public string? Dict { get; set; }
         public string? Headword { get; set; }
+        /// <summary>The All page's one pane per dictionary, each with its own lease; empty for a single entry.</summary>
+        public List<PaneLease> ExtraLeases { get; } = [];
+        /// <summary>The All page's column, and the word it was built for; null for a single entry.</summary>
+        public StackPanel? AllStack { get; set; }
+        public string? AllWord { get; set; }
     }
+
+    /// <summary>What one All page pane answers for: its dictionary, its entry and its own WebView.</summary>
+    private sealed record PaneContext(string Dict, JsonElement Entry, string? Headword, EntryPane Pane);
 
     private EntryTab? ActiveTab
     {
@@ -64,6 +72,10 @@ public sealed partial class MainWindow : Window
             return selected is null ? null : tabs.FirstOrDefault(tab => tab.Item == selected);
         }
     }
+
+    /// <summary>The pane find searches: the tab's own, or the first frame of an All page.</summary>
+    private EntryPane? ActivePane =>
+        paneLease.Pane ?? ActiveTab?.ExtraLeases.Select(lease => lease.Pane).FirstOrDefault(pane => pane is not null);
 
     public MainWindow()
     {
@@ -549,7 +561,143 @@ public sealed partial class MainWindow : Window
         int index = Results.SelectedIndex;
         if (index < 0 || index >= hits.Count) return;
         SearchHit hit = hits[index];
+        // Scope All is the All page (parity P15): the word in every dictionary that has it, one pane each. A chosen
+        // dictionary keeps the one-entry tab.
+        if (ScopeBox.SelectedIndex == 0)
+        {
+            await ShowAllAsync(hit, SearchBox.Text);
+            return;
+        }
         await ShowAsync(hit.Edition, hit.Entry, SearchBox.Text, record: true, newTab: true);
+    }
+
+    /// <summary>
+    /// The All page: the selected word from every open dictionary that has it, each its own WebView2, pane folder,
+    /// scheme and policy, in one vertical scroller. A dictionary with no hit contributes nothing; a lookup failure
+    /// skips that dictionary rather than failing the page. Its panes answer their own links and sounds.
+    /// </summary>
+    private async Task ShowAllAsync(SearchHit seed, string query)
+    {
+        if (client is null || session is null) return;
+        EntryTab? existing = tabs.FirstOrDefault(tab => tab.AllWord == seed.Headword);
+        if (existing is not null)
+        {
+            Tabs.SelectedItem = existing.Item;
+            ActivateTab(existing);
+            return;
+        }
+        await showGate.WaitAsync();
+        bool complete = false;
+        try
+        {
+            EntryTab tab = NewAllTab(seed.Headword);
+            Tabs.SelectedItem = tab.Item;
+            StatusText.Text = Strings.Get("search.allLoading");
+            int shown = 0;
+            int failed = 0;
+            RequestGeneration generation = client.NewGeneration("all");
+            foreach (OpenDictionary dictionary in session.Dictionaries.ToList())
+            {
+                var section = new StackPanel { Spacing = Tokens.Space.Xs };
+                PaneLease? lease = null;
+                try
+                {
+                    var found = new List<SearchHit>();
+                    await session.LookupEachAsync(seed.Headword, dictionary.Edition, 20, page =>
+                    {
+                        lock (found) found.AddRange(page.Hits);
+                    }, generation);
+                    if (!tabs.Contains(tab)) return;
+                    SearchHit? hit = found.FirstOrDefault(item =>
+                        item.Entry.TryGetProperty("key", out JsonElement key) && key.GetString() == seed.Headword)
+                        ?? found.FirstOrDefault();
+                    if (hit is null) continue;
+                    section.Children.Add(new TextBlock
+                    {
+                        Text = dictionary.Name,
+                        FontSize = Tokens.Text.Callout,
+                    });
+                    tab.AllStack!.Children.Add(section);
+                    lease = new PaneLease();
+                    var (pane, source, _) = await lease.EnsureAsync(client, dictionary.Edition, dictionary.Handle,
+                        view => section.Children.Add(view), readingPreferences);
+                    var context = new PaneContext(dictionary.Handle, hit.Entry.Clone(), hit.Headword, pane);
+                    pane.Message += message => _ = GuardAsync(() => OnAllPaneMessageAsync(message, context));
+                    pane.Failure += OnPaneFailure;
+                    EntryResponse response = await source.EntryAsync(hit.Entry);
+                    await pane.ShowAsync(response);
+                    if (!tabs.Contains(tab))
+                    {
+                        lease.Reset();
+                        return;
+                    }
+                    tab.ExtraLeases.Add(lease);
+                    shown++;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception error)
+                {
+                    // One dictionary that cannot answer leaves the other frames standing; the page says how many.
+                    failed++;
+                    lease?.Reset();
+                    tab.AllStack?.Children.Remove(section);
+                    TraceFailure("all page, " + dictionary.Edition + ": " + error.Message);
+                }
+            }
+            OpenDictionary seedDictionary = session.Dictionaries.First(item => item.Edition == seed.Edition);
+            tab.Entry = seed.Entry.Clone();
+            tab.Dict = seedDictionary.Handle;
+            tab.Headword = seed.Headword;
+            ActivateTab(tab);
+            StatusText.Text = failed == 0
+                ? Strings.Format("search.allShown", shown)
+                : Strings.Format("search.allShownFailed", shown, failed);
+            complete = true;
+        }
+        finally
+        {
+            showGate.Release();
+        }
+        if (!complete) return;
+        trail.Push(new Visit(seed.Edition, seed.Entry.Clone(), query));
+        UpdateTrail();
+    }
+
+    private EntryTab NewAllTab(string title)
+    {
+        var stack = new StackPanel
+        {
+            Spacing = Tokens.Space.L,
+            Padding = new Thickness(Tokens.Space.M),
+        };
+        var host = new Grid();
+        host.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = stack,
+        });
+        var item = new TabViewItem { Header = title, Content = host, IsClosable = true };
+        var tab = new EntryTab { Item = item, Host = host, AllStack = stack, AllWord = title };
+        tabs.Add(tab);
+        Tabs.TabItems.Add(item);
+        Tabs.SelectedItem = item;
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private async Task OnAllPaneMessageAsync(EntryBridgeMessage message, PaneContext context)
+    {
+        if (message.Kind == "word" && !string.IsNullOrWhiteSpace(message.Value))
+        {
+            SearchBox.Text = message.Value;
+            await SearchAsync(message.Value);
+            return;
+        }
+        if (message.Kind is "link" or "sound" && !string.IsNullOrWhiteSpace(message.Value))
+            await FollowLinkAsync(message.Value, context);
     }
 
     private async Task ShowAsync(string edition, JsonElement entry, string query, bool record, bool newTab = false)
@@ -651,6 +799,7 @@ public sealed partial class MainWindow : Window
         Tabs.TabItems.Remove(tab.Item);
         tabs.Remove(tab);
         tab.Lease.Reset();
+        foreach (PaneLease lease in tab.ExtraLeases) lease.Reset();
         if (tabs.Count == 0 || Tabs.SelectedItem is null)
         {
             paneLease = new PaneLease();
@@ -670,6 +819,7 @@ public sealed partial class MainWindow : Window
         {
             Tabs.TabItems.Remove(tab.Item);
             tab.Lease.Reset();
+            foreach (PaneLease lease in tab.ExtraLeases) lease.Reset();
         }
         tabs.Clear();
         paneLease = new PaneLease();
@@ -724,12 +874,14 @@ public sealed partial class MainWindow : Window
 
     private static object ViewBody() => new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20 };
 
-    private async Task FollowLinkAsync(string url)
+    private async Task FollowLinkAsync(string url, PaneContext? context = null)
     {
-        if (client is null || currentEntry is not { } entry || currentDict is null) return;
+        string? dict = context?.Dict ?? currentDict;
+        JsonElement? current = context?.Entry ?? currentEntry;
+        if (client is null || current is not { } entry || dict is null) return;
         Reply reply = await client.CallAsync("link", new
         {
-            dict = currentDict, url, origin = new { type = "entry", entry }, view = ViewBody(),
+            dict, url, origin = new { type = "entry", entry }, view = ViewBody(),
         });
         if (reply.Error is { } error)
         {
@@ -745,35 +897,36 @@ public sealed partial class MainWindow : Window
                 await SearchAsync(query);
                 break;
             case "sound":
-                await PlayRecordingAsync(answer.GetProperty("path").GetString() ?? "");
+                await PlayRecordingAsync(answer.GetProperty("path").GetString() ?? "", context);
                 break;
             case "speak":
-                await SpeakAsync(answer.GetProperty("text").GetString() ?? "");
+                await SpeakAsync(answer.GetProperty("text").GetString() ?? "", context);
                 break;
             case "anchor":
-                await ScrollAnchorAsync(answer.GetProperty("name").GetString() ?? "");
+                await ScrollAnchorAsync(answer.GetProperty("name").GetString() ?? "", context?.Pane);
                 break;
         }
     }
 
-    private async Task PlayRecordingAsync(string path)
+    private async Task PlayRecordingAsync(string path, PaneContext? context = null)
     {
-        if (client is null || currentDict is null) return;
-        Reply reply = await client.CallAsync("resource", new { dict = currentDict, path, view = ViewBody() });
+        string? dict = context?.Dict ?? currentDict;
+        if (client is null || dict is null) return;
+        Reply reply = await client.CallAsync("resource", new { dict, path, view = ViewBody() });
         if (reply.Error is not null) return;
         JsonElement ok = reply.Ok!.Value;
         bool found = ok.GetProperty("type").GetString() == "found";
         string? mime = found ? ok.GetProperty("mime").GetString() : null;
         if (!AppSettings.Load().UseRecordings)
         {
-            await SpeakAsync(currentHeadword ?? "");
+            await SpeakAsync(context?.Headword ?? currentHeadword ?? "", context);
             return;
         }
         SoundChoice choice = SoundSupport.Classify(path, found, mime);
         if (choice.Kind != SoundKind.Playable)
         {
             StatusText.Text = SoundSupport.Sentence(choice.Kind);
-            if (choice.Kind == SoundKind.Unsupported) await SpeakAsync(currentHeadword ?? "");
+            if (choice.Kind == SoundKind.Unsupported) await SpeakAsync(context?.Headword ?? currentHeadword ?? "", context);
             return;
         }
         var stream = new InMemoryRandomAccessStream();
@@ -789,15 +942,17 @@ public sealed partial class MainWindow : Window
         player.Play();
     }
 
-    private async Task SpeakAsync(string text)
+    private async Task SpeakAsync(string text, PaneContext? context = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         using var synth = new SpeechSynthesizer();
         (string Name, string Language)[] voices = VoicePicker.Voices();
-        string language = store?.Dictionaries.FirstOrDefault(item => item.Edition == paneLease.Edition)?.ExplainLanguage ?? "en";
+        string? edition = context is { } paneContext && paneContext.Entry.TryGetProperty("edition", out JsonElement held)
+            ? held.GetString() : paneLease.Edition;
+        string language = store?.Dictionaries.FirstOrDefault(item => item.Edition == edition)?.ExplainLanguage ?? "en";
         synth.Choose(voices, language, AppSettings.Load().Accent);
         // The entry's own IPA, when it has one, is what the voice should pronounce; the SSML names the voice's tag.
-        string? ipa = await CurrentIpaAsync();
+        string? ipa = await CurrentIpaAsync(context?.Pane);
         string tag = synth.Voice?.Language ?? language;
         SpeechSynthesisStream stream = ipa is null
             ? await synth.SynthesizeTextToStreamAsync(text)
@@ -808,9 +963,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>The displayed entry's IPA, if it has a sane one; the page is the only place the entry's text lives.</summary>
-    private async Task<string?> CurrentIpaAsync()
+    private async Task<string?> CurrentIpaAsync(EntryPane? pane = null)
     {
-        if (paneLease.Pane?.View.CoreWebView2 is not { } core) return null;
+        if ((pane ?? paneLease.Pane)?.View.CoreWebView2 is not { } core) return null;
         try
         {
             string answer = await core.ExecuteScriptAsync(
@@ -824,9 +979,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ScrollAnchorAsync(string name)
+    private async Task ScrollAnchorAsync(string name, EntryPane? pane = null)
     {
-        if (paneLease.Pane?.View.CoreWebView2 is not { } core) return;
+        if ((pane ?? paneLease.Pane)?.View.CoreWebView2 is not { } core) return;
         await core.ExecuteScriptAsync("document.getElementById(" + JsonSerializer.Serialize(name) + ")?.scrollIntoView()");
     }
 
@@ -919,13 +1074,13 @@ public sealed partial class MainWindow : Window
     private void OnFindClose(object sender, RoutedEventArgs e)
     {
         FindBar.Visibility = Visibility.Collapsed;
-        paneLease.Pane?.View.Focus(FocusState.Programmatic);
+        ActivePane?.View.Focus(FocusState.Programmatic);
     }
 
     private async Task FindInEntryAsync(bool forward)
     {
         string text = FindBox.Text;
-        if (text.Length == 0 || paneLease.Pane?.View.CoreWebView2 is not { } core) return;
+        if (text.Length == 0 || ActivePane?.View.CoreWebView2 is not { } core) return;
         // The page's own find: the selection the reader sees is the browser's, and the entry tree is untouched.
         string script = "window.find(" + JsonSerializer.Serialize(text) + ", false, "
             + (forward ? "false" : "true") + ", true, false, false, false)";
