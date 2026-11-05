@@ -1,12 +1,14 @@
 // The reader's dictionary list: add a file, a folder or a drop; order, enable, name, languages, details; import with
 // progress and cancel. The record and its rules live in XDict.Models; this window is the surface.
 using System.Text;
+using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using XDict.Client;
+using XDict.Contract;
 using XDict.Models;
 
 namespace XDict.App;
@@ -37,9 +39,81 @@ public sealed partial class DictionariesView : UserControl
         JoinButton.Content = Strings.Get("library.join");
         SplitButton.Content = Strings.Get("library.split");
         CancelButton.Content = Strings.Get("library.cancel");
+        WordPackLabel.Text = Strings.Get("library.wordPack");
+        WordPackInstall.Content = Strings.Get("library.wordPack.install");
+        WordPackRemove.Content = Strings.Get("library.wordPack.remove");
         RelinkMissing();
         Refresh();
+        _ = Guarded(RefreshWordPackAsync);
     }
+
+    /// <summary>Contract 5's pack: the state the service holds, installed through a handle the service copies itself.</summary>
+    private async Task RefreshWordPackAsync()
+    {
+        Reply reply = await client.CallAsync("wordPack", null);
+        if (reply.Error is { } error)
+        {
+            WordPackStatus.Text = ServiceMessages.For(error);
+            WordPackInstall.IsEnabled = true;
+            WordPackRemove.IsEnabled = false;
+            return;
+        }
+        ShowWordPack(reply.Ok!.Value.GetProperty("pack"));
+    }
+
+    private void ShowWordPack(JsonElement pack)
+    {
+        bool installed = pack.ValueKind == JsonValueKind.Object;
+        WordPackStatus.Text = installed
+            ? Strings.Format("library.wordPack.installed",
+                pack.GetProperty("version").GetUInt32(),
+                pack.GetProperty("language").GetString() ?? "",
+                pack.GetProperty("records").GetUInt64())
+            : Strings.Get("library.wordPack.none");
+        WordPackInstall.IsEnabled = true;
+        WordPackRemove.IsEnabled = installed;
+    }
+
+    private async void InstallWordPack(object sender, RoutedEventArgs e) => await Guarded(async () =>
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(owner));
+        picker.FileTypeFilter.Add(".jsonl");
+        StorageFile? file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        WordPackStatus.Text = Strings.Get("library.wordPack.installing");
+        WordPackInstall.IsEnabled = false;
+        WordPackRemove.IsEnabled = false;
+        string id = "word-pack-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            client.Observe(id, Path.GetFileName(file.Path), file.Path);
+            Reply reply = await client.CallAsync("setWordPack", new { file = new { file = id } });
+            if (reply.Error is { } error)
+            {
+                // The core keeps the pack already held when it refuses a new one; the row must say so.
+                await RefreshWordPackAsync();
+                WordPackStatus.Text = ServiceMessages.For(error);
+                return;
+            }
+            ShowWordPack(reply.Ok!.Value.GetProperty("pack"));
+        }
+        finally
+        {
+            client.Release(id);
+        }
+    });
+
+    private async void RemoveWordPack(object sender, RoutedEventArgs e) => await Guarded(async () =>
+    {
+        Reply reply = await client.CallAsync("clearWordPack", null);
+        if (reply.Error is { } error)
+        {
+            WordPackStatus.Text = ServiceMessages.For(error);
+            return;
+        }
+        ShowWordPack(reply.Ok!.Value.GetProperty("pack"));
+    });
 
     /// <summary>A folder the reader moved: each missing package is looked for one level above its own folder's parent,
     /// where the moved folder now sits, and its files follow the identity recorded at import.</summary>

@@ -9,6 +9,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <StackPanel Orientation="Horizontal" Spacing="8" Padding="12">
             <Button x:Name="AddFileButton" Click="AddFile" />
@@ -24,8 +25,21 @@
         </StackPanel>
         <ListView x:Name="Dictionaries" Grid.Row="1" Margin="12,0" SelectionMode="Single"
                   AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop" />
-        <TextBlock x:Name="Status" Grid.Row="2" Margin="12,8" TextWrapping="Wrap" />
-        <ScrollViewer Grid.Row="3" Margin="12,0,12,12" MaxHeight="220">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}"
+                    Padding="{StaticResource XDictSpaceM}">
+            <TextBlock x:Name="WordPackLabel" VerticalAlignment="Center"
+                       FontSize="{StaticResource XDictTextCallout}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Button x:Name="WordPackInstall" Click="InstallWordPack"
+                    AutomationProperties.AutomationId="SettingsWordPackInstall" />
+            <Button x:Name="WordPackRemove" Click="RemoveWordPack"
+                    AutomationProperties.AutomationId="SettingsWordPackRemove" />
+            <TextBlock x:Name="WordPackStatus" VerticalAlignment="Center" TextWrapping="Wrap"
+                       FontSize="{StaticResource XDictTextCardMeta}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+        <TextBlock x:Name="Status" Grid.Row="3" Margin="12,8" TextWrapping="Wrap" />
+        <ScrollViewer Grid.Row="4" Margin="12,0,12,12" MaxHeight="220">
             <TextBlock x:Name="DetailsText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
         </ScrollViewer>
     </Grid>

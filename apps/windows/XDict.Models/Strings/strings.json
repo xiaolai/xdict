@@ -375,7 +375,13 @@
     "explore.frame.headwordPlusVerb": "headword + verb",
     "explore.frame.headwordPlusNoun": "headword + noun",
     "explore.frame.nounPlusHeadword": "noun + headword",
-    "explore.frame.phraseOfHeadword": "phrase of the headword"
+    "explore.frame.phraseOfHeadword": "phrase of the headword",
+    "library.wordPack": "Word pack",
+    "library.wordPack.none": "No word pack installed.",
+    "library.wordPack.installed": "Version {0} · {1} · {2} records",
+    "library.wordPack.install": "Install…",
+    "library.wordPack.remove": "Remove",
+    "library.wordPack.installing": "Installing the word pack…"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -753,6 +759,12 @@
     "explore.frame.headwordPlusVerb": "中心词 + 动词",
     "explore.frame.headwordPlusNoun": "中心词 + 名词",
     "explore.frame.nounPlusHeadword": "名词 + 中心词",
-    "explore.frame.phraseOfHeadword": "中心词的短语"
+    "explore.frame.phraseOfHeadword": "中心词的短语",
+    "library.wordPack": "词库包",
+    "library.wordPack.none": "尚未安装词库包。",
+    "library.wordPack.installed": "版本 {0} · {1} · {2} 条记录",
+    "library.wordPack.install": "安装…",
+    "library.wordPack.remove": "移除",
+    "library.wordPack.installing": "正在安装词库包…"
   }
 }
