@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="../XDict.Client/XDict.Client.csproj" />
     <ProjectReference Include="../XDict.Contract/XDict.Contract.csproj" />
+    <ProjectReference Include="../XDict.AI/XDict.AI.csproj" />
     <ProjectReference Include="../XDict.Models/XDict.Models.csproj" />
   </ItemGroup>
 </Project>

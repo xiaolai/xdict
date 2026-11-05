@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="XDict.AI/XDict.AI.csproj" />
   <Project Path="XDict.App/XDict.App.csproj" />
   <Project Path="XDict.Client/XDict.Client.csproj" />
   <Project Path="XDict.Contract/XDict.Contract.csproj" />
