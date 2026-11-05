@@ -381,7 +381,8 @@
     "library.wordPack.installed": "Version {0} · {1} · {2} records",
     "library.wordPack.install": "Install…",
     "library.wordPack.remove": "Remove",
-    "library.wordPack.installing": "Installing the word pack…"
+    "library.wordPack.installing": "Installing the word pack…",
+    "entry.tab": "Entry"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -765,6 +766,7 @@
     "library.wordPack.installed": "版本 {0} · {1} · {2} 条记录",
     "library.wordPack.install": "安装…",
     "library.wordPack.remove": "移除",
-    "library.wordPack.installing": "正在安装词库包…"
+    "library.wordPack.installing": "正在安装词库包…",
+    "entry.tab": "词条"
   }
 }

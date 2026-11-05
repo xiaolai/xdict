@@ -22,7 +22,8 @@ public sealed partial class MainWindow : Window
     private ServiceClient? client;
     private LibraryStore? store;
     private SearchSession? session;
-    private readonly PaneLease paneLease = new();
+    private PaneLease paneLease = new();
+    private readonly List<EntryTab> tabs = [];
     private RequestGeneration? searchGeneration;
     private IReadOnlyList<SearchHit> hits = [];
     private JsonElement? currentEntry;
@@ -42,6 +43,27 @@ public sealed partial class MainWindow : Window
     private bool quitting;
     // The review UIA lab: erase the learning store, write one note so a card is due, and open the review window.
     private readonly bool reviewLab = Environment.GetCommandLineArgs().Contains("--review-lab");
+
+    /// <summary>One tab's entry: its own WebView2, pane lease and the entry it shows. Switching tabs touches none of
+    /// another tab's state; the window's current entry fields follow the selected tab.</summary>
+    private sealed class EntryTab
+    {
+        public required TabViewItem Item { get; init; }
+        public required Grid Host { get; init; }
+        public PaneLease Lease { get; } = new();
+        public JsonElement? Entry { get; set; }
+        public string? Dict { get; set; }
+        public string? Headword { get; set; }
+    }
+
+    private EntryTab? ActiveTab
+    {
+        get
+        {
+            TabViewItem? selected = Tabs.SelectedItem as TabViewItem;
+            return selected is null ? null : tabs.FirstOrDefault(tab => tab.Item == selected);
+        }
+    }
 
     public MainWindow()
     {
@@ -78,7 +100,7 @@ public sealed partial class MainWindow : Window
         Root.Loaded += (_, _) => windowLoaded.TrySetResult();
         AppWindow.Closing += OnMainWindowClosing;
         // The client outlives this window: a Settings window can still be open and uses it; the process exit closes it.
-        Closed += (_, _) => { capture?.Dispose(); capture = null; paneLease.Reset(); };
+        Closed += (_, _) => { capture?.Dispose(); capture = null; CloseAllTabs(); };
         _ = StartAsync();
     }
 
@@ -346,9 +368,9 @@ public sealed partial class MainWindow : Window
                 int lab = Array.IndexOf(arguments, "--entry-lab");
                 if (lab >= 0 && lab + 1 < arguments.Length)
                 {
-                    EntryHost.Visibility = Visibility.Visible;
+                    EntryTab labTab = NewTab("lab");
                     var browser = new Microsoft.UI.Xaml.Controls.WebView2();
-                    EntryHost.Children.Add(browser);
+                    labTab.Host.Children.Add(browser);
                     await EntryLab.RunAsync(browser, arguments[lab + 1], started);
                     return true;
                 }
@@ -414,7 +436,7 @@ public sealed partial class MainWindow : Window
         SearchBox.Text = term;
         await SearchAsync(term);
         if (hits.Count == 0) return;
-        await ShowAsync(hits[0].Edition, hits[0].Entry, term, record: true);
+        await ShowAsync(hits[0].Edition, hits[0].Entry, term, record: true, newTab: true);
         // The panel's own position is kept: the reader is looking at the same entry, not a fresh one.
         if (scroll > 0 && paneLease.Pane?.View.CoreWebView2 is { } core)
             await core.ExecuteScriptAsync("window.scrollTo(0," + scroll.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")");
@@ -527,10 +549,10 @@ public sealed partial class MainWindow : Window
         int index = Results.SelectedIndex;
         if (index < 0 || index >= hits.Count) return;
         SearchHit hit = hits[index];
-        await ShowAsync(hit.Edition, hit.Entry, SearchBox.Text, record: true);
+        await ShowAsync(hit.Edition, hit.Entry, SearchBox.Text, record: true, newTab: true);
     }
 
-    private async Task ShowAsync(string edition, JsonElement entry, string query, bool record)
+    private async Task ShowAsync(string edition, JsonElement entry, string query, bool record, bool newTab = false)
     {
         if (client is null || session is null) return;
         OpenDictionary dictionary = session.Dictionaries.First(item => item.Edition == edition);
@@ -539,11 +561,14 @@ public sealed partial class MainWindow : Window
         await showGate.WaitAsync();
         try
         {
+            if (newTab && SelectOpen(entry)) return;
+            EntryTab target = newTab || ActiveTab is null ? NewTab(query) : ActiveTab!;
+            Tabs.SelectedItem = target.Item;
             // The handle changes when the session closes and reopens a dictionary; the old pane still sends it.
-            bool rebuilt = !paneLease.Matches(edition, dictionary.Handle);
-            if (rebuilt) EntryHost.Children.Clear();
-            var (pane, source, built) = await paneLease.EnsureAsync(client, edition, dictionary.Handle,
-                view => EntryHost.Children.Add(view), readingPreferences);
+            bool rebuilt = !target.Lease.Matches(edition, dictionary.Handle);
+            if (rebuilt) target.Host.Children.Clear();
+            var (pane, source, built) = await target.Lease.EnsureAsync(client, edition, dictionary.Handle,
+                view => target.Host.Children.Add(view), readingPreferences);
             if (built)
             {
                 pane.Message += OnPaneMessage;
@@ -551,17 +576,106 @@ public sealed partial class MainWindow : Window
             }
             EntryResponse response = await source.EntryAsync(entry);
             await pane.ShowAsync(response);
+            target.Entry = entry.Clone();
+            target.Dict = dictionary.Handle;
+            target.Headword = entry.TryGetProperty("key", out JsonElement key) ? key.GetString() : query;
+            target.Item.Header = target.Headword ?? query;
+            ActivateTab(target);
         }
         finally
         {
             showGate.Release();
         }
-        currentEntry = entry.Clone();
-        currentDict = dictionary.Handle;
-        currentHeadword = entry.TryGetProperty("key", out JsonElement key) ? key.GetString() : null;
         if (!record) return;
         trail.Push(new Visit(edition, entry.Clone(), query));
         UpdateTrail();
+    }
+
+    /// <summary>A new tab with its own WebView2 and pane folder; selecting it activates its state.</summary>
+    private EntryTab NewTab(string title)
+    {
+        var host = new Grid();
+        var item = new TabViewItem
+        {
+            Header = title.Length == 0 ? Strings.Get("entry.tab") : title,
+            Content = host,
+            IsClosable = true,
+        };
+        var tab = new EntryTab { Item = item, Host = host };
+        tabs.Add(tab);
+        Tabs.TabItems.Add(item);
+        Tabs.SelectedItem = item;
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private void ActivateTab(EntryTab tab)
+    {
+        paneLease = tab.Lease;
+        currentEntry = tab.Entry;
+        currentDict = tab.Dict;
+        currentHeadword = tab.Headword;
+    }
+
+    /// <summary>The same entry already open in a tab: selecting it is the whole of the new-tab gesture.</summary>
+    private bool SelectOpen(JsonElement entry)
+    {
+        if (!entry.TryGetProperty("edition", out JsonElement edition) ||
+            !entry.TryGetProperty("key", out JsonElement key)) return false;
+        string wantedEdition = edition.GetString() ?? "";
+        string wantedKey = key.GetString() ?? "";
+        uint wantedOccurrence = entry.TryGetProperty("occurrence", out JsonElement occurrence)
+            ? occurrence.GetUInt32() : 0;
+        foreach (EntryTab tab in tabs)
+        {
+            if (tab.Entry is not { } held ||
+                held.GetProperty("edition").GetString() != wantedEdition ||
+                held.GetProperty("key").GetString() != wantedKey ||
+                held.GetProperty("occurrence").GetUInt32() != wantedOccurrence) continue;
+            Tabs.SelectedItem = tab.Item;
+            ActivateTab(tab);
+            return true;
+        }
+        return false;
+    }
+
+    private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ActiveTab is { } tab) ActivateTab(tab);
+    }
+
+    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    {
+        EntryTab? tab = tabs.FirstOrDefault(item => item.Item == args.Tab);
+        if (tab is null) return;
+        Tabs.TabItems.Remove(tab.Item);
+        tabs.Remove(tab);
+        tab.Lease.Reset();
+        if (tabs.Count == 0 || Tabs.SelectedItem is null)
+        {
+            paneLease = new PaneLease();
+            currentEntry = null;
+            currentDict = null;
+            currentHeadword = null;
+        }
+        else if (ActiveTab is { } selected)
+        {
+            ActivateTab(selected);
+        }
+    }
+
+    private void CloseAllTabs()
+    {
+        foreach (EntryTab tab in tabs.ToList())
+        {
+            Tabs.TabItems.Remove(tab.Item);
+            tab.Lease.Reset();
+        }
+        tabs.Clear();
+        paneLease = new PaneLease();
+        currentEntry = null;
+        currentDict = null;
+        currentHeadword = null;
     }
 
     private async void OnPaneMessage(EntryBridgeMessage message) => await GuardAsync(async () =>
@@ -926,7 +1040,7 @@ public sealed partial class MainWindow : Window
         string edition = entry.GetProperty("edition").GetString() ?? "";
         if (!session.Dictionaries.Any(dictionary => dictionary.Edition == edition)) return;
         string key = entry.TryGetProperty("key", out JsonElement value) ? value.GetString() ?? "" : "";
-        await ShowAsync(edition, entry, key, record: true);
+        await ShowAsync(edition, entry, key, record: true, newTab: true);
         Activate();
     }
 
@@ -974,7 +1088,7 @@ public sealed partial class MainWindow : Window
         capture = null;
         reminders?.Dispose();
         reminders = null;
-        paneLease.Reset();
+        CloseAllTabs();
         reviewWindow?.CloseForQuit();
         reviewWindow = null;
         try { settingsWindow?.Close(); } catch (Exception) { }
@@ -1034,7 +1148,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         SearchBox.Text = query;
-        await ShowAsync(hit.Edition, hit.Entry, query, record: true);
+        await ShowAsync(hit.Edition, hit.Entry, query, record: true, newTab: true);
     }
 
     /// <summary>The first-run privacy choice: the history stays off until this is answered, and the answer is written.</summary>
@@ -1070,6 +1184,11 @@ public sealed partial class MainWindow : Window
     {
         if (quitting || session is null || store is null) return;
         string? chosen = SelectedEdition();
+        // Reopening changes every handle and closes the panes built on the old ones, so the tabs are rebuilt rather
+        // than left sending a stale handle. The entry on screen is the one the reader keeps.
+        JsonElement? shown = currentEntry?.Clone();
+        string? shownEdition = paneLease.Edition;
+        CloseAllTabs();
         await session.OpenAsync(store.Dictionaries);
         // Reading & Speech is global: a stored edition preference follows the settings from now on. The old handle
         // also changed, so the next entry rebuilds its pane and reads the new preference.
@@ -1078,9 +1197,9 @@ public sealed partial class MainWindow : Window
         foreach (LibraryDictionary dictionary in store.Dictionaries)
             if (readingPreferences.Has(dictionary.Edition)) readingPreferences.Write(dictionary.Edition, current);
         // Show the entry again: the refresh closed its handle, so this rebuilds the pane and reads the preference.
-        if (currentEntry is { } shown && paneLease.Edition is { } shownEdition &&
-            session.Dictionaries.Any(item => item.Edition == shownEdition))
-            await ShowAsync(shownEdition, shown, string.Empty, record: false);
+        if (shown is { } entry && shownEdition is { } edition &&
+            session.Dictionaries.Any(item => item.Edition == edition))
+            await ShowAsync(edition, entry, string.Empty, record: false);
         ScopeBox.Items.Clear();
         ScopeBox.Items.Add(Strings.Get("search.all"));
         foreach (OpenDictionary dictionary in session.Dictionaries) ScopeBox.Items.Add(dictionary.Name);

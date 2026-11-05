@@ -46,7 +46,10 @@
                     <Button x:Name="FindNext" Click="OnFindNext" />
                     <Button x:Name="FindClose" Click="OnFindClose" />
                 </StackPanel>
-                <Grid x:Name="EntryHost" Grid.Row="1" />
+                <TabView x:Name="Tabs" Grid.Row="1" IsAddTabButtonVisible="False"
+                         TabWidthMode="SizeToContent"
+                         SelectionChanged="OnTabSelectionChanged"
+                         TabCloseRequested="OnTabCloseRequested" />
             </Grid>
         </Grid>
     </Grid>
