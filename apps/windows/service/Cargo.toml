@@ -11,6 +11,8 @@ publish = false
 # next version, so a mixed pair exercises `contractMismatch` against the product pair.
 acceptance-probes = []
 acceptance-contract3 = []
+# Test artifact only: a request can commit and lose its reply, for the lost-acknowledgement acceptance.
+acceptance-faults = []
 
 [dependencies]
 # The core's serde feature gives the contract's camelCase, type-tagged records.

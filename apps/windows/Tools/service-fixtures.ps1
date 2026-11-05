@@ -19,3 +19,8 @@ cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --f
 if ($LASTEXITCODE -ne 0) { throw 'the sandbox probe artifact did not build' }
 $env:XDICT_PROBE_SERVICE = Join-Path $acceptance 'XDictProbeService.exe'
 Copy-Item -LiteralPath (Join-Path $target 'debug\xdict-service.exe') -Destination $env:XDICT_PROBE_SERVICE -Force
+$faultTarget = Join-Path $layout.AppRoot 'service\target\faults'
+cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --features acceptance-faults --target-dir $faultTarget
+if ($LASTEXITCODE -ne 0) { throw 'the lost-acknowledgement artifact did not build' }
+$env:XDICT_FAULT_SERVICE = Join-Path $acceptance 'XDictFaultService.exe'
+Copy-Item -LiteralPath (Join-Path $faultTarget 'debug\xdict-service.exe') -Destination $env:XDICT_FAULT_SERVICE -Force

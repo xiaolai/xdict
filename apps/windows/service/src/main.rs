@@ -138,6 +138,12 @@ fn main() {
             if import {
                 service.finish_cancel(id);
             }
+            // Test artifact only: the operation has committed, the reply is lost. The client must not retry the
+            // erase; a fresh export/state read resolves it (the lost-acknowledgement acceptance).
+            #[cfg(feature = "acceptance-faults")]
+            if request.op == "eraseData" && std::env::var_os("XDICT_FAULT_AFTER_ERASE").is_some() {
+                std::process::exit(0);
+            }
             writer.reply(id, outcome);
         });
     }
