@@ -371,6 +371,7 @@ public sealed partial class MainWindow : Window
             (term, scroll) => _ = GuardAsync(() => OpenFromTrayAsync(term, scroll)));
         capture.SettingsRequested += () => OpenSettings(this, new RoutedEventArgs());
         capture.ReviewRequested += OpenReview;
+        capture.MeaningRequested += OpenMeaning;
         capture.ExitRequested += Quit;
         reminders = new ReviewReminders(started, OpenReview);
         reminders.Start();
@@ -810,6 +811,18 @@ public sealed partial class MainWindow : Window
             StatusText.Text = Strings.Format("review.loadFailed",
                 error is ServiceFailureException failure ? ServiceMessages.For(failure.ErrorType) : error.Message);
         }
+    }
+
+    /// <summary>The capture panel's Ask action: one meaning window over the captured sentence and the entry it drew.</summary>
+    private void OpenMeaning(Capture.MeaningRequest request)
+    {
+        if (client is null)
+        {
+            StatusText.Text = Strings.Get("app.serviceFailed");
+            return;
+        }
+        var window = new MeaningWindow(client, request);
+        window.Activate();
     }
 
     /// <summary>The main window is hidden by X, never destroyed: the tray and the shortcut must find it again.</summary>

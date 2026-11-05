@@ -34,13 +34,20 @@ public sealed partial class CapturePanel : Window
         Win32.SetWindowLongPtrW(Handle, Win32.GWL_EXSTYLE,
             new IntPtr(style | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW));
         OpenButton.Content = Strings.Get("capture.openInApp");
+        AskButton.Content = Strings.Get("meaning.ask");
         CloseButton.Content = Strings.Get("capture.close");
+        AskButton.Click += (_, _) => AskRequested?.Invoke();
         OpenButton.Click += (_, _) => OpenRequested?.Invoke(TermText.Text);
         CloseButton.Click += (_, _) => Dismiss();
         mouseHook = (code, wParam, _) => OnMouse(code, wParam);
     }
 
     public event Action<string>? OpenRequested;
+
+    /// <summary>The reader asked for meaning from this capture; the controller supplies the captured context.</summary>
+    public event Action? AskRequested;
+
+    public void SetAskAvailable(bool available) => AskButton.IsEnabled = available;
 
     public void SetContent(string term, string status)
     {

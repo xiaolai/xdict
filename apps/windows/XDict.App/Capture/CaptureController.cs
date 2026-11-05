@@ -22,6 +22,7 @@ public sealed class CaptureController : IDisposable
     private readonly Hotkey hotkey;
     private readonly TrayIcon tray;
     private CapturePanel? panel;
+    private MeaningRequest? lastMeaning;
     private readonly PaneLease paneLease = new();
     private CancellationTokenSource? inFlight;
     private CaptureRequest? inFlightRequest;
@@ -53,6 +54,9 @@ public sealed class CaptureController : IDisposable
     }
 
     public event Action? SettingsRequested;
+
+    /// <summary>The capture panel's Ask action, with the captured sentence and the entry it drew.</summary>
+    public event Action<MeaningRequest>? MeaningRequested;
 
     /// <summary>The tray's Review item; the main window owns the review window and the single instance.</summary>
     public event Action? ReviewRequested;
@@ -233,6 +237,8 @@ public sealed class CaptureController : IDisposable
         SearchHit? drawnHit = null;
         try
         {
+            lastMeaning = null;
+            view.SetAskAvailable(false);
             view.SetContent(delivery.Term.Term, Strings.Format("capture.searching", delivery.Term.Term));
             contexts.Hold(delivery.Term, delivery.Request.Number, delivery.Generation);
             IntPtr before = Win32.GetForegroundWindow();
@@ -293,6 +299,19 @@ public sealed class CaptureController : IDisposable
         }
         if (drawn)
         {
+            if (drawnHit is { } hit && delivery.Term.Context is CaptureContext.Available context)
+            {
+                string key = hit.Entry.TryGetProperty("key", out System.Text.Json.JsonElement keyValue)
+                    ? keyValue.GetString() ?? delivery.Term.Term
+                    : delivery.Term.Term;
+                uint occurrence = hit.Entry.TryGetProperty("occurrence", out System.Text.Json.JsonElement occurrenceValue)
+                    ? occurrenceValue.GetUInt32()
+                    : 0;
+                string handle = session.Dictionaries.First(item => item.Edition == hit.Edition).Handle;
+                lastMeaning = new MeaningRequest(delivery.Term.Term, context.Sentence, context.Start,
+                    context.Length, handle, hit.Edition, key, occurrence, hit.Dictionary);
+            }
+            view.SetAskAvailable(lastMeaning is not null);
             Acknowledge(delivery, CaptureOutcome.Shown);
             // A separate event from the acknowledgement: the capture ended either way; this is the reading the
             // history may keep, and only when its own switch and sentence allow it.
@@ -312,7 +331,12 @@ public sealed class CaptureController : IDisposable
                 }
             }
         }
-        else Acknowledge(delivery, CaptureOutcome.NotShown);
+        else
+        {
+            lastMeaning = null;
+            view.SetAskAvailable(false);
+            Acknowledge(delivery, CaptureOutcome.NotShown);
+        }
     }
 
     /// <summary>Drops the entry a previous capture showed; the panel's host, its binding and its private folder.</summary>
@@ -350,7 +374,9 @@ public sealed class CaptureController : IDisposable
     private void ShowNotice(string sentence)
     {
         ResetEntry();
+        lastMeaning = null;
         CapturePanel view = EnsurePanel();
+        view.SetAskAvailable(false);
         // A notice has no term: the Open button sends TermText, and a title there would be searched for.
         view.SetContent("", sentence);
         Win32.GetCursorPos(out Win32.POINT point);
@@ -372,6 +398,10 @@ public sealed class CaptureController : IDisposable
         panel = new CapturePanel();
         panel.Dismissed += OnDismissed;
         panel.OpenRequested += term => OpenGuarded(term);
+        panel.AskRequested += () =>
+        {
+            if (lastMeaning is { } request) MeaningRequested?.Invoke(request);
+        };
         return panel;
     }
 
