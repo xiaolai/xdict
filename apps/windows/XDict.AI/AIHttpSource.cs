@@ -56,6 +56,11 @@ public static class AIProviderProfiles
         "deepseek", "DeepSeek", new Uri("https://api.deepseek.com"), KeyRequired: true,
         AITokenField.MaxTokens, ["deepseek-flash", "deepseek-v4-pro"]);
 
+    /// <summary>The macOS custom row: the reader's address, the key when saved, max_completion_tokens first.</summary>
+    public static readonly AIProviderProfile Custom = new(
+        CustomId, "Custom (OpenAI-compatible)", new Uri("http://127.0.0.1"), KeyRequired: false,
+        AITokenField.MaxCompletionTokens, []);
+
     public static readonly IReadOnlyList<AIProviderProfile> Known = [DeepSeek];
 
     /// <summary>The macOS DeepSeek configuration: its base, its default model, the key, max_tokens first, 8,192 tokens.</summary>

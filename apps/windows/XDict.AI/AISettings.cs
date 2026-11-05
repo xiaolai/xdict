@@ -62,7 +62,8 @@ public sealed record AISettings
     public string Work => System.IO.Path.Combine(Folder, "work");
 
     public AIProviderProfile Profile =>
-        AIProviderProfiles.Known.FirstOrDefault(item => item.Id == HttpProfile) ?? AIProviderProfiles.DeepSeek;
+        AIProviderProfiles.Known.FirstOrDefault(item => item.Id == HttpProfile)
+        ?? (HttpProfile == AIProviderProfiles.CustomId ? AIProviderProfiles.Custom : AIProviderProfiles.DeepSeek);
 
     /// <summary>DeepSeek by macOS's rule: its base, its default model, Bearer, max_tokens first, 8,192 tokens.</summary>
     public AIHttpConfig HttpConfig(string? key)
