@@ -30,6 +30,9 @@ public sealed record LearningSettings
     /// <summary>Whether review reminders are scheduled; the toast itself is the shell's.</summary>
     public bool RemindersEnabled { get; init; } = true;
 
+    /// <summary>The reader's sync folder, chosen once; null until they choose one. The folder is theirs, not XDict's.</summary>
+    public string? SyncFolder { get; init; }
+
     /// <summary>The validated policy a grade carries, whatever the file said.</summary>
     [JsonIgnore]
     public ReviewPolicy Policy => new(

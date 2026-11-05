@@ -98,8 +98,10 @@ internal static class Native
 
     private const uint FileReadAttributes = 0x0080;
     private const uint GenericRead = 0x80000000;
+    private const uint GenericWrite = 0x40000000;
     private const uint ShareAll = 0x00000007;
     private const uint OpenExisting = 3;
+    private const uint CreateAlways = 2;
     private const uint FileAttributeNormal = 0x80;
     private const uint DuplicateSameAccess = 0x00000002;
 
@@ -165,6 +167,14 @@ internal static class Native
     {
         SafeFileHandle file = CreateFileW(path, GenericRead, ShareAll, IntPtr.Zero, OpenExisting, FileAttributeNormal, IntPtr.Zero);
         if (file.IsInvalid) { file.Dispose(); throw Failure("open dictionary file"); }
+        return file;
+    }
+
+    /// <summary>Contract 3's destination: created or truncated, shared for read and delete, never read by this app.</summary>
+    internal static SafeFileHandle OpenWrite(string path)
+    {
+        SafeFileHandle file = CreateFileW(path, GenericWrite, ShareAll, IntPtr.Zero, CreateAlways, FileAttributeNormal, IntPtr.Zero);
+        if (file.IsInvalid) { file.Dispose(); throw Failure("open sync destination"); }
         return file;
     }
 

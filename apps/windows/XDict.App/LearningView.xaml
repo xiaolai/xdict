@@ -25,6 +25,23 @@
                         AutomationProperties.AutomationId="SettingsNotificationSettings" />
             </StackPanel>
             <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="SyncLabel" FontSize="{StaticResource XDictTextBody}" />
+                <TextBlock x:Name="SyncDetail" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock x:Name="SyncFolderText" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsSyncFolder" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
+                    <Button x:Name="ChooseSyncFolder" Click="OnChooseSyncFolder"
+                            AutomationProperties.AutomationId="SettingsSyncChoose" />
+                    <Button x:Name="SyncNow" Click="OnSyncNow"
+                            AutomationProperties.AutomationId="SettingsSyncNow" />
+                </StackPanel>
+                <TextBlock x:Name="SyncStatus" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsSyncStatus" />
+            </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
                 <TextBlock x:Name="ExportLabel" FontSize="{StaticResource XDictTextBody}" />
                 <TextBlock x:Name="ExportDetail" FontSize="{StaticResource XDictTextCallout}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />

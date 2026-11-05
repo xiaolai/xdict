@@ -185,7 +185,17 @@
     "learning.eraseAction": "Erase",
     "learning.eraseCancel": "Cancel",
     "learning.erased": "Erased {0} readings, {1} notes and {2} grades. {3}",
-    "learning.eraseFailed": "Could not erase: {0} Export the data to see whether it completed."
+    "learning.eraseFailed": "Could not erase: {0} Export the data to see whether it completed.",
+    "sync.title": "Sync",
+    "sync.detail": "Choose a folder XDict can write its device log to; the other devices' logs in it are merged.",
+    "sync.choose": "Choose Folder…",
+    "sync.now": "Sync Now",
+    "sync.notSet": "No folder chosen yet.",
+    "sync.running": "Syncing…",
+    "sync.done": "Merged {0} peer(s): {1} added, {2} skipped.",
+    "sync.limit": "Could not sync: {0}",
+    "sync.failed": "Could not sync: {0}",
+    "sync.chooseFailed": "Could not use that folder: {0}"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -373,6 +383,16 @@
     "learning.eraseAction": "清除",
     "learning.eraseCancel": "取消",
     "learning.erased": "已清除 {0} 条阅读记录、{1} 条笔记和 {2} 条评分。{3}",
-    "learning.eraseFailed": "无法清除：{0} 请导出数据以确认是否已完成。"
+    "learning.eraseFailed": "无法清除：{0} 请导出数据以确认是否已完成。",
+    "sync.title": "同步",
+    "sync.detail": "选择一个 XDict 可写入设备日志的文件夹；其中的其他设备日志会被合并。",
+    "sync.choose": "选择文件夹……",
+    "sync.now": "立即同步",
+    "sync.notSet": "尚未选择文件夹。",
+    "sync.running": "正在同步……",
+    "sync.done": "已合并 {0} 个对端：新增 {1}，跳过 {2}。",
+    "sync.limit": "无法同步：{0}",
+    "sync.failed": "无法同步：{0}",
+    "sync.chooseFailed": "无法使用该文件夹：{0}"
   }
 }

@@ -1,9 +1,10 @@
-# The Windows wire contract — contract 2
+# The Windows wire contract — contract 3
 
-**2026-11-01** · Status: **current, contract 2** — every fixture in `fixtures.jsonl` is decoded, checked against this
-schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 adds
-the learning set (history, notes, review, export/erase, the entry gloss) and raises the JSON envelope to 4 MiB.
-Normative for `apps/windows/`; decisions in ADR-0022 and ADR-0023/0037.
+**2026-11-05** · Status: **current, contract 3** — every fixture in `fixtures.jsonl` is decoded, checked against this
+schema and re-encoded by `tests/rust` and `tests/cs`; the app's client and the service implement it. Contract 2 added
+the learning set (history, notes, review, export/erase, the entry gloss) and raised the JSON envelope to 4 MiB.
+Contract 3 adds `ledgerSync`, the one writable destination and the service-owned staging inbox/outbox. Normative for
+`apps/windows/`; decisions in ADR-0022, ADR-0023/0037 and ADR-0004.
 
 ## 1. Transport
 
@@ -27,23 +28,25 @@ product-visible bound rather than a connection the client must drop.
 ## 2. The envelope
 
 ```json
-{"contract": 1, "id": 17, "op": "lookup", "files": [], "operation": { ... }}
+{"contract": 3, "id": 17, "op": "lookup", "files": [], "operation": { ... }}
 ```
 
 - `contract` and `id` come first and are read before anything else. A `contract` other than the service's is
   answered `contractMismatch` with both numbers, and the rest of the envelope is never decoded.
 - `id` is the app's request number, unique per connection; it is echoed on the reply and on every progress event.
 - `files` carries the handles an operation may read, each
-  `{"id":"<uuid>","name":"...","handle":<u64>,"identity":{"device":..,"inode":..,"size":..,"mtimeNs":..,"ctimeNs":..},"observedAt":<u64>}`
+  `{"id":"<uuid>","name":"...","handle":<u64>,"identity":{"device":..,"inode":..,"size":..,"mtimeNs":..,"ctimeNs":..},"observedAt":<u64>,"write":<bool>}`
   where `handle` is a **handle valid in the service process** (the app duplicated it there with
-  `DUPLICATE_SAME_ACCESS`), `identity` is the app's observation of the path the file came from, and `observedAt` is
-  a monotonic observation number. A request that may read must carry an observation for every file it names; a
-  missing one is `admission`.
-- The service admits a file only if the handle is a regular file opened read-only, and only if the handle's own
-  identity matches either the observation or the identity the service last saw; an observation older than the newest
-  for that file never replaces it.
+  `DUPLICATE_SAME_ACCESS`), `identity` is the app's observation of the path the file came from, `observedAt` is a
+  monotonic observation number, and `write` is contract 3's one writable destination (absent or false on every
+  other file). A request that may read must carry an observation for every file it names; a missing one is
+  `admission`.
+- The service admits a file only if the handle is a regular file, opened read-only unless it is `ledgerSync`'s
+  single `write` file, and only if the handle's own identity matches either the observation or the identity the
+  service last saw; an observation older than the newest for that file never replaces it. A writable handle on any
+  other operation, or a second one on `ledgerSync`, is `admission`.
 
-A reply is `{"contract":1,"id":17,"ok":{...}}` or `{"contract":1,"id":17,"error":{"type":"...",...}}`. A reply that
+A reply is `{"contract":3,"id":17,"ok":{...}}` or `{"contract":3,"id":17,"error":{"type":"...",...}}`. A reply that
 carries bytes announces them in the JSON: `"bulk":{"transfer":<u64>,"length":<u64>,"mime":"..."}`, and the kind-2
 frame with that transfer id follows before any other reply on the connection. At most two bulk replies are in
 flight; a third request is `busy` until one completes.
@@ -88,8 +91,17 @@ are macOS-only, ADR-0011).
 | `reviewSummary` | `{"now"}` | `ReviewSummary` |
 | `studyConflicts` | — | `[CardConflict]` |
 | `reviewResolve` | `{"target","keep","stamp":Stamp,"operation"}` | `ReviewOutcome` |
+| `ledgerSync` | `{"device":"<safe name>"}` | `SyncReport` (`exported`,`peers`,`added`,`skipped`) |
 
 `FileRef` is `{"file":"<uuid>"}`, naming an entry of `files`. `EntryRef` is `{"edition","key","occurrence"}`.
+
+**Sync (contract 3).** `ledgerSync` takes every peer log as a read-only file and exactly one writable destination in
+the same `files` array; `device` names the destination (`xdict-<device>.xdlog`). The service copies the peers into a
+service-owned staging inbox (at most 64 files and 256 MiB in aggregate, one over refused by name), calls the core's
+`ledger_sync(inbox, staging, device)`, copies the staged output through the one write handle in chunks, and deletes
+staging. The reader's folder path never enters the service, and no dictionary content travels in a log. A killed sync
+leaves staging to the next service start's sweep; the app's own destination is replaced only by an atomic rename
+after the reply.
 
 **Edition admission.** `entryGloss`, `studyNoteAt` and `studyReanchor` name an edition rather than a handle. The service
 keeps an **edition→open-dictionary map** from `open`; the named edition is resolved there and its files must be
@@ -101,8 +113,8 @@ view's ceiling, never a base from the request. The records, enums and error shap
 (`core/xdict-core/src/types.rs`, camelCase and a `type` tag), which the fixtures below quote.
 
 **Progress and cancellation.** An import with `"progress":true` sends kind-1 events
-`{"contract":1,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
-kind-1 frame `{"contract":1,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
+`{"contract":3,"id":<import id>,"event":"progress","done":..,"total":..}` while it runs; the app answers with a
+kind-1 frame `{"contract":3,"id":<import id>,"event":"answer","cancel":<bool>}`. Work that answers after a `cancel`
 answers `cancelled` and registers nothing.
 
 ## 4. Typed errors
@@ -119,10 +131,10 @@ shell words every sentence**; a service never sends one.
 - Two bulk replies in flight; eight lookup-class calls in flight; one import at a time; a **service-wide** gate
   admits work across connections, and a stalled call past its deadline frees its slot by a new connection.
 - Deadlines: lookup-class 10 s, import none (the app cancels), bulk 30 s. Contract 2: `entryGloss`, `studyNote`,
-  `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` 15 s; `ledgerRecord`, `ledgerHistory`,
+  `studyNoteAt` and `definitionHash` 10 s; `studyReanchor` and `ledgerSync` 15 s; `ledgerRecord`, `ledgerHistory`,
   `ledgerRemove`/`Restore`, `exportData`, `eraseData`, `studyNotes`, the review calls and `studyConflicts` 5 s.
-  Bulk-class in contract 2 is `entry`, `resource`, `entryGloss`, `exportData`, `studyNote`, `studyNoteAt`,
-  `definitionHash` and `studyReanchor`.
+  The bulk class is unchanged from contract 2: `entry`, `resource`, `entryGloss`, `exportData`, `studyNote`,
+  `studyNoteAt`, `definitionHash` and `studyReanchor` (not `ledgerSync`; its bytes cross by handles, not a payload).
 - A killed service makes every handle stale; the app starts a new service, re-duplicates the handles and re-opens.
   The service exits when idle with no request, import or reply in flight; the app restarts it on demand.
 

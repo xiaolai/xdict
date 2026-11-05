@@ -26,6 +26,12 @@ fn main() {
             std::process::exit(2);
         }
     }
+    // The staging folders a sync's handles meet in: the service's own data (or cache), never the reader's path.
+    let staging = arguments
+        .data
+        .clone()
+        .or_else(|| arguments.cache.clone())
+        .unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
     let core = match ops::core_from(arguments.data, arguments.cache) {
         Ok(core) => core,
         Err(error) => {
@@ -34,7 +40,7 @@ fn main() {
         }
     };
     let writer = Arc::new(Writer::new(io::stdout()));
-    let service = Arc::new(Service::new(core));
+    let service = Arc::new(Service::new(core, std::path::PathBuf::from(staging)));
     let gates = Arc::new(WorkGate::new());
     let activity = Arc::new(Activity::new());
     {

@@ -10,7 +10,7 @@ publish = false
 # Test artifact only: confinement probes never ship in the production service. The foreign-contract build speaks the
 # next version, so a mixed pair exercises `contractMismatch` against the product pair.
 acceptance-probes = []
-acceptance-contract3 = []
+acceptance-contract4 = []
 # Test artifact only: a request can commit and lose its reply, for the lost-acknowledgement acceptance.
 acceptance-faults = []
 

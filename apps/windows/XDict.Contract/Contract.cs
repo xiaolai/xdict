@@ -8,7 +8,7 @@ namespace XDict.Contract;
 public static class Wire
 {
     /// <summary>Raised by any change to the envelope, an operation, a record, a limit or an error.</summary>
-    public const uint Version = 2;
+    public const uint Version = 3;
 
     /// <summary>One JSON envelope's ceiling, read before it is decoded. 4 MiB since contract 2: a maximum history,
     /// the notes and the conflicts travel whole, or are refused as a product-visible bound.</summary>
@@ -33,7 +33,8 @@ public sealed record FileIdentity(ulong Device, ulong Inode, ulong Size, long Mt
 
 /// <summary>One file a request may read: its id, the core's name for it, the handle duplicated into the service, and
 /// the app's observation of its path (null identity when nothing is at the path).</summary>
-public sealed record FileObservation(string Id, string Name, ulong Handle, FileIdentity? Identity, ulong ObservedAt);
+public sealed record FileObservation(string Id, string Name, ulong Handle, FileIdentity? Identity, ulong ObservedAt,
+    bool Write = false);
 
 /// <summary>A reply: exactly one of <paramref name="Ok"/> and <paramref name="Error"/> is set; a bulk reply's bytes
 /// travel in <paramref name="Payload"/>.</summary>

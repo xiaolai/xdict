@@ -9,9 +9,10 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs::File;
-use std::io;
+use std::io::{self, Read, Write};
 use std::os::windows::fs::FileExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use xdict_core::{ByteSource, CoreError, FileIdentity};
@@ -80,10 +81,11 @@ pub struct HandleSource {
     name: String,
     at_open: Option<FileIdentity>,
     ledger: Arc<Ledger>,
+    write: bool,
 }
 
 impl HandleSource {
-    pub fn take(spec: &FileSpec, ledger: Arc<Ledger>) -> Result<Self, Failure> {
+    pub fn take(spec: &FileSpec, ledger: Arc<Ledger>, write: bool) -> Result<Self, Failure> {
         if spec.handle == 0 || spec.handle > i64::MAX as u64 {
             return Err(Failure::admission(format!("{}: no usable handle", spec.id)));
         }
@@ -101,7 +103,14 @@ impl HandleSource {
                 spec.id
             )));
         }
-        if writable(&file) {
+        let opened_for_write = writable(&file);
+        if write && !opened_for_write {
+            return Err(Failure::admission(format!(
+                "{}: the sync destination is not opened for writing",
+                spec.id
+            )));
+        }
+        if !write && opened_for_write {
             return Err(Failure::admission(format!(
                 "{}: opened for writing",
                 spec.id
@@ -120,6 +129,7 @@ impl HandleSource {
             name: spec.name.clone(),
             at_open,
             ledger,
+            write,
         })
     }
 
@@ -127,6 +137,71 @@ impl HandleSource {
     /// a sidecar.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn is_write(&self) -> bool {
+        self.write
+    }
+
+    /// Copies a read-only source into the service's staging inbox, byte for byte, at most its admitted size.
+    pub fn copy_to(&self, path: &Path) -> Result<u64, Failure> {
+        let mut out = File::create(path)
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        let size = self.size();
+        let mut offset = 0u64;
+        while offset < size {
+            let len = u32::try_from((size - offset).min(1_048_576)).map_err(|_| {
+                Failure::Core(CoreError::Internal {
+                    detail: "a staging read length overflowed".into(),
+                })
+            })?;
+            let bytes = self.read_at(offset, len).map_err(Failure::Core)?;
+            if bytes.is_empty() {
+                break;
+            }
+            out.write_all(&bytes)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            offset += bytes.len() as u64;
+        }
+        out.flush()
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        Ok(offset)
+    }
+
+    /// Writes the staged output through the app's one writable handle, in chunks, from its start.
+    pub fn write_from(&mut self, path: &Path) -> Result<u64, Failure> {
+        let mut input = File::open(path)
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        let mut buffer = vec![0u8; 65_536];
+        let mut written = 0u64;
+        loop {
+            let read = input
+                .read(&mut buffer)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            if read == 0 {
+                break;
+            }
+            let Some(chunk) = buffer.get(..read) else {
+                return Err(Failure::Core(CoreError::Internal {
+                    detail: "a staging chunk exceeded its buffer".into(),
+                }));
+            };
+            self.file
+                .write_all(chunk)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            written += read as u64;
+        }
+        self.file
+            .flush()
+            .map_err(CoreError::from)
+            .map_err(Failure::Core)?;
+        Ok(written)
     }
 
     pub fn held_identity(&self) -> Result<FileIdentity, Failure> {
@@ -240,6 +315,7 @@ pub fn identity_rule(
 pub fn admit(
     specs: &[FileSpec],
     ledger: &Arc<Ledger>,
+    allow_write: bool,
 ) -> Result<HashMap<String, HandleSource>, Failure> {
     let mut sources = HashMap::new();
     // One HANDLE value, one owner: two specs naming it would become two `File`s over one handle and close it twice.
@@ -247,8 +323,23 @@ pub fn admit(
     // Every handle this request duplicated is the service's to close. One it never took (an error on an earlier
     // spec) would otherwise leak until the process dies.
     let mut owned = std::collections::HashSet::new();
+    let mut write_seen = false;
     let result = (|| -> Result<(), Failure> {
         for spec in specs {
+            if spec.write {
+                if !allow_write {
+                    return Err(Failure::admission(format!(
+                        "{}: only ledgerSync may name a writable handle",
+                        spec.id
+                    )));
+                }
+                if write_seen {
+                    return Err(Failure::admission(
+                        "ledgerSync names more than one writable handle",
+                    ));
+                }
+                write_seen = true;
+            }
             if !handles.insert(spec.handle) {
                 return Err(Failure::Core(xdict_core::CoreError::Malformed {
                     detail: format!("the handle {} is named by two files", spec.handle),
@@ -264,7 +355,7 @@ pub fn admit(
             );
             // From here a File owns the handle; its drop closes it on every error path of `take`.
             owned.insert(spec.handle);
-            let source = HandleSource::take(spec, ledger.clone())?;
+            let source = HandleSource::take(spec, ledger.clone(), spec.write)?;
             let held = source.held_identity()?;
             match spec.identity {
                 // A rename over the path is admitted on purpose: the handle is the file last seen, and the core

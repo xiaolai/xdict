@@ -11,7 +11,7 @@ if ($LASTEXITCODE -ne 0) { throw 'the generated library fixtures failed' }
 $target = Join-Path $layout.AppRoot 'service\target\probes'
 $acceptance = Join-Path $layout.AppRoot 'service\target\acceptance'
 New-Item -ItemType Directory -Force -Path $acceptance | Out-Null
-cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --features acceptance-contract3 --target-dir $target
+cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --features acceptance-contract4 --target-dir $target
 if ($LASTEXITCODE -ne 0) { throw 'the foreign contract artifact did not build' }
 $env:XDICT_FOREIGN_SERVICE = Join-Path $acceptance 'XDictForeignService.exe'
 Copy-Item -LiteralPath (Join-Path $target 'debug\xdict-service.exe') -Destination $env:XDICT_FOREIGN_SERVICE -Force

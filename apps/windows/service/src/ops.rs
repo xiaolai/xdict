@@ -2,14 +2,16 @@
 //! of, and the imports that can be cancelled. Every operation is the core's, with the wire's envelope around it.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use xdict_core::{
-    Config, Core, CoreError, Location, Missing, Opened, Package, Progress, Resource, View,
+    ByteSource, Config, Core, CoreError, Location, MAX_SYNC_BYTES, Missing, Opened, Package,
+    Progress, Resource, View,
 };
 
 use crate::failure::Failure;
@@ -19,7 +21,7 @@ use crate::wire::{
     EntryGlossBody, EraseBody, FileRef, GradeBody, ImportBody, JoinLineageBody, LedgerHistoryBody,
     LedgerRecordBody, LedgerRemovalBody, LineageOfBody, LinkBody, LookupBody, OpenBody,
     PackageSpec, QueueBody, ReanchorBody, Request, ResolveBody, ResourceBody, SplitLineageBody,
-    StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, UndoBody,
+    StudyNoteAtBody, StudyNoteBody, SuggestBody, SummaryBody, SyncBody, UndoBody,
 };
 
 /// Slow work tells the app how far it is; the app's answer can stop it.
@@ -115,10 +117,15 @@ pub struct Service {
     editions: Mutex<HashMap<String, String>>,
     edition_of: Mutex<HashMap<String, String>>,
     cancels: Mutex<HashMap<u64, Arc<CancelState>>>,
+    /// The service-owned folders a sync's input and output meet in; the reader's folder never has a path here.
+    staging: PathBuf,
+    sync_serial: AtomicU64,
 }
 
 impl Service {
-    pub fn new(core: Core) -> Self {
+    pub fn new(core: Core, staging: PathBuf) -> Self {
+        // A killed sync leaves its own folder; the next service start sweeps them all before any work runs.
+        let _ = std::fs::remove_dir_all(staging.join("ledger-sync"));
         Self {
             core,
             ledger: Arc::new(Ledger::default()),
@@ -126,6 +133,8 @@ impl Service {
             editions: Mutex::new(HashMap::new()),
             edition_of: Mutex::new(HashMap::new()),
             cancels: Mutex::new(HashMap::new()),
+            staging,
+            sync_serial: AtomicU64::new(0),
         }
     }
 
@@ -154,7 +163,48 @@ impl Service {
     /// Admits every file the request names and checks each named dictionary's observations, before any operation
     /// decodes: a temporary duplicate is owned and closed even when the operation is refused.
     fn admit_request(&self, request: &Request) -> Result<HashMap<String, HandleSource>, Failure> {
-        let sources = admit(&request.files, &self.ledger)?;
+        let sync = request.op == "ledgerSync";
+        let sources = admit(&request.files, &self.ledger, sync)?;
+        if sync {
+            let outputs = request.files.iter().filter(|spec| spec.write).count();
+            if outputs != 1 {
+                return Err(Failure::admission(
+                    "ledgerSync needs exactly one writable destination",
+                ));
+            }
+            let inputs: Vec<&crate::wire::FileSpec> =
+                request.files.iter().filter(|spec| !spec.write).collect();
+            if inputs.len() > 64 {
+                return Err(Failure::admission(format!(
+                    "ledgerSync names {} peers; the bound is 64",
+                    inputs.len()
+                )));
+            }
+            let mut aggregate = 0u64;
+            for spec in inputs {
+                let Some(source) = sources.get(&spec.id) else {
+                    return Err(Failure::admission(format!(
+                        "{}: the peer was not admitted",
+                        spec.id
+                    )));
+                };
+                let size = source.size();
+                if size > MAX_SYNC_BYTES {
+                    return Err(Failure::admission(format!(
+                        "{}: the peer is {size} bytes; the bound is {MAX_SYNC_BYTES}",
+                        spec.id
+                    )));
+                }
+                aggregate = aggregate
+                    .checked_add(size)
+                    .ok_or_else(|| Failure::admission("the peers' aggregate size overflows"))?;
+                if aggregate > MAX_SYNC_BYTES {
+                    return Err(Failure::admission(format!(
+                        "the peers' aggregate is over {MAX_SYNC_BYTES} bytes"
+                    )));
+                }
+            }
+        }
         let mut dicts = named_dicts(&request.op, &request.operation)?;
         // An edition-named operation reads the dictionary open under that edition; the app never names its handle,
         // so admission resolves it here and then checks that dictionary's files like any other.
@@ -379,10 +429,69 @@ impl Service {
                     body.operation,
                 )?)
             }
+            "ledgerSync" => {
+                let body: SyncBody = decode(&request.operation)?;
+                self.ledger_sync(body, sources)
+            }
             other => Err(Failure::Core(CoreError::Malformed {
                 detail: format!("the operation {other} is not in contract {CONTRACT}"),
             })),
         }
+    }
+
+    /// Contract 3's one pass: copy the admitted peer handles into the service's staging inbox, let the core merge them
+    /// and write this device's log, then copy that log through the app's one writable handle. No reader path is read.
+    fn ledger_sync(
+        &self,
+        body: SyncBody,
+        sources: HashMap<String, HandleSource>,
+    ) -> Result<Answer, Failure> {
+        let mut output = None;
+        let mut inputs = Vec::new();
+        for source in sources.into_values() {
+            if source.is_write() {
+                output = Some(source);
+            } else {
+                inputs.push(source);
+            }
+        }
+        let mut output =
+            output.ok_or_else(|| Failure::admission("ledgerSync has no writable destination"))?;
+        let serial = self.sync_serial.fetch_add(1, Ordering::Relaxed);
+        let root = self
+            .staging
+            .join("ledger-sync")
+            .join(format!("{}-{serial}", std::process::id()));
+        let inbox = root.join("in");
+        let outbox = root.join("out");
+        let device = body.device;
+        let result = (|| -> Result<Answer, Failure> {
+            std::fs::create_dir_all(&inbox)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            std::fs::create_dir_all(&outbox)
+                .map_err(CoreError::from)
+                .map_err(Failure::Core)?;
+            for (index, source) in inputs.iter().enumerate() {
+                let path = inbox.join(sync_name(source.name(), index));
+                source.copy_to(&path)?;
+            }
+            let report = self.core.ledger_sync(
+                inbox.to_string_lossy().into_owned(),
+                outbox.to_string_lossy().into_owned(),
+                device.clone(),
+            )?;
+            let ours = outbox.join(format!("xdict-{device}.xdlog"));
+            output.write_from(&ours)?;
+            record(report)
+        })();
+        if let Err(error) = std::fs::remove_dir_all(&root) {
+            eprintln!(
+                "the sync staging {} could not be removed: {error}",
+                root.display()
+            );
+        }
+        result
     }
 
     fn import(
@@ -583,6 +692,21 @@ pub fn is_bulk(op: &str) -> bool {
             | "definitionHash"
             | "studyReanchor"
     )
+}
+
+/// The staging name a peer log is copied under: its own file name when it is safe, one `.xdlog` suffix, and an
+/// index so two peers with the same name cannot shadow each other. The reader's path never becomes this name.
+fn sync_name(name: &str, index: usize) -> String {
+    let base = Path::new(name)
+        .file_name()
+        .and_then(|part| part.to_str())
+        .unwrap_or("peer.xdlog");
+    let named = if base.ends_with(".xdlog") {
+        base.to_string()
+    } else {
+        format!("{base}.xdlog")
+    };
+    format!("{index:02}-{named}")
 }
 
 fn package_ids(spec: &PackageSpec) -> Vec<String> {

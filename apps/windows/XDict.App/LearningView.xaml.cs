@@ -33,6 +33,11 @@ public sealed partial class LearningView : UserControl
         RemindersDetail.Text = Strings.Get("learning.remindersDetail");
         Reminders.IsOn = settings.RemindersEnabled;
         NotificationSettings.Content = Strings.Get("learning.openNotificationSettings");
+        SyncLabel.Text = Strings.Get("sync.title");
+        SyncDetail.Text = Strings.Get("sync.detail");
+        ChooseSyncFolder.Content = Strings.Get("sync.choose");
+        SyncNow.Content = Strings.Get("sync.now");
+        UpdateSyncFolder();
         ExportLabel.Text = Strings.Get("learning.export");
         ExportDetail.Text = Strings.Get("learning.exportDetail");
         ExportButton.Content = Strings.Get("learning.exportAction");
@@ -102,6 +107,62 @@ public sealed partial class LearningView : UserControl
         catch (Exception error)
         {
             Status.Text = Strings.Format("settings.saveFailed", error.Message);
+        }
+    }
+
+    private void UpdateSyncFolder()
+    {
+        bool chosen = !string.IsNullOrWhiteSpace(settings.SyncFolder);
+        SyncFolderText.Text = chosen ? settings.SyncFolder! : Strings.Get("sync.notSet");
+        SyncNow.IsEnabled = chosen;
+    }
+
+    private async void OnChooseSyncFolder(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new FolderPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(owner));
+            picker.FileTypeFilter.Add("*");
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            StorageFolder? folder = await picker.PickSingleFolderAsync();
+            if (folder is null) return;
+            settings = settings with { SyncFolder = folder.Path };
+            Save();
+            UpdateSyncFolder();
+            SyncStatus.Text = "";
+        }
+        catch (Exception error)
+        {
+            SyncStatus.Text = Strings.Format("sync.chooseFailed", error.Message);
+        }
+    }
+
+    private async void OnSyncNow(object sender, RoutedEventArgs e)
+    {
+        if (settings.SyncFolder is not { } folder) return;
+        SyncNow.IsEnabled = false;
+        SyncStatus.Text = Strings.Get("sync.running");
+        try
+        {
+            SyncReport report = await new SyncSession(client).SyncAsync(folder);
+            SyncStatus.Text = Strings.Format("sync.done", report.Peers, report.Added, report.Skipped);
+        }
+        catch (SyncLimitException error)
+        {
+            SyncStatus.Text = Strings.Format("sync.limit", error.Message);
+        }
+        catch (ServiceFailureException error)
+        {
+            SyncStatus.Text = Strings.Format("sync.failed", ServiceMessages.For(error.ErrorType));
+        }
+        catch (Exception error)
+        {
+            SyncStatus.Text = Strings.Format("sync.failed", error.Message);
+        }
+        finally
+        {
+            SyncNow.IsEnabled = !string.IsNullOrWhiteSpace(settings.SyncFolder);
         }
     }
 

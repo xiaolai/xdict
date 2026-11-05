@@ -1,4 +1,4 @@
-# The contract-fixture gate: both sides decode, validate and re-encode every fixture (contract 2).
+# The contract-fixture gate: both sides decode, validate and re-encode every fixture (contract 3).
 [CmdletBinding()]
 param([switch]$Full)
 

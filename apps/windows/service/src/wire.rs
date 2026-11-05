@@ -1,5 +1,5 @@
 //! The wire contract's Rust side: the envelope, the operation bodies, and what a reply carries
-//! (`apps/windows/contract/CONTRACT.md`, contract 2).
+//! (`apps/windows/contract/CONTRACT.md`, contract 3).
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -10,10 +10,10 @@ use xdict_core::{
 };
 
 /// The product's contract. The acceptance build speaks the next one, so a mixed pair has a real mismatch to refuse.
-#[cfg(not(feature = "acceptance-contract3"))]
-pub const CONTRACT: u32 = 2;
-#[cfg(feature = "acceptance-contract3")]
+#[cfg(not(feature = "acceptance-contract4"))]
 pub const CONTRACT: u32 = 3;
+#[cfg(feature = "acceptance-contract4")]
+pub const CONTRACT: u32 = 4;
 
 /// One JSON envelope's ceiling, read before it is decoded (`CONTRACT.md` §5). A maximum history of 400 cards with CJK
 /// contexts must fit; the macOS envelope is the same 4 MiB.
@@ -45,6 +45,10 @@ pub struct FileSpec {
     /// A monotonic observation number; the newest wins per file.
     #[serde(default)]
     pub observed_at: u64,
+    /// Contract 3: the one destination `ledgerSync` writes, opened by the app for writing. Every other file is
+    /// read-only, and any other operation refuses a writable handle.
+    #[serde(default)]
+    pub write: bool,
 }
 
 /// A package's file: the id of an entry of `Request.files`.
@@ -266,6 +270,13 @@ pub struct ResolveBody {
     pub keep: String,
     pub stamp: Stamp,
     pub operation: String,
+}
+
+/// Contract 3's one sync pass: the device names the output file; the request's files are the peers to merge and the
+/// single writable destination. No path crosses the pipe.
+#[derive(Debug, Deserialize)]
+pub struct SyncBody {
+    pub device: String,
 }
 
 /// The served base every entry URL is rewritten under (ADR-0022; the spike's WebView2 answer).

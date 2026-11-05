@@ -20,7 +20,7 @@ pub mod words;
 
 pub use crate::core::{
     Core, DISPLAY_OPTIONS, EDITION_SCHEME, EditionStyle, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, MAX_SUGGEST,
-    NORMALIZATION, PROTOCOL, STYLE, StyleReport,
+    MAX_SYNC_BYTES, NORMALIZATION, PROTOCOL, STYLE, StyleReport,
 };
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
 pub use examples::{

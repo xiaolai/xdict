@@ -91,6 +91,29 @@ public sealed class ServiceClient : IDisposable
         }
     }
 
+    /// <summary>Contract 3's one writable destination: created or truncated, duplicated to the service for one sync.</summary>
+    public FileObservation ObserveWrite(string id, string name, string path)
+    {
+        lock (state)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            SafeFileHandle held = Native.OpenWrite(path);
+            if (paths.Remove(id, out var previous)) previous.Held.Dispose();
+            paths[id] = (name, path, held);
+            return new FileObservation(id, name, 0, Native.ObservePath(path),
+                (ulong)Stopwatch.GetTimestamp(), Write: true);
+        }
+    }
+
+    /// <summary>Closes a file the app observed for one operation; a later Observe of the same id replaces it anyway.</summary>
+    public void Release(string id)
+    {
+        lock (state)
+        {
+            if (paths.Remove(id, out var previous)) previous.Held.Dispose();
+        }
+    }
+
     public Versions Handshake()
     {
         Reply reply = Call("versions", null);
@@ -154,7 +177,7 @@ public sealed class ServiceClient : IDisposable
             "import" => null,
             "entry" or "resource" or "health" => options.BulkDeadline,
             "entryGloss" or "studyNote" or "studyNoteAt" or "definitionHash" => TimeSpan.FromSeconds(10),
-            "studyReanchor" => TimeSpan.FromSeconds(15),
+            "studyReanchor" or "ledgerSync" => TimeSpan.FromSeconds(15),
             "exportData" or "ledgerRecord" or "ledgerHistory" or "ledgerRemove" or "ledgerRestore" or "eraseData"
                 or "studyNotes" or "reviewQueue" or "reviewGrade" or "reviewUndo" or "reviewSummary" or "studyConflicts"
                 or "reviewResolve" => TimeSpan.FromSeconds(5),
@@ -304,7 +327,7 @@ public sealed class ServiceClient : IDisposable
         {
             if (file is not FileObservation observation || !paths.TryGetValue(observation.Id, out var path)) return file;
             return new FileObservation(observation.Id, path.Name, Native.DuplicateFile(current.Child.ProcessHandle, path.Held),
-                Native.ObservePath(path.Path), (ulong)Stopwatch.GetTimestamp());
+                Native.ObservePath(path.Path), (ulong)Stopwatch.GetTimestamp(), observation.Write);
         }).ToArray();
     }
 
