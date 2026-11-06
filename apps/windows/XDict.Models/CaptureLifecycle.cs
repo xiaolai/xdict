@@ -287,6 +287,12 @@ public sealed class CaptureRequests
     {
         lock (gate) return Known(request) ? ended.GetValueOrDefault(request.Number) : null;
     }
+
+    /// <summary>Whether the request is known and owes an ending: a hover read checks this after its await.</summary>
+    public bool IsOpen(CaptureRequest request)
+    {
+        lock (gate) return Known(request) && !IsEnded(request.Number);
+    }
 }
 
 /// <summary>The presented document's identity: a finished document acknowledges only where it belongs to the lookup the

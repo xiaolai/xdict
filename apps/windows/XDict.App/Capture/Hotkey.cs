@@ -43,7 +43,7 @@ internal sealed class Hotkey : IDisposable
     {
         try
         {
-            return CaptureSettings.TryRebind(modifiers, key, Register, Unregister);
+            return CaptureSettings.TryRebind(previous, modifiers, key, Register, Unregister);
         }
         catch (CaptureClashException)
         {

@@ -29,11 +29,13 @@ public class CaptureSettingsTests
     public void AClashKeepsTheOldCombinationAndSaysSo()
     {
         bool oldUnregistered = false;
-        Assert.Throws<CaptureClashException>(() => CaptureSettings.TryRebind(0x0002, 0x51,
+        var previous = new CaptureSettings();
+        Assert.Throws<CaptureClashException>(() => CaptureSettings.TryRebind(previous, 0x0002, 0x51,
             (_, _) => false, () => oldUnregistered = true));
         Assert.True(oldUnregistered);
-        CaptureSettings taken = CaptureSettings.TryRebind(0x0002, 0x51, (_, _) => true, () => { });
+        CaptureSettings taken = CaptureSettings.TryRebind(previous, 0x0002, 0x51, (_, _) => true, () => { });
         Assert.Equal(0x51u, taken.Key);
+        Assert.Same(previous.Hover, taken.Hover);
     }
 
     [Fact]

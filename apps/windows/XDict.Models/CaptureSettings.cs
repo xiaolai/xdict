@@ -13,6 +13,12 @@ public sealed record CaptureSettings
     public uint Modifiers { get; init; } = DefaultModifiers;
     public uint Key { get; init; } = DefaultKey;
 
+    /// <summary>Hover's choices, beside the shortcut in the same file: one capture surface, one settings file.</summary>
+    public HoverPolicy Hover { get; init; } = new();
+
+    /// <summary>Illegal values are clamped to the nearest legal one, never silently kept.</summary>
+    public CaptureSettings Validated() => this with { Hover = (Hover ?? new HoverPolicy()).Validated() };
+
     /// <summary>Where the settings file lives; `XDICT_CAPTURE_SETTINGS` overrides it for a lab.</summary>
     public static string Path =>
         Environment.GetEnvironmentVariable("XDICT_CAPTURE_SETTINGS")
@@ -24,7 +30,7 @@ public sealed record CaptureSettings
         try
         {
             if (!File.Exists(path)) return new CaptureSettings();
-            return JsonSerializer.Deserialize<CaptureSettings>(File.ReadAllText(path)) ?? new CaptureSettings();
+            return (JsonSerializer.Deserialize<CaptureSettings>(File.ReadAllText(path)) ?? new CaptureSettings()).Validated();
         }
         catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -32,7 +38,7 @@ public sealed record CaptureSettings
         }
     }
 
-    public void Save(string? path = null) => SettingsJson.Write(path ?? Path, this);
+    public void Save(string? path = null) => SettingsJson.Write(path ?? Path, Validated());
 
     /// <summary>"Ctrl+Shift+D": the combination as a reader reads it.</summary>
     public static string Describe(uint modifiers, uint key)
@@ -55,11 +61,12 @@ public sealed record CaptureSettings
     };
 
     /// <summary>A rebinding is kept only when Windows gave it; on a clash the caller puts the previous combination
-    /// back, as Hotkey.Rebind does.</summary>
-    public static CaptureSettings TryRebind(uint modifiers, uint key, Func<uint, uint, bool> register, Action unregisterOld)
+    /// back, as Hotkey.Rebind does. The previous record carries every other choice, hover's included.</summary>
+    public static CaptureSettings TryRebind(CaptureSettings previous, uint modifiers, uint key,
+        Func<uint, uint, bool> register, Action unregisterOld)
     {
         unregisterOld();
-        if (register(modifiers, key)) return new CaptureSettings { Modifiers = modifiers, Key = key };
+        if (register(modifiers, key)) return previous with { Modifiers = modifiers, Key = key };
         throw new CaptureClashException(modifiers, key);
     }
 }
