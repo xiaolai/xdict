@@ -44,9 +44,12 @@ try {
     }
     $window = Find-XDictWindow $root 60
     $result = [ordered]@{ window = $false; scopeAll = -1; scopeTiny = -1; scopeDropped = -1
-        error = '' }
+        statusAll = ''; statusTiny = ''; statusDropped = ''; error = '' }
     if ($window) {
         $result.window = $true
+        # The window exists before the session has opened its dictionaries; a query sent then is answered "loading"
+        # with no rows. The old stage raced this and won on a faster start.
+        Start-Sleep -Seconds 10
         $search = & $byId $window 'SearchBox'
         $list = & $byId $window 'Results'
         $scope = & $byId $window 'ScopeBox'
@@ -62,8 +65,12 @@ try {
             Start-Sleep -Seconds 2
         }
         function Read-Rows {
-            $items = @($list.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition))
-            return $items.Count
+            # The status sentence carries the count; WinUI's bulk FindAll stops answering after a list repaints.
+            $status = & $byId $window 'StatusText'
+            if (-not $status) { return -1 }
+            $name = $status.Current.Name
+            if ($name -match '(\d+)') { return [int]$Matches[1] }
+            return 0
         }
         function Set-Scope([string]$name) {
             $expand = $scope.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
@@ -82,12 +89,18 @@ try {
         }
         Set-Query 'dropped'
         $result.scopeAll = Read-Rows
+        $status = & $byId $window 'StatusText'
+        if ($status) { $result.statusAll = $status.Current.Name }
         Set-Scope 'Tiny'
         Set-Query 'dropped'
         $result.scopeTiny = Read-Rows
+        $status = & $byId $window 'StatusText'
+        if ($status) { $result.statusTiny = $status.Current.Name }
         Set-Scope 'Dropped'
         Set-Query 'dropped'
         $result.scopeDropped = Read-Rows
+        $status = & $byId $window 'StatusText'
+        if ($status) { $result.statusDropped = $status.Current.Name }
     }
     $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath '__RESULT__' -Encoding UTF8
 }
