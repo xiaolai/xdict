@@ -612,11 +612,13 @@ public sealed partial class MainWindow : Window
                         item.Entry.TryGetProperty("key", out JsonElement key) && key.GetString() == seed.Headword)
                         ?? found.FirstOrDefault();
                     if (hit is null) continue;
-                    section.Children.Add(new TextBlock
+                    var header = new TextBlock
                     {
                         Text = dictionary.Name,
                         FontSize = Tokens.Text.Callout,
-                    });
+                    };
+                    AutomationProperties.SetAutomationId(header, "Section_" + dictionary.Name);
+                    section.Children.Add(header);
                     tab.AllStack!.Children.Add(section);
                     lease = new PaneLease();
                     var (pane, source, _) = await lease.EnsureAsync(client, dictionary.Edition, dictionary.Handle,
@@ -673,13 +675,17 @@ public sealed partial class MainWindow : Window
             Spacing = Tokens.Space.L,
             Padding = new Thickness(Tokens.Space.M),
         };
+        AutomationProperties.SetAutomationId(stack, "AllSections");
         var host = new Grid();
-        host.Children.Add(new ScrollViewer
+        var scroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = stack,
-        });
+        };
+        AutomationProperties.SetAutomationId(scroll, "AllScroll");
+        host.Children.Add(scroll);
         var item = new TabViewItem { Header = title, Content = host, IsClosable = true };
+        AutomationProperties.SetAutomationId(item, "Tab_" + title);
         var tab = new EntryTab { Item = item, Host = host, AllStack = stack, AllWord = title };
         tabs.Add(tab);
         Tabs.TabItems.Add(item);
@@ -728,6 +734,7 @@ public sealed partial class MainWindow : Window
             target.Dict = dictionary.Handle;
             target.Headword = entry.TryGetProperty("key", out JsonElement key) ? key.GetString() : query;
             target.Item.Header = target.Headword ?? query;
+            AutomationProperties.SetAutomationId(target.Item, "Tab_" + (target.Headword ?? "entry"));
             ActivateTab(target);
         }
         finally
@@ -749,6 +756,7 @@ public sealed partial class MainWindow : Window
             Content = host,
             IsClosable = true,
         };
+        AutomationProperties.SetAutomationId(item, "Tab_" + (title.Length == 0 ? "entry" : title));
         var tab = new EntryTab { Item = item, Host = host };
         tabs.Add(tab);
         Tabs.TabItems.Add(item);

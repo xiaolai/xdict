@@ -141,6 +141,25 @@ function Get-XDictAppOutput {
     return [System.IO.Path]::GetFullPath((Join-Path (Split-Path $project -Parent) $relative))
 }
 
+# A private library for one UIA stage: the library window lab imports the named MDX files, sidecars included, so the
+# stage never touches the reader's own library. Returns the library path the app reads through XDICT_LIBRARY.
+function New-XDictUiaLibrary {
+    param([Parameter(Mandatory)][string]$Folder, [Parameter(Mandatory)][string[]]$Mdx)
+    foreach ($path in $Mdx) {
+        if (-not (Test-Path -LiteralPath $path)) { throw "the fixture is missing: $path" }
+    }
+    New-Item -ItemType Directory -Force -Path $Folder | Out-Null
+    $library = Join-Path $Folder 'library.json'
+    $config = Join-Path $Folder 'library-config.json'
+    @{ output = (Join-Path $Folder 'library-result.json'); library = $library; paths = $Mdx } |
+        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+    $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $config + '"') `
+        -Output (Join-Path $Folder 'library-result.json') -Seconds 180 -Prefix 'xdict-library'
+    if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
+    return $library
+}
+
 # Ends the windows a lab opened, never the reader's own: only processes started after the run began are killed. A
 # cleanup by process name alone closed whatever Word, Edge or Notepad the host's owner had open.
 function Stop-XDictLabProcesses {
@@ -171,7 +190,7 @@ function Get-XDictConformanceExe {
 # The Windows E2E stages whose passing evidence a release requires; e2e.ps1 and release.ps1 read this one list.
 function Get-XDictE2EStageNames {
     return @('build', 'unit', 'contract', 'ipc', 'capture', 'library', 'launch', 'lookup', 'scope', 'trail',
-        'sound', 'sound-links', 'review', 'selection', 'setup', 'setup-225')
+        'find', 'tabs', 'all', 'explore', 'sound', 'sound-links', 'review', 'selection', 'setup', 'setup-225')
 }
 
 function Get-XDictBuildInputs {
