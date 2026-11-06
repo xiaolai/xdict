@@ -8,12 +8,17 @@ using XDict.Contract;
 
 namespace XDict.Client;
 
-public sealed class ServiceFailureException(string type, JsonElement? error = null) : Exception(type)
+public sealed class ServiceFailureException(string type, JsonElement? error = null, Exception? cause = null)
+    : Exception(type, cause)
 {
     public string ErrorType { get; } = type;
 
     /// <summary>The service's whole error object: the type, and the typed payload the sentence depends on.</summary>
     public JsonElement? Error { get; } = error;
+
+    /// <summary>Why the type was reached, where the layer below threw: a spawn's Win32 error, a denied ACL write.
+    /// The reader's sentence still comes from <see cref="ErrorType"/>; this is for the record and the log.</summary>
+    public Exception? Cause => InnerException;
 }
 
 public sealed record ServiceClientOptions
@@ -160,7 +165,7 @@ public sealed class ServiceClient : IDisposable
                     };
                 }
                 catch (Exception e) when (e is Win32Exception or FileNotFoundException or UnauthorizedAccessException)
-                { throw new ServiceFailureException("closed"); }
+                { throw new ServiceFailureException("closed", null, e); }
             }
             return connection;
         }

@@ -39,16 +39,20 @@ internal sealed class AppContainer : IDisposable
         const string name = "ai.xdict.app.DictionaryService";
         lock (SetupGate)
         {
-            // Creating a profile already in use can return E_UNEXPECTED, not just ALREADY_EXISTS.
-            // Derive first, and create only if its folder does not exist.
+            // **A profile that does not exist has no folder to find**: GetAppContainerFolderPath answers
+            // ERROR_FILE_NOT_FOUND for it, so asking first threw before CreateAppContainerProfile could run, and a
+            // clean standard user could never start the service (found on a fresh Windows 11 LTSC VM, 2026-11-06).
+            // Ask; on that answer create the profile. Creating one that exists returns ALREADY_EXISTS (or
+            // E_UNEXPECTED in use), and then the derived SID is the profile's.
             Marshal.ThrowExceptionForHR(DeriveAppContainerSidFromAppContainerName(name, out sid));
-            string folder = FolderFor(sid);
-            if (!Directory.Exists(folder))
+            try { _ = FolderFor(sid); }
+            catch (Exception error) when (error.HResult == unchecked((int)0x80070002))
             {
                 FreeSid(sid);
                 sid = IntPtr.Zero;
-                int created = CreateAppContainerProfile(name, "XDict Dictionary Service", "XDict parser sandbox", IntPtr.Zero, 0, out sid);
-                if (created == unchecked((int)0x800700B7))
+                int created = CreateAppContainerProfile(name, "XDict Dictionary Service", "XDict parser sandbox",
+                    IntPtr.Zero, 0, out sid);
+                if (created is unchecked((int)0x800700B7) or unchecked((int)0x8000FFFF))
                     created = DeriveAppContainerSidFromAppContainerName(name, out sid);
                 Marshal.ThrowExceptionForHR(created);
             }

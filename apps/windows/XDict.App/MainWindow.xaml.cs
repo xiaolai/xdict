@@ -158,8 +158,13 @@ public sealed partial class MainWindow : Window
         catch (ServiceFailureException error)
         {
             StatusText.Text = ServiceMessages.For(error.ErrorType);
-            probe?.RecordError(error.ErrorType);
-            TraceFailure("service: " + error.ErrorType + " " + error.Message);
+            // The type is the reader's sentence; a cause from the layer below is what the record needs to name a
+            // clean machine's refusal (a Win32 error from the spawn, a denied ACL write) instead of "closed".
+            string detail = error.Cause is { } cause
+                ? ": " + cause.GetType().Name + ": " + cause.Message + " @ " + cause.StackTrace
+                : "";
+            probe?.RecordError(error.ErrorType + detail);
+            TraceFailure("service: " + error.ErrorType + detail);
         }
         catch (Exception error)
         {

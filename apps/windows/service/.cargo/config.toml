@@ -1,0 +1,5 @@
+# The service is shipped as one exe with no installer of its own: a dynamic CRT leaves it importing VCRUNTIME140.dll,
+# which a clean Windows 11 has no Visual C++ redistributable to provide. The clean-VM install exited 0xC0000135
+# (STATUS_DLL_NOT_FOUND) before main on 2026-11-06; static linking is what makes the bundle self-contained.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
