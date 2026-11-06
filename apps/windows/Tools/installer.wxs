@@ -4,12 +4,15 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <!-- `installer.ps1` builds this with `-arch x64`, which puts ProgramFiles64Folder in C:\Program Files. 0.1.6 and
        0.2.0 were built without it, so WiX resolved the 64-bit folder to the x86 view; the upgrade removes that older
-       product after this one is installed, and the app repoints its own per-user Run value on first launch. -->
+       product before this one's files are copied, and the app repoints its own per-user Run value on first launch. -->
   <Package Name="XDict" Manufacturer="XDict" Version="$(var.Version)" UpgradeCode="41C24C37-620F-46DC-A1E0-BF1D638ADE6E"
            Scope="perMachine" Compressed="yes" InstallerVersion="500">
-    <!-- Remove the old product only after the new one is installed: a failed upgrade then leaves the reader's
-         working version in place. The default schedule removes it before the new files are copied. -->
-    <MajorUpgrade Schedule="afterInstallExecute"
+    <!-- Remove the old product after InstallInitialize, before the new files are copied: the old uninstall takes its
+         own Start-menu folder with it, so it must finish before this product lays down the new shortcut. Unlike
+         afterInstallValidate, this schedule sits inside the installation transaction, so a failed upgrade rolls the
+         removal back and reinstalls the working version. afterInstallExecute removed the old product after the new
+         shortcut existed and deleted it (observed 0.2.0 -> 0.4.0, 2026-11-06). -->
+    <MajorUpgrade Schedule="afterInstallInitialize"
                   DowngradeErrorMessage="A newer version of XDict is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="ProgramFiles64Folder">
