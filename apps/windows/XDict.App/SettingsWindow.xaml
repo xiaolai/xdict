@@ -3,8 +3,21 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
                     PaneDisplayMode="Left" SelectionChanged="OnRouteChanged"
                     AutomationProperties.AutomationId="SettingsNav">
+        <NavigationView.Resources>
+            <!-- The pane's own brush, so it is opaque in the requested theme instead of sampling whatever is behind
+                 the window; the pane has no PaneBackground property in WinUI 3. -->
+            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="{ThemeResource SystemBaseLowColor}" />
+            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="{ThemeResource SystemBaseLowColor}" />
+            <!-- The selected item's own fill, for the same reason: its default white pill is unreadable over the
+                 dark pane. -->
+            <SolidColorBrush x:Key="NavigationViewItemBackgroundSelected" Color="{ThemeResource SystemBaseLowColor}" />
+            <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemBaseLowColor}" />
+            <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemBaseLowColor}" />
+            <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedDisabled" Color="{ThemeResource SystemBaseLowColor}" />
+        </NavigationView.Resources>
         <NavigationView.MenuItems>
             <NavigationViewItem x:Name="DictionariesItem" Tag="dictionaries"
                                 AutomationProperties.AutomationId="SettingsDictionaries" />

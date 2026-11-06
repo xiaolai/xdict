@@ -14,36 +14,45 @@
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" x:Name="TitleText" FontSize="{StaticResource XDictTextHeadline}"
                            FontWeight="SemiBold" AutomationProperties.AutomationId="ExploreTitle" />
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="{StaticResource XDictSpaceM}">
+                <Grid Grid.Row="1" ColumnSpacing="{StaticResource XDictSpaceM}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <StackPanel Spacing="{StaticResource XDictSpaceXs}">
                         <TextBlock x:Name="ScopeLabel" FontSize="{StaticResource XDictTextCallout}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <ComboBox x:Name="Scope" Width="{StaticResource XDictSizeFindWidth}"
+                        <ComboBox x:Name="Scope" HorizontalAlignment="Stretch"
                                   SelectionChanged="OnScopeChanged"
                                   AutomationProperties.AutomationId="ExploreScope" />
                     </StackPanel>
-                    <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                    <StackPanel Grid.Column="1" Spacing="{StaticResource XDictSpaceXs}">
                         <TextBlock x:Name="ModeLabel" FontSize="{StaticResource XDictTextCallout}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <ComboBox x:Name="Mode" Width="{StaticResource XDictSizeFindWidth}"
+                        <ComboBox x:Name="Mode" HorizontalAlignment="Stretch"
                                   SelectionChanged="OnModeChanged"
                                   AutomationProperties.AutomationId="ExploreMode" />
                     </StackPanel>
-                    <StackPanel x:Name="DistancePanel" Spacing="{StaticResource XDictSpaceXs}"
-                                Visibility="Collapsed">
+                    <StackPanel Grid.Column="2" x:Name="DistancePanel"
+                                Spacing="{StaticResource XDictSpaceXs}" Visibility="Collapsed">
                         <TextBlock x:Name="DistanceLabel" FontSize="{StaticResource XDictTextCallout}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <NumberBox x:Name="Distance" Minimum="1" Maximum="3" Value="1"
                                    Width="{StaticResource XDictSizeButtonMinWidth}"
                                    AutomationProperties.AutomationId="ExploreDistance" />
                     </StackPanel>
-                </StackPanel>
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
-                    <TextBox x:Name="Query" Width="{StaticResource XDictSizeReviewWidth}"
-                             KeyDown="OnQueryKeyDown"
+                </Grid>
+                <Grid Grid.Row="2" ColumnSpacing="{StaticResource XDictSpaceSm}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="Query" KeyDown="OnQueryKeyDown"
                              AutomationProperties.AutomationId="ExploreQuery" />
-                    <Button x:Name="RunButton" Click="OnRun" AutomationProperties.AutomationId="ExploreRun" />
-                </StackPanel>
+                    <Button x:Name="RunButton" Grid.Column="1" Click="OnRun"
+                            AutomationProperties.AutomationId="ExploreRun" />
+                </Grid>
                 <ListView Grid.Row="3" x:Name="Results" SelectionChanged="OnSelectionChanged"
                           AutomationProperties.AutomationId="ExploreResults" />
                 <StackPanel Grid.Row="4" Spacing="{StaticResource XDictSpaceXs}">
