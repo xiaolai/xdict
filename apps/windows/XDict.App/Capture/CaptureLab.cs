@@ -64,6 +64,21 @@ internal static class CaptureLab
         string libraryPath = root.GetProperty("library").GetString()!;
         string textFile = root.GetProperty("text").GetString()!;
         Environment.SetEnvironmentVariable("XDICT_CAPTURE_SETTINGS", settingsPath);
+        if (mode is "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
+        {
+            new CaptureSettings
+            {
+                Modifiers = 0x0006,
+                Key = 0x44,
+                Hover = new HoverPolicy
+                {
+                    Enabled = true,
+                    Modifier = HoverModifier.Control,
+                    Gesture = mode == "hover-double" ? HoverGesture.DoubleTap : HoverGesture.Hold,
+                    SettleMs = 300,
+                },
+            }.Save(settingsPath);
+        }
 
         var report = new Dictionary<string, object?>();
         string log = output + ".log";
@@ -86,10 +101,10 @@ internal static class CaptureLab
         try
         {
         await Mark("target mode " + mode);
-        if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated")
+        if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
         {
             bool elevated = mode == "elevated";
-            bool notepad = mode is "notepad" or "elevated";
+            bool notepad = mode is "notepad" or "elevated" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip";
             bool word = mode == "word";
             // A Word the harness opened through COM is used as it is; starting WINWORD.EXE shows the Start screen.
             if (mode == "pdf") pdfServer = new PdfServer(textFile);
@@ -124,7 +139,7 @@ internal static class CaptureLab
                 return;
             }
             await Task.Delay(400);
-            if (mode is "notepad" or "word" or "pdf")
+            if (mode is "notepad" or "word" or "pdf" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
             {
                 if (mode == "word")
                 {
@@ -150,6 +165,152 @@ internal static class CaptureLab
             else if (mode is "main" or "relaunch" or "suspended") ClickCenter(targetWindow);
             await Mark("selection made");
             report["foregroundBefore"] = Win32.GetForegroundWindow().ToInt64();
+        }
+
+        if (mode is "hover" or "hover-double" or "hover-elevated")
+        {
+            report["hoverRunning"] = controller.HoverRunning;
+            report["hoverStartFailed"] = controller.HoverStartFailed;
+            report["hoverModifier"] = controller.Hover.Modifier.ToString();
+            report["hoverGesture"] = controller.Hover.Gesture.ToString();
+            report["hoverSettle"] = controller.Hover.SettleMs;
+            var word = OnSta(() => WordRectByUia(targetWindow, 1));
+            report["hoverWord"] = word.Text;
+            if (word.Rect is { } box)
+            {
+                int x = (int)(box.X + box.Width / 2), y = (int)(box.Y + box.Height / 2);
+                report["hoverPoint"] = new[] { x, y };
+                Win32.SetCursorPos(x - 3, y);
+                await Task.Delay(100);
+                Win32.SetCursorPos(x, y);
+                await Task.Delay(150);
+                Win32.GetCursorPos(out Win32.POINT cursor);
+                report["hoverCursor"] = new[] { cursor.X, cursor.Y };
+                IntPtr hit = Win32.WindowFromPoint(new Win32.POINT { X = x, Y = y });
+                Win32.GetWindowThreadProcessId(hit, out uint hitPid);
+                report["hoverWindow"] = hit.ToInt64();
+                report["hoverWindowPid"] = hitPid;
+                report["hoverWindowRoot"] = Win32.GetAncestor(hit, Win32.GA_ROOT).ToInt64();
+                long started = Environment.TickCount64;
+                if (mode == "hover-double")
+                {
+                    Key(0x11);
+                    Thread.Sleep(80);
+                    Key(0x11);
+                }
+                else
+                {
+                    Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero); // Ctrl down
+                }
+                long deadline = Environment.TickCount64 + 6000;
+                while (controller.Panel is not { Shown: true } && Environment.TickCount64 < deadline)
+                    await Task.Delay(10);
+                report["hoverPanelMs"] = controller.Panel is { Shown: true } ? Environment.TickCount64 - started : -1;
+                report["hoverShown"] = controller.Panel is { Shown: true };
+                report["hoverTerm"] = controller.Panel?.Term;
+                report["hoverRefusal"] = controller.LastRefusal;
+                report["hoverFailure"] = controller.LastFailure;
+                report["hoverNotice"] = controller.HoverNotice;
+                report["hoverHookMicroseconds"] = controller.HoverHookMicroseconds;
+            report["hoverLastOutcome"] = controller.HoverLastOutcome;
+            report["hoverLastReadMs"] = controller.HoverLastReadMs;
+            report["hoverReadsStarted"] = controller.HoverReadsStarted;
+            report["hoverWordsFound"] = controller.HoverWordsFound;
+            report["hoverEventsSeen"] = controller.HoverEventsSeen;
+            report["hoverModifierDowns"] = controller.HoverModifierDowns;
+            report["hoverLastEvent"] = controller.HoverLastEvent;
+            report["hoverArmed"] = controller.HoverArmed;
+            report["hoverModifierHeld"] = controller.HoverModifierHeld;
+                long ack = Environment.TickCount64 + 5000;
+                while (controller.Panel is { Shown: true } && controller.LastAcknowledgement is null &&
+                       Environment.TickCount64 < ack) await Task.Delay(20);
+                report["hoverAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+                report["hoverFocusUnchanged"] = controller.LastFocusUnchanged;
+                if (mode != "hover-double") Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+                Key(0x1B);
+                await Task.Delay(400);
+                report["hoverDismissedByEscape"] = controller.Panel is not { Shown: true };
+                // Without the key, the same rest asks nothing.
+                Win32.SetCursorPos(x - 40, y);
+                await Task.Delay(100);
+                Win32.SetCursorPos(x, y);
+                await Task.Delay(1300);
+                report["hoverPanelWithoutKey"] = controller.Panel is { Shown: true };
+                // Idle cost with the hooks installed and no input: the watcher's timer and the hooks' own wake-ups.
+                Process self = Process.GetCurrentProcess();
+                TimeSpan cpuBefore = self.TotalProcessorTime;
+                long wallBefore = Environment.TickCount64;
+                await Task.Delay(3000);
+                double wall = Math.Max(1, Environment.TickCount64 - wallBefore);
+                double cpu = (self.TotalProcessorTime - cpuBefore).TotalMilliseconds / wall /
+                    Environment.ProcessorCount * 100;
+                report["hoverIdleCpuPercent"] = Math.Round(cpu, 3);
+            }
+        }
+
+        if (mode is "hover-own" or "hover-own-skip")
+        {
+#if DEBUG
+            if (mode == "hover-own-skip") Environment.SetEnvironmentVariable("XDICT_HOVER_SKIP_OWN", "1");
+#endif
+            report["ownRunning"] = controller.HoverRunning;
+            report["ownStartFailed"] = controller.HoverStartFailed;
+            _ = controller.AskAsync(CaptureTrigger.Selection);
+            long until = Environment.TickCount64 + 6000;
+            while (controller.Panel is not { Shown: true } && Environment.TickCount64 < until)
+                await Task.Delay(20);
+            report["ownPanel"] = controller.Panel is { Shown: true };
+            report["ownSelectionTerm"] = controller.Panel?.Term;
+            var gamma = OnSta(() => FindWordRectByUia(targetWindow, "gamma"));
+            report["ownPlannedWord"] = gamma.Text;
+            if (gamma.Rect is { } rect && controller.Panel is { Shown: true })
+            {
+                // Put the panel's term over `gamma`, so the word behind it differs from the panel's own word.
+                controller.Panel.ShowAt(new SelectionBox((int)rect.X, (int)(rect.Y - 43), 1, 1));
+                await Task.Delay(300);
+                System.Windows.Rect? term = OnSta(PanelTermRect);
+                report["ownTermRect"] = term is { } t0 ? new[] { (int)t0.X, (int)t0.Y, (int)t0.Width, (int)t0.Height } : null;
+                if (term is { } box)
+                {
+                    // The title line sits at the top of its block; the block's centre can be over the entry below it.
+                    int x = (int)box.X + 24, y = (int)box.Y + 22;
+                    report["ownPoint"] = new[] { x, y };
+                    report["ownBehindWord"] = OnSta(() => WordAtPoint(targetWindow, x, y));
+                    int before = controller.LastAcknowledgement?.Request ?? 0;
+                    Win32.SetCursorPos(x, y);
+                    await Task.Delay(150);
+                    Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
+                    until = Environment.TickCount64 + 6000;
+                    while ((controller.LastAcknowledgement?.Request ?? before) <= before &&
+                           Environment.TickCount64 < until) await Task.Delay(20);
+                    report["ownHoverTerm"] = controller.Panel?.Term;
+                    report["ownHoverRequest"] = controller.LastAcknowledgement?.Request;
+                    report["ownHoverAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+                    report["ownLastOutcome"] = controller.HoverLastOutcome;
+                    report["ownReadMs"] = controller.HoverLastReadMs;
+                    report["ownModifierDowns"] = controller.HoverModifierDowns;
+                    report["ownEventsSeen"] = controller.HoverEventsSeen;
+                    report["ownLastEvent"] = controller.HoverLastEvent;
+                    report["ownArmed"] = controller.HoverArmed;
+                    report["ownModifierHeld"] = controller.HoverModifierHeld;
+                    report["ownLastStillMs"] = controller.HoverLastStillMs;
+                    report["ownLastSettleMs"] = controller.HoverLastSettleMs;
+                    report["ownSettleChecks"] = controller.HoverSettleChecks;
+                    report["ownReading"] = controller.HoverReading;
+                    report["ownEnabled"] = controller.HoverEnabledNow;
+                    report["ownReadsStarted"] = controller.HoverReadsStarted;
+                    report["ownLastEventDelayMs"] = controller.HoverLastEventDelayMs;
+                    report["ownLastTerm"] = controller.HoverLastWord?.Term;
+                    report["ownLastAcquisition"] = controller.HoverLastWord?.Acquisition;
+                    report["ownLastSource"] = controller.HoverLastWord?.SourceName;
+                    report["ownLastPid"] = controller.HoverLastWord?.SourceId;
+                    report["ownLastSentence"] = controller.HoverLastWord?.Sentence;
+                    report["ownLastBox"] = controller.HoverLastWord?.Box;
+                    Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+                    Key(0x1B);
+                    await Task.Delay(300);
+                }
+            }
         }
 
         if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated")
@@ -386,6 +547,76 @@ internal static class CaptureLab
         return (selection.Length == 0 ? "<none>" : "<" + selection[0].GetText(-1) + ">") + " [" + detail + "]";
     }
 
+    /// <summary>The word at `index` and its first bounding rectangle, selected so a UIA reader could read it too.</summary>
+    private static (string Text, System.Windows.Rect? Rect) WordRectByUia(IntPtr window, int index)
+    {
+        var document = TextDocument(window);
+        if (document is null) return ("<no document>", null);
+        if (!document.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
+            return ("<no text pattern>", null);
+        var text = (System.Windows.Automation.TextPattern)raw;
+        System.Windows.Automation.Text.TextPatternRange word = text.DocumentRange.Clone();
+        word.MoveEndpointByRange(System.Windows.Automation.Text.TextPatternRangeEndpoint.End,
+            text.DocumentRange, System.Windows.Automation.Text.TextPatternRangeEndpoint.Start);
+        word.Move(System.Windows.Automation.Text.TextUnit.Word, index);
+        word.ExpandToEnclosingUnit(System.Windows.Automation.Text.TextUnit.Word);
+        for (int i = 0; i < 4 && word.GetText(-1).EndsWith(' '); i++)
+            word.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.End,
+                System.Windows.Automation.Text.TextUnit.Character, -1);
+        word.Select();
+        System.Windows.Rect[] boxes = word.GetBoundingRectangles();
+        return (word.GetText(-1), boxes.Length > 0 ? boxes[0] : null);
+    }
+
+    /// <summary>The first range whose word is `wanted`, scanned in document order; the word's index in a document with
+    /// blank lines is not a number a test can rely on.</summary>
+    private static (string Text, System.Windows.Rect? Rect) FindWordRectByUia(IntPtr window, string wanted)
+    {
+        for (int index = 0; index < 64; index++)
+        {
+            var found = WordRectByUia(window, index);
+            if (found.Text.Trim() == wanted) return found;
+        }
+        return (wanted, null);
+    }
+
+    /// <summary>The panel's own term rectangle, found through UI Automation as a reader's assistive technology would.</summary>
+    private static System.Windows.Rect? PanelTermRect()
+    {
+        uint self = (uint)Environment.ProcessId;
+        foreach (System.Windows.Automation.AutomationElement window in
+                 System.Windows.Automation.AutomationElement.RootElement.FindAll(
+                     System.Windows.Automation.TreeScope.Children,
+                     System.Windows.Automation.Condition.TrueCondition))
+        {
+            if (window.Current.ProcessId != self) continue;
+            var condition = new System.Windows.Automation.PropertyCondition(
+                System.Windows.Automation.AutomationElement.AutomationIdProperty, "CaptureTerm");
+            System.Windows.Automation.AutomationElement? term = window.FindFirst(
+                System.Windows.Automation.TreeScope.Descendants, condition);
+            if (term is not null && !term.Current.IsOffscreen) return term.Current.BoundingRectangle;
+        }
+        return null;
+    }
+
+    /// <summary>The word a document's own TextPattern range holds at a screen point, whatever window covers it.</summary>
+    private static string WordAtPoint(IntPtr window, int x, int y)
+    {
+        var document = TextDocument(window);
+        if (document is null) return "<no document>";
+        if (!document.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
+            return "<no text pattern>";
+        var text = (System.Windows.Automation.TextPattern)raw;
+        try
+        {
+            System.Windows.Automation.Text.TextPatternRange word =
+                text.RangeFromPoint(new System.Windows.Point(x, y));
+            word.ExpandToEnclosingUnit(System.Windows.Automation.Text.TextUnit.Word);
+            return word.GetText(-1).Trim();
+        }
+        catch (Exception error) { return "<" + error.GetType().Name + ">"; }
+    }
+
     /// <summary>The first elements of a window's tree, names and control types: what a dialog is made of.</summary>
     private static string DescribeTree(IntPtr window)
     {
@@ -506,8 +737,7 @@ internal static class CaptureLab
                 if (document is null) return (false, false, 0.0, 0.0);
                 System.Windows.Rect rect = document.Current.BoundingRectangle;
                 try { document.SetFocus(); } catch (Exception) { }
-                bool onDocument = System.Windows.Automation.AutomationElement.FocusedElement?.Current.ControlType ==
-                    System.Windows.Automation.ControlType.Document;
+                bool onDocument = FocusedIsDocument();
                 return (!rect.IsEmpty, onDocument, rect.X + rect.Width / 2, rect.Y + Math.Min(rect.Height / 2, 200));
             });
             if (found && x > 0 && y > 0)
@@ -518,21 +748,37 @@ internal static class CaptureLab
                 Win32.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
                 Thread.Sleep(250);
             }
-            bool nowFocused = OnSta(() =>
-                System.Windows.Automation.AutomationElement.FocusedElement?.Current.ControlType ==
-                System.Windows.Automation.ControlType.Document);
+            bool nowFocused = OnSta(FocusedIsDocument);
             if (nowFocused) return;
             Thread.Sleep(200);
         }
     }
 
+    /// <summary>Whether the focused element is a document; a focus that vanished between reads is not one.</summary>
+    private static bool FocusedIsDocument()
+    {
+        try
+        {
+            return System.Windows.Automation.AutomationElement.FocusedElement?.Current.ControlType ==
+                System.Windows.Automation.ControlType.Document;
+        }
+        catch (Exception) { return false; }
+    }
+
     private static T OnSta<T>(Func<T> work)
     {
         T result = default!;
-        var thread = new Thread(() => result = work());
+        Exception? failure = null;
+        // A UIA call that throws must reach the awaiting lab as a report, never kill the process from this thread.
+        var thread = new Thread(() =>
+        {
+            try { result = work(); }
+            catch (Exception error) { failure = error; }
+        });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         thread.Join(2500);
+        if (failure is not null) throw new InvalidOperationException("the UI Automation read failed: " + failure.Message, failure);
         return result;
     }
 

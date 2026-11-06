@@ -190,7 +190,7 @@ function Get-XDictConformanceExe {
 # The Windows E2E stages whose passing evidence a release requires; e2e.ps1 and release.ps1 read this one list.
 function Get-XDictE2EStageNames {
     return @('build', 'unit', 'contract', 'ipc', 'capture', 'library', 'launch', 'lookup', 'scope', 'trail',
-        'find', 'tabs', 'all', 'explore', 'sound', 'sound-links', 'review', 'selection', 'setup', 'setup-225')
+        'find', 'tabs', 'all', 'explore', 'hover', 'sound', 'sound-links', 'review', 'selection', 'setup', 'setup-225')
 }
 
 function Get-XDictBuildInputs {
