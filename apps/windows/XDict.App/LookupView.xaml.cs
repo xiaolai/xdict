@@ -1,7 +1,8 @@
-// Lookup: the capture shortcut and its rebinding. The tray's own items and hover are the shell's; the shortcut is the
-// one setting this pane owns.
+// Lookup: the capture shortcut and hover. The reader's both ways of asking live in one pane (plan-windows-parity
+// WS-P8): the chord that reads a selection, and the key, gesture, rest and excluded apps hover reads with.
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using XDict.Models;
@@ -13,6 +14,8 @@ namespace XDict.App;
 public sealed partial class LookupView : UserControl
 {
     private readonly Capture.CaptureController? capture;
+    private readonly List<string> excluded = [];
+    private bool loadingHover = true;
     private uint proposedModifiers;
     private uint proposedKey;
 
@@ -24,12 +27,140 @@ public sealed partial class LookupView : UserControl
         HotkeyLabel.Text = Strings.Get("settings.hotkey");
         ChangeHotkeyButton.Content = Strings.Get("settings.changeHotkey");
         ShowHotkey();
+        HoverHeading.Text = Strings.Get("hover.title");
+        HoverToggle.Header = Strings.Get("hover.enabled");
+        HoverToggle.OnContent = "";
+        HoverToggle.OffContent = "";
+        AutomationProperties.SetName(HoverToggle, Strings.Get("hover.enabled"));
+        HoverDescription.Text = Strings.Get("hover.enabled.description");
+        HoverKeyBox.Header = Strings.Get("hover.key");
+        HoverGestureBox.Header = Strings.Get("hover.gesture");
+        HoverSettleBox.Header = Strings.Get("hover.settle");
+        HoverExcludedLabel.Text = Strings.Get("hover.excluded");
+        HoverExcludedDescription.Text = Strings.Get("hover.excluded.description");
+        HoverAddButton.Content = Strings.Get("hover.addApp");
+        HoverKeyBox.ItemsSource = new[]
+        {
+            Strings.Get("hover.key.control"), Strings.Get("hover.key.shift"),
+            Strings.Get("hover.key.alt"), Strings.Get("hover.key.windows"),
+        };
+        HoverGestureBox.ItemsSource = new[]
+        {
+            Strings.Get("hover.gesture.hold"), Strings.Get("hover.gesture.doubleTap"),
+        };
+        HoverSettleBox.ItemsSource = HoverPolicy.SettleChoices
+            .Select(rest => Strings.Format("hover.settleMs", rest)).ToArray();
+        LoadHover();
+        loadingHover = false;
     }
 
     private void ShowHotkey()
     {
         CaptureSettings chord = capture?.Settings ?? CaptureSettings.Load();
         HotkeyText.Text = CaptureSettings.Describe(chord.Modifiers, chord.Key);
+    }
+
+    private void LoadHover()
+    {
+        HoverPolicy policy = capture?.Hover ?? new HoverPolicy();
+        HoverToggle.IsOn = policy.Enabled;
+        HoverKeyBox.SelectedIndex = (int)policy.Modifier;
+        HoverGestureBox.SelectedIndex = (int)policy.Gesture;
+        int rest = Array.IndexOf(HoverPolicy.SettleChoices, policy.SettleMs);
+        HoverSettleBox.SelectedIndex = rest >= 0 ? rest : Array.IndexOf(HoverPolicy.SettleChoices,
+            HoverPolicy.DefaultSettleMs);
+        excluded.Clear();
+        excluded.AddRange(policy.ExcludedApps);
+        RenderExcluded();
+        ShowHoverState();
+    }
+
+    private void ShowHoverState()
+    {
+        if (capture is null)
+        {
+            HoverStatus.Text = Strings.Get("settings.unavailable");
+            return;
+        }
+        if (capture.HoverStartFailed)
+        {
+            HoverStatus.Text = Strings.Get("hover.unavailable");
+            return;
+        }
+        HoverStatus.Text = capture.HoverNotice switch
+        {
+            "elevated" => Strings.Get("capture.elevated"),
+            "ocrUnavailable" => Strings.Get("hover.ocrUnavailable"),
+            _ => "",
+        };
+    }
+
+    /// <summary>Every change saves and restarts the watcher; the choice is the reader's next rest.</summary>
+    private void OnHoverToggle(object sender, RoutedEventArgs e) => SaveHover();
+
+    private void OnHoverChoice(object sender, SelectionChangedEventArgs e) => SaveHover();
+
+    private void SaveHover()
+    {
+        if (loadingHover || capture is null) return;
+        var policy = new HoverPolicy
+        {
+            Enabled = HoverToggle.IsOn,
+            Modifier = (HoverModifier)Math.Clamp(HoverKeyBox.SelectedIndex, 0, 3),
+            Gesture = (HoverGesture)Math.Clamp(HoverGestureBox.SelectedIndex, 0, 1),
+            SettleMs = HoverPolicy.SettleChoices[Math.Clamp(HoverSettleBox.SelectedIndex, 0,
+                HoverPolicy.SettleChoices.Length - 1)],
+            ExcludedApps = excluded.ToArray(),
+        };
+        capture.SetHover(policy);
+        ShowHoverState();
+    }
+
+    private void RenderExcluded()
+    {
+        HoverExcludedPanel.Children.Clear();
+        foreach (string app in excluded.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Tokens.Space.Xs };
+            row.Children.Add(new TextBlock { Text = app, VerticalAlignment = VerticalAlignment.Center });
+            var remove = new Button { Content = Strings.Get("hover.remove"), Tag = app };
+            remove.Click += OnRemoveHoverApp;
+            row.Children.Add(remove);
+            HoverExcludedPanel.Children.Add(row);
+        }
+    }
+
+    private async void OnAddHoverApp(object sender, RoutedEventArgs e)
+    {
+        if (capture is null) return;
+        var field = new TextBox { PlaceholderText = Strings.Get("hover.appPlaceholder") };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = Strings.Get("hover.addApp"),
+            Content = field,
+            PrimaryButtonText = Strings.Get("settings.keep"),
+            CloseButtonText = Strings.Get("settings.close"),
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        string name = field.Text.Trim();
+        if (name.Length == 0 || name.IndexOfAny(['\\', '/', ':']) >= 0 || name.Length > 260)
+        {
+            HoverStatus.Text = Strings.Get("hover.appInvalid");
+            return;
+        }
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name += ".exe";
+        if (!excluded.Contains(name, StringComparer.OrdinalIgnoreCase)) excluded.Add(name);
+        RenderExcluded();
+        SaveHover();
+    }
+
+    private void OnRemoveHoverApp(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string app }) return;
+        excluded.RemoveAll(name => string.Equals(name, app, StringComparison.OrdinalIgnoreCase));
+        RenderExcluded();
+        SaveHover();
     }
 
     private async void OnChangeHotkey(object sender, RoutedEventArgs e)

@@ -14,6 +14,28 @@
                             AutomationProperties.AutomationId="SettingsChangeHotkey" />
                 </StackPanel>
             </StackPanel>
+            <StackPanel Spacing="{StaticResource XDictSpaceXs}">
+                <TextBlock x:Name="HoverHeading" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <ToggleSwitch x:Name="HoverToggle" Toggled="OnHoverToggle"
+                              AutomationProperties.AutomationId="SettingsHoverEnabled" />
+                <TextBlock x:Name="HoverDescription" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ComboBox x:Name="HoverKeyBox" SelectionChanged="OnHoverChoice"
+                          AutomationProperties.AutomationId="SettingsHoverKey" />
+                <ComboBox x:Name="HoverGestureBox" SelectionChanged="OnHoverChoice"
+                          AutomationProperties.AutomationId="SettingsHoverGesture" />
+                <ComboBox x:Name="HoverSettleBox" SelectionChanged="OnHoverChoice"
+                          AutomationProperties.AutomationId="SettingsHoverSettle" />
+                <TextBlock x:Name="HoverExcludedLabel" />
+                <TextBlock x:Name="HoverExcludedDescription" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <StackPanel x:Name="HoverExcludedPanel" Spacing="{StaticResource XDictSpaceXs}" />
+                <Button x:Name="HoverAddButton" Click="OnAddHoverApp"
+                        AutomationProperties.AutomationId="SettingsHoverAddApp" />
+                <TextBlock x:Name="HoverStatus" FontSize="{StaticResource XDictTextCallout}"
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SettingsHoverStatus" />
+            </StackPanel>
             <TextBlock x:Name="Status" FontSize="{StaticResource XDictTextCallout}"
                        Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
                        AutomationProperties.AutomationId="SettingsLookupStatus" />
