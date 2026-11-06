@@ -24,6 +24,19 @@ dotnet publish (Join-Path $layout.AppRoot 'XDict.App\XDict.App.csproj') -c Relea
     -p:WindowsAppSDKSelfContained=true -o $fullOut
 if ($LASTEXITCODE -ne 0) { throw 'the release publish failed' }
 
+# WinUI's XAML compiler writes the compiled XAML (.xbf) and the app's resource index (XDict.pri) beside the build
+# output, but this SDK's `dotnet publish` does not copy them. A bundle without them installs and then dies at
+# MainWindow's XAML parse (0xC000027B; observed 0.4.0, 2026-11-06). Copy them from the build the publish just ran and
+# refuse a bundle that still lacks them, rather than ship one that cannot start.
+$buildOutput = Get-XDictAppOutput -Configuration Release
+Copy-Item -Path (Join-Path $buildOutput '*.xbf') -Destination $fullOut -Force
+Copy-Item -LiteralPath (Join-Path $buildOutput 'XDict.pri') -Destination $fullOut -Force
+foreach ($required in @('App.xbf', 'MainWindow.xbf', 'XDict.pri')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $fullOut $required))) {
+        throw "the release bundle lacks ${required}: the XAML compiler's output did not reach the publish"
+    }
+}
+
 $service = Join-Path $layout.AppRoot 'service\target\release\xdict-service.exe'
 if (-not (Test-Path -LiteralPath $service)) { throw "the release service is not built: $service" }
 Copy-Item -LiteralPath $service -Destination (Join-Path $fullOut 'XDictService.exe') -Force
