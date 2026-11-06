@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ScrollViewer>
-        <StackPanel Padding="{StaticResource XDictSpaceXxl}" Spacing="{StaticResource XDictSpaceXxl}">
+        <StackPanel Padding="{StaticResource XDictSpaceXxlThickness}" Spacing="{StaticResource XDictSpaceXxl}">
             <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
             <StackPanel Spacing="{StaticResource XDictSpaceXs}">
                 <TextBlock x:Name="SourceLabel" FontSize="{StaticResource XDictTextBody}" />

@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid x:Name="Root" IsTabStop="True" KeyDown="OnKeyDown"
           Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Border Padding="{StaticResource XDictSpaceXxl}">
+        <Border Padding="{StaticResource XDictSpaceXxlThickness}">
             <Grid RowSpacing="{StaticResource XDictSpaceL}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -25,8 +25,8 @@
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="{StaticResource XDictSpaceM}">
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                CornerRadius="{StaticResource XDictRadiusL}"
-                                Padding="{StaticResource XDictSpaceL}">
+                                CornerRadius="{StaticResource XDictRadiusLCorner}"
+                                Padding="{StaticResource XDictSpaceLThickness}">
                             <StackPanel Spacing="{StaticResource XDictSpaceSm}">
                                 <TextBlock x:Name="WordText" FontSize="{StaticResource XDictTextCardWord}"
                                            FontWeight="SemiBold" TextWrapping="Wrap"

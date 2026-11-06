@@ -26,7 +26,7 @@
         <ListView x:Name="Dictionaries" Grid.Row="1" Margin="12,0" SelectionMode="Single"
                   AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop" />
         <StackPanel Grid.Row="2" Spacing="{StaticResource XDictSpaceXs}"
-                    Padding="{StaticResource XDictSpaceM}">
+                    Padding="{StaticResource XDictSpaceMThickness}">
             <StackPanel Orientation="Horizontal" Spacing="{StaticResource XDictSpaceSm}">
                 <TextBlock x:Name="WordPackLabel" VerticalAlignment="Center"
                            FontSize="{StaticResource XDictTextCallout}"

@@ -39,14 +39,15 @@
                 </Grid.RowDefinitions>
                 <StackPanel x:Name="FindBar" Orientation="Horizontal" Visibility="Collapsed"
                             Spacing="{StaticResource XDictSpaceSm}"
-                            Padding="{StaticResource XDictSpaceM}">
-                    <TextBox x:Name="FindBox" Width="{StaticResource XDictSizeFind}"
+                            Padding="{StaticResource XDictSpaceMThickness}">
+                    <TextBox x:Name="FindBox" Width="{StaticResource XDictSizeFindWidth}"
                              TextChanged="OnFindTextChanged" KeyDown="OnFindKeyDown" />
                     <Button x:Name="FindPrevious" Click="OnFindPrevious" />
                     <Button x:Name="FindNext" Click="OnFindNext" />
                     <Button x:Name="FindClose" Click="OnFindClose" />
                 </StackPanel>
                 <TabView x:Name="Tabs" Grid.Row="1" IsAddTabButtonVisible="False"
+                         AutomationProperties.AutomationId="Tabs"
                          TabWidthMode="SizeToContent"
                          SelectionChanged="OnTabSelectionChanged"
                          TabCloseRequested="OnTabCloseRequested" />

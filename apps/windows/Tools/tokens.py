@@ -148,6 +148,12 @@ def generate(raw, groups, tokens):
                 value = fields["value"]
                 rendered = str(int(value)) if isinstance(value, int) else repr(float(value))
                 xaml.append(f'    <x:Double x:Key="{key}">{rendered}</x:Double>')
+                # A padding or a radius is a Thickness/CornerRadius, not a Double: the XAML resource must carry the
+                # type the control assigns, or the page parses and the window fails at load.
+                if group == "space":
+                    xaml.append(f'    <Thickness x:Key="{key}Thickness">{rendered}</Thickness>')
+                if group == "radius":
+                    xaml.append(f'    <CornerRadius x:Key="{key}Corner">{rendered}</CornerRadius>')
     xaml.append("</ResourceDictionary>")
     return ("\n".join(cs) + "\n").encode("utf-8"), ("\n".join(xaml) + "\n").encode("utf-8")
 

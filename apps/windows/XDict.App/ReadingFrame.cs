@@ -64,6 +64,9 @@ internal static class ReadingFrame
         var substitutions = new Dictionary<string, string>
         {
             ["theme"] = preferences.Theme, ["face"] = "windows", ["hue"] = "blue", ["density"] = "main",
+            // The Windows shell has no prose-measure setting yet: the main column is full width, as it was before
+            // the shared frame gained the parameter.
+            ["measure"] = "full",
             ["sheet-tokens"] = JsonSerializer.Serialize(tokens),
             ["sheet-column"] = JsonSerializer.Serialize(preferences.OriginalStyle ? "html{padding:var(--xdict-pad-block) var(--xdict-pad-inline)!important}body{contain:layout;overflow-wrap:break-word}" : Css("column.css")),
             ["sheet-type"] = JsonSerializer.Serialize(preferences.OriginalStyle ? Css("original-phon.css") : Css("type.css") + Css("controls.css") + Css("marks.css") + Css("reading-labels.css")),
