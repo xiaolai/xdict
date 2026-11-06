@@ -62,10 +62,16 @@ internal sealed class AppContainer : IDisposable
             lock (SetupGate)
             {
                 FileSecurity acl = file.GetAccessControl();
-                bool granted = acl.GetAccessRules(true, true, typeof(SecurityIdentifier)).OfType<FileSystemAccessRule>()
-                    .Any(rule => rule.IdentityReference.Equals(principal) && rule.AccessControlType == AccessControlType.Allow &&
-                        (rule.FileSystemRights & FileSystemRights.ReadAndExecute) == FileSystemRights.ReadAndExecute);
-                if (!granted)
+                FileSystemAccessRule[] rules = acl.GetAccessRules(true, true, typeof(SecurityIdentifier))
+                    .OfType<FileSystemAccessRule>().ToArray();
+                bool granted = rules.Any(rule => Allows(rule, principal));
+                // A Program Files install inherits read-and-execute for ALL APPLICATION PACKAGES (S-1-15-2-1), which
+                // is all the capability-free service needs. A standard user launching the installed app cannot add
+                // the specific SID to that ACL; the failed write used to abort the spawn and surface as "closed"
+                // (observed on an installed 0.4.0, 2026-11-06). Grant the specific SID only where the file is not
+                // already package-executable.
+                bool packageExecutable = rules.Any(rule => Allows(rule, new SecurityIdentifier("S-1-15-2-1")));
+                if (!granted && !packageExecutable)
                 {
                     acl.AddAccessRule(new FileSystemAccessRule(principal, FileSystemRights.ReadAndExecute, AccessControlType.Allow));
                     file.SetAccessControl(acl);
@@ -78,6 +84,10 @@ internal sealed class AppContainer : IDisposable
     }
 
     public static int CapabilitiesSize => Marshal.SizeOf<SecurityCapabilities>();
+
+    private static bool Allows(FileSystemAccessRule rule, SecurityIdentifier identity) =>
+        rule.IdentityReference.Equals(identity) && rule.AccessControlType == AccessControlType.Allow &&
+        (rule.FileSystemRights & FileSystemRights.ReadAndExecute) == FileSystemRights.ReadAndExecute;
 
     private static string FolderFor(IntPtr sid)
     {
