@@ -21,6 +21,10 @@ public sealed partial class CapturePanel : Window
 
     public IntPtr Handle { get; }
 
+    /// <summary>Whether the panel installs its own low-level hooks for Escape and a click away. Hover replaces them
+    /// with its hook thread's: a hook callback on the busy UI thread delays every low-level hook behind it.</summary>
+    public bool UseOwnHooks { get; set; } = true;
+
     /// <summary>The reader dismissed the panel: Escape, a click outside, or its Close button.</summary>
     public event Action? Dismissed;
 
@@ -66,7 +70,7 @@ public sealed partial class CapturePanel : Window
         if (box is { } measured) (x, y) = Place(measured);
         Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, Width, Height, Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
         Shown = true;
-        if (mouse == IntPtr.Zero)
+        if (UseOwnHooks && mouse == IntPtr.Zero)
             mouse = Win32.SetWindowsHookExW(Win32.WH_MOUSE_LL, mouseHook, Win32.GetModuleHandleW(null), 0);
     }
 

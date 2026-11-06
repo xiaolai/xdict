@@ -11,6 +11,8 @@ internal static partial class Win32
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_NOACTIVATE = 0x08000000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
+    public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const uint GA_ROOT = 2;
     public static readonly IntPtr HWND_MESSAGE = new(-3);
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public const uint SWP_NOACTIVATE = 0x0010;
@@ -45,6 +47,24 @@ internal static partial class Win32
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MONITORINFO { public uint cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam; public IntPtr lParam; public uint time; public POINT pt; public uint lPrivate; }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool PeekMessageW(out MSG message, IntPtr window, uint min, uint max, uint remove);
+
+    [DllImport("user32.dll")]
+    public static extern int GetMessageW(out MSG message, IntPtr window, uint min, uint max);
+
+    [DllImport("user32.dll")]
+    public static extern bool TranslateMessage(ref MSG message);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr DispatchMessageW(ref MSG message);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool PostThreadMessageW(uint threadId, uint message, IntPtr wParam, IntPtr lParam);
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
@@ -128,6 +148,49 @@ internal static partial class Win32
 
     [DllImport("user32.dll")]
     public static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDC(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern int ReleaseDC(IntPtr window, IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateCompatibleDC(IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int width, int height);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+
+    [DllImport("gdi32.dll")]
+    public static extern bool DeleteObject(IntPtr item);
+
+    [DllImport("gdi32.dll")]
+    public static extern bool DeleteDC(IntPtr dc);
+
+    public const uint PW_RENDERFULLCONTENT = 2;
+
+    /// <summary>Whether one of the chosen modifier's keys is down. Left and right are asked apart where the key has
+    /// two: `keys` holds both virtual-key codes.</summary>
+    public static bool Down(params int[] keys)
+    {
+        foreach (int key in keys) if ((GetAsyncKeyState(key) & 0x8000) != 0) return true;
+        return false;
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint key);

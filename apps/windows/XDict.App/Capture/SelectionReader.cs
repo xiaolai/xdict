@@ -28,6 +28,9 @@ public sealed class SelectionReader : IDisposable
     /// <summary>Two stuck calls refuse further reads: an abandoned call can leave the provider unable to answer.</summary>
     public const int StuckLimit = 2;
 
+    /// <summary>Whether this process runs elevated: only a lower process is denied a higher window's text.</summary>
+    private static readonly bool SelfElevated = Win32.IsElevated((uint)Environment.ProcessId);
+
     private readonly object gate = new();
     private Worker? worker;
     private int stuck;
@@ -77,7 +80,7 @@ public sealed class SelectionReader : IDisposable
             Win32.GetWindowThreadProcessId(window, out uint processId);
             string source = Win32.ProcessName(processId);
             // UIPI's dead zone: an elevated window's text is not readable from here, and saying so is the outcome.
-            if (processId != Environment.ProcessId && Win32.IsElevated(processId))
+            if (processId != Environment.ProcessId && Win32.IsElevated(processId) && !SelfElevated)
                 return SelectionRead.Failed("elevated", watch.ElapsedMilliseconds, source, processId);
             AutomationElement? focused = AutomationElement.FocusedElement;
             if (focused is null) return SelectionRead.Failed("noFocus", watch.ElapsedMilliseconds, source, processId);

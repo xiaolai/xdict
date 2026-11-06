@@ -3,6 +3,7 @@
 // the entry while the sentence stays in the one ephemeral session.
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using XDict.Client;
 using XDict.Models;
@@ -21,6 +22,7 @@ public sealed class CaptureController : IDisposable
     private readonly SelectionReader reader = new();
     private readonly Hotkey hotkey;
     private readonly TrayIcon tray;
+    private readonly DispatcherQueue? dispatcher;
     private CapturePanel? panel;
     private MeaningRequest? lastMeaning;
     private readonly PaneLease paneLease = new();
@@ -29,6 +31,9 @@ public sealed class CaptureController : IDisposable
     private Win32.HookProc? escapeHook;
     private IntPtr escape;
     private CaptureSettings settings = new();
+    private HoverWatcher? hover;
+    private bool hoverStartFailed;
+    private string? hoverNotice;
     private bool disposed;
 
     public CaptureController(ServiceClient client, LibraryStore store, SearchSession session, Action<string, double> openInApp)
@@ -38,6 +43,7 @@ public sealed class CaptureController : IDisposable
         this.session = session;
         readings = new ReadingRecorder(client);
         this.openInApp = openInApp;
+        dispatcher = DispatcherQueue.GetForCurrentThread();
         hotkey = new Hotkey(() => AskGuarded(CaptureTrigger.Selection));
         tray = new TrayIcon();
         tray.LookupRequested += () => AskGuarded(CaptureTrigger.Menu);
@@ -71,6 +77,27 @@ public sealed class CaptureController : IDisposable
     public CaptureSettings Settings => settings;
     public bool HotkeyRegistered => hotkey.Registered;
     public bool TrayVisible => tray.Visible;
+    public HoverPolicy Hover => settings.Hover;
+    public bool HoverRunning => hoverStartFailed ? false : hover is not null;
+    public bool HoverStartFailed => hoverStartFailed;
+    public long HoverHookMicroseconds => hover?.MaxHookMicroseconds ?? 0;
+    public string HoverLastOutcome => hover?.LastOutcome ?? "";
+    public long HoverLastReadMs => hover?.LastReadMs ?? 0;
+    public int HoverReadsStarted => hover?.ReadsStarted ?? 0;
+    public int HoverWordsFound => hover?.WordsFound ?? 0;
+    public int HoverEventsSeen => hover?.EventsSeen ?? 0;
+    public int HoverModifierDowns => hover?.ModifierDowns ?? 0;
+    public string HoverLastEvent => hover?.LastEvent ?? "";
+    public bool HoverArmed => hover?.ArmedNow ?? false;
+    public bool HoverModifierHeld => hover?.ModifierNow ?? false;
+    public HoverWord? HoverLastWord => hover?.LastWord;
+    public long HoverLastStillMs => hover?.LastStillMs ?? 0;
+    public int HoverLastSettleMs => hover?.LastSettleMs ?? 0;
+    public long HoverSettleChecks => hover?.SettleChecks ?? 0;
+    public bool HoverReading => hover?.ReadingNow ?? false;
+    public bool HoverEnabledNow => hover?.EnabledNow ?? false;
+    public long HoverLastEventDelayMs => hover?.LastEventDelayMs ?? 0;
+    public string? HoverNotice => hoverNotice;
     public CapturePanel? Panel => panel;
     public CaptureAcknowledgement? LastAcknowledgement { get; private set; }
 
@@ -92,6 +119,7 @@ public sealed class CaptureController : IDisposable
         settings = CaptureSettings.Load();
         bool registered = hotkey.Register(settings.Modifiers, settings.Key);
         tray.Show();
+        StartHover();
         return registered;
     }
 
@@ -101,6 +129,154 @@ public sealed class CaptureController : IDisposable
         settings = hotkey.Rebind(settings, modifiers, key);
         settings.Save();
         return settings;
+    }
+
+    /// <summary>The Lookup pane's hover choices: saved, and the watcher restarted so the next rest uses them.</summary>
+    public void SetHover(HoverPolicy policy)
+    {
+        settings = (settings with { Hover = policy.Validated() }).Validated();
+        settings.Save();
+        StartHover();
+    }
+
+    /// <summary>Starts or stops the watcher for the stored choice; a start Windows refused is remembered, not hidden.</summary>
+    private void StartHover()
+    {
+        hover?.Dispose();
+        hover = null;
+        hoverStartFailed = false;
+        hoverNotice = null;
+        if (!settings.Hover.Enabled) return;
+        var watcher = new HoverWatcher(() => settings.Hover, book,
+            (x, y) => book.Begin(CaptureTrigger.PointerGesture), PresentPointer, reason =>
+            {
+                hoverNotice = reason;
+            }, EscapeHover, HoverClick);
+        if (!watcher.Start())
+        {
+            watcher.Dispose();
+            hoverStartFailed = true;
+            return;
+        }
+        hover = watcher;
+        if (panel is not null) panel.UseOwnHooks = false;
+    }
+
+    /// <summary>Escape, seen by the watcher's own hook thread: dismiss what is up, or cancel the selection read. The
+    /// panel's own keyboard hook is not installed while hover runs: a low-level hook on the busy UI thread delays every
+    /// hook behind it, which is what made a hover read late (measured 2026-11-06).</summary>
+    private void EscapeHover()
+    {
+        if (dispatcher is null) return;
+        dispatcher.TryEnqueue(() =>
+        {
+            if (panel is { Shown: true })
+            {
+                panel.Dismiss();
+                return;
+            }
+            inFlight?.Cancel();
+            if (inFlightRequest is { } request) book.Cancel(request);
+        });
+    }
+
+    /// <summary>A click outside the panel dismisses it, from the watcher's hook thread; a click inside is the reader's
+    /// and is left alone.</summary>
+    private void HoverClick(int x, int y)
+    {
+        if (dispatcher is null) return;
+        dispatcher.TryEnqueue(() =>
+        {
+            if (panel is not { Shown: true }) return;
+            if (!Win32.GetWindowRect(panel.Handle, out Win32.RECT rect)) return;
+            if (x < rect.Left || x >= rect.Right || y < rect.Top || y >= rect.Bottom) panel.Dismiss();
+        });
+    }
+
+    /// <summary>The watcher's word, off its own thread: presentation belongs to the window's dispatcher.</summary>
+    private void PresentPointer(HoverWord word, CaptureRequest request, int x, int y)
+    {
+        if (dispatcher is null)
+        {
+            book.Cancel(request);
+            return;
+        }
+        dispatcher.TryEnqueue(() => PresentPointerGuarded(word, request, x, y));
+    }
+
+    private async void PresentPointerGuarded(HoverWord word, CaptureRequest request, int x, int y)
+    {
+        try { await PresentPointerAsync(word, request, x, y); }
+        catch (Exception error) { LastFailure = error.GetType().Name + ": " + error.Message; }
+    }
+
+    private Task PresentPointerAsync(HoverWord word, CaptureRequest request, int x, int y)
+    {
+        CaptureValue.Result result = BuildHover(word, x, y);
+        CapturedTerm? term = result.Valid ? CapturedTerm.From(result) : null;
+        if (term is null)
+        {
+            LastRefusal = "denied";
+            book.Cancel(request);
+            return Task.CompletedTask;
+        }
+        var sink = new PanelSink(delivery => PresentGuarded(delivery, new SelectionBox(x, y, 1, 1)));
+        // Present claims presentation for the hover's number, exactly as the shortcut's does; a shortcut that asked
+        // after this hover began already ended it, and Present refuses without showing anything.
+        book.Present(term, request, sink);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The validation input for a pointer read: the term the acquisition measured, its sentence where one was
+    /// measured, and the measured box or the pointer's click placement.</summary>
+    private static CaptureValue.Result BuildHover(HoverWord word, int x, int y)
+    {
+        JsonObject context;
+        if (word.Sentence.Length > 0 && word.TermStart >= 0 && word.TermLength > 0 &&
+            SentenceCut.Around(word.Sentence, word.TermStart, word.TermLength) is { } sentence)
+        {
+            var cut = new JsonArray();
+            if (sentence.CutStart) cut.Add("start");
+            if (sentence.CutEnd) cut.Add("end");
+            context = new JsonObject
+            {
+                ["kind"] = "available",
+                ["sentence"] = sentence.Text,
+                ["term"] = new JsonObject { ["start"] = sentence.TermStart, ["length"] = sentence.TermLength },
+                ["cut"] = cut,
+                ["gap"] = null,
+            };
+        }
+        else
+        {
+            context = new JsonObject { ["kind"] = "unavailable", ["reason"] = "notCaptured" };
+        }
+        JsonObject box = word.Box is { } measured
+            ? new JsonObject
+            {
+                ["kind"] = "measured",
+                ["quality"] = "containing",
+                ["rect"] = new JsonObject
+                {
+                    ["x"] = measured.X,
+                    ["y"] = measured.Y,
+                    ["width"] = measured.Width,
+                    ["height"] = measured.Height,
+                },
+            }
+            : new JsonObject { ["kind"] = "clickPlacement", ["point"] = new JsonObject { ["x"] = x, ["y"] = y } };
+        var input = new JsonObject
+        {
+            ["term"] = word.Term,
+            ["trigger"] = "pointerGesture",
+            ["acquisition"] = word.Acquisition,
+            ["confidence"] = word.Confidence,
+            ["source"] = new JsonObject { ["process"] = word.SourceName, ["pid"] = word.SourceId },
+            ["pointer"] = new JsonObject { ["x"] = x, ["y"] = y },
+            ["box"] = box,
+            ["context"] = context,
+        };
+        return CaptureValue.Make(input);
     }
 
     /// <summary>The tray menu's own route, for the lab: 1 is "look up the selection".</summary>
@@ -245,6 +421,9 @@ public sealed class CaptureController : IDisposable
             view.SetAskAvailable(false);
             view.SetContent(delivery.Term.Term, Strings.Format("capture.searching", delivery.Term.Term));
             contexts.Hold(delivery.Term, delivery.Request.Number, delivery.Generation);
+            // A hover's panel owns Escape just as the shortcut's does; when hover runs, its own hook thread sees
+            // Escape and clicks, and the UI thread's low-level hook is deliberately not installed.
+            InstallEscape();
             IntPtr before = Win32.GetForegroundWindow();
             view.ShowAt(box);
             IntPtr after = Win32.GetForegroundWindow();
@@ -367,6 +546,8 @@ public sealed class CaptureController : IDisposable
 
     private void OnEnded(CaptureAcknowledgement ending)
     {
+        // The hover watcher keeps its suppression only for a word that actually drew (or forgets one that did not).
+        hover?.Ended(ending);
         if (inFlightRequest is { } request && request.Number == ending.Request)
         {
             inFlight?.Cancel();
@@ -399,7 +580,7 @@ public sealed class CaptureController : IDisposable
     private CapturePanel EnsurePanel()
     {
         if (panel is not null) return panel;
-        panel = new CapturePanel();
+        panel = new CapturePanel { UseOwnHooks = hover is null };
         panel.Dismissed += OnDismissed;
         panel.OpenRequested += term => OpenGuarded(term);
         panel.AskRequested += () =>
@@ -436,6 +617,7 @@ public sealed class CaptureController : IDisposable
     /// <summary>Escape during a read cancels it; Escape with the panel up dismisses it. Installed at the gesture.</summary>
     private void InstallEscape()
     {
+        if (hover is not null) { RemoveEscape(); return; }
         if (escape != IntPtr.Zero) return;
         escapeHook = (code, wParam, lParam) =>
         {
@@ -489,6 +671,8 @@ public sealed class CaptureController : IDisposable
         inFlight?.Cancel();
         inFlight?.Dispose();
         paneLease.Reset();
+        hover?.Dispose();
+        hover = null;
         hotkey.Dispose();
         tray.Dispose();
         reader.Dispose();
