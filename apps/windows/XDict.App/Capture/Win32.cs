@@ -116,6 +116,64 @@ internal static partial class Win32
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool DestroyWindow(IntPtr hWnd);
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct WNDCLASSEX
+    {
+        public uint cbSize;
+        public uint style;
+        public WndProc lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+        public IntPtr hIconSm;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PAINTSTRUCT
+    {
+        public IntPtr hdc;
+        public bool fErase;
+        public RECT rcPaint;
+        public bool fRestore;
+        public bool fIncUpdate;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] rgbReserved;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern ushort RegisterClassExW(ref WNDCLASSEX windowClass);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr LoadCursorW(IntPtr instance, IntPtr name);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr BeginPaint(IntPtr hWnd, out PAINTSTRUCT paint);
+
+    [DllImport("user32.dll")]
+    public static extern bool EndPaint(IntPtr hWnd, ref PAINTSTRUCT paint);
+
+    [DllImport("user32.dll")]
+    public static extern void PostQuitMessage(int code);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool PostMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    public const int DWMWA_CLOAKED = 14;
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out int value, int size);
+
+    /// <summary>Whether DWM has cloaked the window: a suspended UWP app's, or a shell surface that is not shown.
+    /// Such a window reports IsWindowVisible true and can cover the screen while the reader sees nothing — ClickToDo's
+    /// full-screen island, cloaked and topmost, was the measured case (2026-11-06). A failed query (no DWM) is not
+    /// evidence of cloaking, so the window is read as before.</summary>
+    public static bool IsCloaked(IntPtr hWnd) =>
+        DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr DefWindowProcW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
@@ -251,6 +309,49 @@ internal static partial class Win32
 
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDesktopWindow();
+
+    public static readonly IntPtr DPI_AWARENESS_CONTEXT_UNAWARE = new(-1);
+    public static readonly IntPtr DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED = new(-5);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetWindowDpiAwarenessContext(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool AreDpiAwarenessContextsEqual(IntPtr first, IntPtr second);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+
+    /// <summary>The effective DPI of the monitor the window is on (96 where it cannot be read).</summary>
+    public static uint MonitorDpi(IntPtr window)
+    {
+        IntPtr monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero) return 96;
+        return GetDpiForMonitor(monitor, 0, out uint dpi, out _) == 0 && dpi > 0 ? dpi : 96;
+    }
+
+    /// <summary>Whether the window is the shell's desktop: the wallpaper and icons, not an app under the pointer.
+    /// Progman and its WorkerW sibling cover the whole screen, and their Accessibility name ("Program Manager") is
+    /// not a word a reader read — measured 2026-11-06, when an own-window miss fell through to it.</summary>
+    public static bool IsDesktop(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return false;
+        if (window == GetDesktopWindow()) return true;
+        var name = new char[64];
+        int length = GetClassNameW(window, name, name.Length);
+        if (length <= 0) return false;
+        string value = new string(name, 0, length);
+        return value == "Progman" || value == "WorkerW";
+    }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetClassNameW(IntPtr hWnd, [Out] char[] name, int size);

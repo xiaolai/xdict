@@ -83,6 +83,7 @@ public sealed class CaptureController : IDisposable
     public long HoverHookMicroseconds => hover?.MaxHookMicroseconds ?? 0;
     public string HoverLastOutcome => hover?.LastOutcome ?? "";
     public long HoverLastReadMs => hover?.LastReadMs ?? 0;
+    public string HoverLastDiagnostics => hover?.LastDiagnostics ?? "";
     public int HoverReadsStarted => hover?.ReadsStarted ?? 0;
     public int HoverWordsFound => hover?.WordsFound ?? 0;
     public int HoverEventsSeen => hover?.EventsSeen ?? 0;

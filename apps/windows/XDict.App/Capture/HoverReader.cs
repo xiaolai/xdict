@@ -57,6 +57,10 @@ public sealed class HoverReader : IDisposable
         Win32.EnumWindows((window, _) =>
         {
             if (!Win32.IsWindowVisible(window) || Win32.IsIconic(window)) return true;
+            // The desktop is not an app under the pointer; its Accessibility name is not a word.
+            if (Win32.IsDesktop(window)) return true;
+            // A cloaked window (a suspended UWP app, a shell overlay) is not on screen even though it says it is.
+            if (Win32.IsCloaked(window)) return true;
             long style = (long)Win32.GetWindowLongPtrW(window, Win32.GWL_EXSTYLE);
             if ((style & Win32.WS_EX_TRANSPARENT) != 0) return true;
             if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return true;
@@ -171,6 +175,12 @@ public sealed class HoverReader : IDisposable
     /// for on the element and then on its ancestors, and the range at the point is the word's own range.</summary>
     private static UiaAnswer ReadUia(IntPtr window, int x, int y, bool scoped)
     {
+#if DEBUG
+        // A provider that never answers, for the stalled-read pass: the read's deadline and abandonment are the
+        // production path under test, and the fault only makes the stall deterministic.
+        if (int.TryParse(Environment.GetEnvironmentVariable("XDICT_HOVER_STALL_UIA"), out int stall) && stall > 0)
+            Thread.Sleep(stall);
+#endif
         var point = new System.Windows.Point(x, y);
         try
         {
@@ -394,6 +404,8 @@ public sealed class HoverReader : IDisposable
             if (window == ours) { passed = true; return true; }
             if (!passed) return true;
             if (!Win32.IsWindowVisible(window) || Win32.IsIconic(window)) return true;
+            if (Win32.IsDesktop(window)) return true;
+            if (Win32.IsCloaked(window)) return true;
             long style = (long)Win32.GetWindowLongPtrW(window, Win32.GWL_EXSTYLE);
             if ((style & Win32.WS_EX_TRANSPARENT) != 0) return true;
             if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return true;
@@ -428,24 +440,52 @@ public sealed class HoverReader : IDisposable
 
     private static OcrAnswer Recognize(IntPtr window, int x, int y, string source, uint pid)
     {
+#if DEBUG
+        // The two OCR faults: no recogniser language installed, and a capture that holds the lane past its deadline.
+        if (Environment.GetEnvironmentVariable("XDICT_HOVER_NO_OCR") == "1")
+            return OcrAnswer.Miss("ocrUnavailable");
+        if (int.TryParse(Environment.GetEnvironmentVariable("XDICT_HOVER_STALL_OCR"), out int stall) && stall > 0)
+            Thread.Sleep(stall);
+#endif
         if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return OcrAnswer.Miss("noTarget");
         int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
         if (width <= 0 || height <= 0) return OcrAnswer.Miss("noTarget");
         using Bitmap? shot = Capture(window, width, height);
         if (shot is null) return OcrAnswer.Miss("captureFailed");
+#if DEBUG
+        // The lab's mixed-DPI investigation: the exact pixels OCR was asked to read.
+        if (Environment.GetEnvironmentVariable("XDICT_HOVER_CAPTURE_DUMP") is { Length: > 0 } dump)
+            try { shot.Save(dump, ImageFormat.Png); } catch (Exception) { }
+#endif
         OcrEngine? engine = OcrEngine.TryCreateFromUserProfileLanguages();
         if (engine is null) return OcrAnswer.Miss("ocrUnavailable");
+        // A dpi-unaware window draws at 96 dpi and the system scales what is composed on screen; PrintWindow hands
+        // back the **unscaled** surface (measured 2026-11-06: a 1200x400 surface in a 2400x800 capture of a window
+        // on a 192-dpi monitor). Its pixels are logical, so they are scaled to screen pixels here.
+        double content = ContentScale(window);
         int maximum = (int)OcrEngine.MaxImageDimension;
-        double scale = Math.Min(1d, Math.Min((double)maximum / width, (double)maximum / height));
-        using Bitmap? scaled = scale < 1
-            ? new Bitmap(shot, new Size(Math.Max(1, (int)(width * scale)), Math.Max(1, (int)(height * scale))))
+        double downscale = Math.Min(1d, Math.Min((double)maximum / width, (double)maximum / height));
+        using Bitmap? scaled = downscale < 1
+            ? new Bitmap(shot, new Size(Math.Max(1, (int)(width * downscale)), Math.Max(1, (int)(height * downscale))))
             : null;
         try
         {
             OcrResult result = RecognizeAsync(engine, scaled ?? shot).GetAwaiter().GetResult();
-            return Pick(result, x - rect.Left, y - rect.Top, scale, rect.Left, rect.Top, source, pid);
+            return Pick(result, x - rect.Left, y - rect.Top, downscale / content, content / downscale,
+                rect.Left, rect.Top, source, pid);
         }
         catch (Exception error) { return OcrAnswer.Miss("ocrFailed:" + error.GetType().Name); }
+    }
+
+    /// <summary>How many screen pixels one pixel of the window's own surface covers. 1 for every window that draws
+    /// in physical pixels; for a DPI-virtualized window (its thread unaware of DPI) the monitor's scale.</summary>
+    private static double ContentScale(IntPtr window)
+    {
+        IntPtr context = Win32.GetWindowDpiAwarenessContext(window);
+        if (!Win32.AreDpiAwarenessContextsEqual(context, Win32.DPI_AWARENESS_CONTEXT_UNAWARE) &&
+            !Win32.AreDpiAwarenessContextsEqual(context, Win32.DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED)) return 1;
+        uint dpi = Win32.MonitorDpi(window);
+        return dpi > 96 ? dpi / 96.0 : 1;
     }
 
     private static async Task<OcrResult> RecognizeAsync(OcrEngine engine, Bitmap bitmap)
@@ -466,10 +506,11 @@ public sealed class HoverReader : IDisposable
         return await engine.RecognizeAsync(software);
     }
 
-    /// <summary>The word whose box holds the point (or is nearest within 12 px), its line as the sentence, and the
-    /// word's offset in that line. All positions are physical screen pixels again.</summary>
-    private static OcrAnswer Pick(OcrResult result, int x, int y, double scale, int left, int top, string source,
-        uint pid)
+    /// <summary>The word whose box holds the point (or is nearest within 12 screen px), its line as the sentence, and
+    /// the word's offset in that line. `toOcr` maps window pixels to OCR pixels, `fromOcr` the reverse; all returned
+    /// positions are physical screen pixels again.</summary>
+    private static OcrAnswer Pick(OcrResult result, int x, int y, double toOcr, double fromOcr, int left, int top,
+        string source, uint pid)
     {
         OcrWord? best = null;
         OcrLine? line = null;
@@ -478,16 +519,23 @@ public sealed class HoverReader : IDisposable
         {
             foreach (OcrWord word in candidate.Words)
             {
-                double distance = Distance(word.BoundingRect, x * scale, y * scale);
+                double distance = Distance(word.BoundingRect, x * toOcr, y * toOcr);
                 if (distance < bestDistance) { bestDistance = distance; best = word; line = candidate; }
             }
         }
-        if (best is null || line is null || bestDistance > 12 * scale) return OcrAnswer.Miss("noWord");
+        if (best is null || line is null || bestDistance > 12 * toOcr)
+            return OcrAnswer.Miss("noWord",
+                "ocr: lines=" + result.Lines.Count + " nearest=" + (best is null ? "none" :
+                    best.Text + "@" + (int)bestDistance + "/" + (int)(12 * toOcr) + " box=" +
+                    (int)best.BoundingRect.X + "," + (int)best.BoundingRect.Y + "," +
+                    (int)best.BoundingRect.Width + "," + (int)best.BoundingRect.Height) +
+                " point=" + x + "," + y + " ocrScale=" + toOcr);
         int start = line.Text.IndexOf(best.Text, StringComparison.Ordinal);
         Windows.Foundation.Rect box = best.BoundingRect;
         var measured = new SelectionBox(
-            (int)Math.Round(box.X / scale) + left, (int)Math.Round(box.Y / scale) + top,
-            Math.Max(1, (int)Math.Round(box.Width / scale)), Math.Max(1, (int)Math.Round(box.Height / scale)));
+            (int)Math.Round(box.X * fromOcr) + left, (int)Math.Round(box.Y * fromOcr) + top,
+            Math.Max(1, (int)Math.Round(box.Width * fromOcr)),
+            Math.Max(1, (int)Math.Round(box.Height * fromOcr)));
         return OcrAnswer.Hit(new HoverWord(best.Text, start >= 0 ? line.Text : "", start >= 0 ? start : 0,
             best.Text.Length, measured, source, pid, "recognition", 0.5, ""));
     }
@@ -528,16 +576,16 @@ public sealed class HoverReader : IDisposable
     }
 
     /// <summary>A capture that is entirely one colour (usually black) proved nothing: some windows answer PrintWindow
-    /// with an empty surface. Sampled rather than scanned whole.</summary>
+    /// with an empty surface. Checked on a downscaled copy, so a small word anywhere in a large window leaves a
+    /// different shade; a fixed sparse grid missed a word at 96 px (measured 2026-11-06) and refused a real capture.
+    /// </summary>
     private static bool Blank(Bitmap bitmap)
     {
-        Color first = bitmap.GetPixel(bitmap.Width / 2, bitmap.Height / 2);
-        for (int row = 1; row < 8; row++)
-        for (int column = 1; column < 8; column++)
-        {
-            Color sample = bitmap.GetPixel(bitmap.Width * column / 8, bitmap.Height * row / 8);
-            if (sample.ToArgb() != first.ToArgb()) return false;
-        }
+        using var small = new Bitmap(bitmap, new Size(64, 64));
+        int first = small.GetPixel(0, 0).ToArgb();
+        for (int row = 0; row < 64; row++)
+        for (int column = 0; column < 64; column++)
+            if (small.GetPixel(column, row).ToArgb() != first) return false;
         return true;
     }
 
@@ -556,7 +604,7 @@ public sealed class HoverReader : IDisposable
     private sealed record OcrAnswer(HoverWord? Word, string? Refusal, string Diagnostics)
     {
         public static OcrAnswer Hit(HoverWord word) => new(word, null, "");
-        public static OcrAnswer Miss(string refusal) => new(null, refusal, "");
+        public static OcrAnswer Miss(string refusal, string diagnostics = "") => new(null, refusal, diagnostics);
     }
 
     /// <summary>One dedicated STA thread with a one-slot queue; a read that timed out is abandoned, never queued.</summary>

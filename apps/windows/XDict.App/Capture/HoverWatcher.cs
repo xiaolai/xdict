@@ -64,6 +64,8 @@ public sealed class HoverWatcher : IDisposable
     /// <summary>What the last rest decided or found, for the lab's evidence: metadata only.</summary>
     public string LastOutcome { get; private set; } = "";
     public long LastReadMs { get; private set; }
+    /// <summary>Why the last read answered as it did: the lab and the stage print it on a miss.</summary>
+    public string LastDiagnostics { get; private set; } = "";
     public int ReadsStarted { get; private set; }
     public int WordsFound { get; private set; }
     public int EventsSeen { get; private set; }
@@ -337,6 +339,7 @@ public sealed class HoverWatcher : IDisposable
         finally { if (Volatile.Read(ref readGeneration) == generation) reading = false; }
         LastReadMs = read.ElapsedMs;
         LastOutcome = read.Found ? "word" : "miss:" + (read.Refusal ?? "none");
+        LastDiagnostics = read.Diagnostics;
         LastWord = read.Word;
         if (read.Found) WordsFound += 1;
         if (token.IsCancellationRequested || !book.IsOpen(request))
