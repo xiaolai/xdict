@@ -1,7 +1,11 @@
 # Hover on the Windows E2E host (plan-windows-parity WS-P8): the key's rest reads the word under the pointer through
 # UI Automation into the non-activating panel, the double-tap gesture reads it with the key up, the same rest without
 # the key asks nothing, a window of ours under the pointer is read before the app behind it — and the Debug-only fault
-# that skips that read shows the behind word, which is the rule's red-once control. Thresholds are declared here, once.
+# that skips that read shows the behind word, which is the rule's red-once control.
+#
+# The read's fallbacks and refusals have their own passes, each a deterministic surface the lab makes (CaptureLab):
+# pixels only (OCR), a dpi-unaware window (a scaled, DPI-virtualized surface), no OCR language, a stalled UIA provider,
+# a stalled capture, and an elevated window (refused with its notice). Thresholds are declared here, once.
 [CmdletBinding()]
 param([switch]$Full)
 . (Join-Path $PSScriptRoot 'gates.ps1')
@@ -14,6 +18,13 @@ $MaxReadMs = 900
 $MaxPanelMs = 1500
 $MaxHookMicroseconds = 5000
 $MaxIdleCpuPercent = 1.0
+# The pixels fallback costs one window capture plus recognition (measured 190-290 ms on mbp16).
+$MaxOcrReadMs = 2000
+# The deadlines HoverReader declares: UiaDeadline 1.5 s, OcrDeadline 2.5 s. A stalled pass must exceed its deadline
+# and stay inside the next one, so a change to either constant shows here.
+$UiaDeadlineMs = 1500
+$OcrDeadlineMs = 2500
+$StallCeilingMs = 4000
 
 Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\hover-lab\' + [Guid]::NewGuid().ToString('N'))
@@ -21,12 +32,15 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $library = Join-Path $folder 'library.json'
     $text = Join-Path $folder 'words.txt'
+    # The pixels passes draw this whole file as one word, so it holds the word alone.
+    $pixelsText = Join-Path $folder 'pixels-word.txt'
     # Two paragraphs: the first holds the word the gesture asks; the second puts `gamma` under the panel's term, so
     # the own-window case has a different word behind it to be red against.
     Set-Content -LiteralPath $text -Encoding UTF8 -Value @(
         'The run reader selects this sentence.',
         '',
         'alpha beta gamma delta epsilon zeta')
+    Set-Content -LiteralPath $pixelsText -Value 'Hover' -Encoding UTF8 -NoNewline
     # No dictionary: the hover stage proves the acquisition and the panel, not the entry draw. An entry view would
     # build a WebView2 on this process's UI thread, and the own-window read (which is this process's UI Automation)
     # would then wait on that same thread — a property of the harness, not of hover.
@@ -35,28 +49,76 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     # Notepad is single-instance on Windows 11: a stale lab Notepad would take the file as a tab and the read would
     # look at another document. Lab-owned Notepads (their command line names this run's folder) are ended; **any other
     # Notepad is the person's**, and the stage refuses rather than touch it.
-    $notepads = @(Get-CimInstance Win32_Process -Filter "Name='notepad.exe'" -ErrorAction SilentlyContinue)
+    function Expand-NotepadCommand([string]$CommandLine) {
+        # Windows 11's packaged Notepad carries the document in a base64 UTF-16 /SESSION: argument, so the path is
+        # not visible to a match on the command line itself.
+        if ($CommandLine -and $CommandLine -match '/SESSION:([A-Za-z0-9+/=]+)') {
+            try { return [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($Matches[1])) }
+            catch { return $CommandLine }
+        }
+        return $CommandLine
+    }
+    $notepads = @(Get-CimInstance Win32_Process -Filter "Name='notepad.exe'" -ErrorAction SilentlyContinue |
+        Select-Object ProcessId, @{ Name = 'CommandLine'; Expression = { Expand-NotepadCommand $_.CommandLine } })
     foreach ($stale in @($notepads | Where-Object { $_.CommandLine -like '*XDict\hover-lab*' })) {
         Stop-Process -Id $stale.ProcessId -Force -ErrorAction SilentlyContinue
     }
-    $foreign = @(Get-CimInstance Win32_Process -Filter "Name='notepad.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -notlike '*XDict\hover-lab*' })
+    $foreign = @($notepads | Where-Object { $_.CommandLine -notlike '*XDict\hover-lab*' })
     if ($foreign.Count -gt 0) {
         throw 'Notepad is open on the host; hover''s target must be the only instance. Close it and rerun.'
     }
 
-    function Invoke-HoverPass([string]$Mode) {
-        Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Since $started
+    function Invoke-HoverPass([string]$Mode, [string]$PassText = $text, [string]$Press = '', [switch]$KeepNotepad) {
+        # The elevated pass owns its Notepad: the launcher started it and the launcher ends it, so the pass must not
+        # stop it here (this session can kill an elevated process, and doing so leaves the lab without a target).
+        $stopNames = if ($KeepNotepad) { @('XDict') } else { @('XDict', 'notepad') }
+        Stop-XDictLabProcesses -Name $stopNames -Since $started
         Start-Sleep -Milliseconds 400
         $config = Join-Path $folder ($Mode + '-config.json')
         $result = Join-Path $folder ($Mode + '-result.json')
-        @{ output = $result; mode = $Mode; settings = (Join-Path $folder ($Mode + '-capture.json'));
-           library = $library; text = $text } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+        $body = @{ output = $result; mode = $Mode; settings = (Join-Path $folder ($Mode + '-capture.json'));
+                   library = $library; text = $PassText }
+        if ($Press) { $body.press = $Press }
+        $body | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
         $run = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $config + '"') -Output $result `
             -Seconds 180 -Prefix ('xdict-hover-' + $Mode)
         Write-Host ($run | ConvertTo-Json -Depth 6)
         if ($run.PSObject.Properties['error']) { throw "the $Mode hover pass failed: $($run.error)" }
         return $run
+    }
+
+    function Assert-SpecialCommon($run, [string]$Mode) {
+        if (-not $run.specialRunning) { throw "$Mode`: hover did not start" }
+        if ($run.specialStartFailed) { throw "$Mode`: Windows refused the pointer or key hooks" }
+        if ($run.specialHookMicroseconds -gt $MaxHookMicroseconds) {
+            throw ("$Mode`: a hook callback took $($run.specialHookMicroseconds) us, over $MaxHookMicroseconds")
+        }
+        if ($run.specialEvents -lt 1) { throw "$Mode`: the key never reached a hook" }
+    }
+
+    # The pixels surface: the pointer is over the lab's wordless window, and a cloaked overlay covers the same point.
+    # Both facts are asserted, so a pass cannot turn green by reading the overlay or the desktop instead.
+    function Assert-PixelsSurface($run, [string]$Mode) {
+        if ([string]::IsNullOrEmpty($run.cloakedAtPoint)) {
+            throw "$Mode`: no cloaked overlay covered the point; the skip rule was not exercised"
+        }
+        if ($run.pointWindow -notmatch '^XDict\.exe/XDictCaptureLabPixels/') {
+            throw "$Mode`: the window under the point was '$($run.pointWindow)', not the lab's pixels window"
+        }
+    }
+
+    function Assert-OcrWord($run, [string]$Mode) {
+        if (-not $run.specialShown) { throw "$Mode`: no panel (outcome $($run.specialOutcome))" }
+        if ($run.specialTerm -ne 'Hover') { throw "$Mode`: the recognised term is '$($run.specialTerm)', expected Hover" }
+        if ($run.specialAcquisition -ne 'recognition') {
+            throw "$Mode`: the word came by $($run.specialAcquisition), not recognition"
+        }
+        if ($run.specialSource -ne 'XDict.exe') { throw "$Mode`: the word came from $($run.specialSource)" }
+        if ($run.specialReadMs -gt $MaxOcrReadMs) { throw "$Mode`: the read took $($run.specialReadMs) ms, over $MaxOcrReadMs" }
+        if ($run.specialPanelMs -lt 0 -or $run.specialPanelMs -gt $MaxPanelMs) {
+            throw "$Mode`: the panel took $($run.specialPanelMs) ms, over $MaxPanelMs"
+        }
+        if ($run.specialAck -ne 'Shown') { throw "$Mode`: the entry was not acknowledged: $($run.specialAck)" }
     }
 
     function Assert-HoverCommon($run, [string]$Mode) {
@@ -107,7 +169,178 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     }
     if ($skip.ownLastSource -eq 'XDict.exe') { throw 'hover-own-skip: the fault still read XDict’s own window' }
 
+    # The OCR fallback, on a window that exposes nothing to Accessibility (a plain Win32 surface drawing one word).
+    $ocr = Invoke-HoverPass 'hover-ocr' $pixelsText
+    Assert-SpecialCommon $ocr 'hover-ocr'
+    Assert-PixelsSurface $ocr 'hover-ocr'
+    Assert-OcrWord $ocr 'hover-ocr'
+
+    # The same window from a dpi-unaware thread: the system scales its surface, so its pixels are not screen pixels.
+    # This is the mixed-DPI hazard a second monitor with another scale would also produce; the E2E host has one
+    # scaled display, so a dpi-unaware window is the case it can make. The monitor must actually be scaled, or the
+    # pass would prove nothing.
+    $dpi = Invoke-HoverPass 'hover-unaware' $pixelsText
+    Assert-SpecialCommon $dpi 'hover-unaware'
+    Assert-PixelsSurface $dpi 'hover-unaware'
+    Assert-OcrWord $dpi 'hover-unaware'
+    if ($dpi.pixelsMonitorDpi -lt 120) {
+        throw "hover-unaware: the monitor runs at $($dpi.pixelsMonitorDpi) dpi; a dpi-unaware window is not scaled there"
+    }
+
+    # No recogniser language: the read says so, with its notice, and shows no panel.
+    $noOcr = Invoke-HoverPass 'hover-noocr' $pixelsText
+    Assert-SpecialCommon $noOcr 'hover-noocr'
+    Assert-PixelsSurface $noOcr 'hover-noocr'
+    if ($noOcr.specialShown) { throw 'hover-noocr: a panel was drawn without a recogniser' }
+    if ($noOcr.specialOutcome -ne 'miss:ocrUnavailable') {
+        throw "hover-noocr: the outcome is '$($noOcr.specialOutcome)', expected miss:ocrUnavailable"
+    }
+    if ($noOcr.specialNotice -ne 'ocrUnavailable') { throw "hover-noocr: the notice is '$($noOcr.specialNotice)'" }
+
+    # A UIA provider that never answers: the read is abandoned at its deadline, the pixels answer, and the lane is
+    # free again afterwards (the recovery read is a UIA hit, under the plain read threshold).
+    $stallUia = Invoke-HoverPass 'hover-stall-uia' $pixelsText
+    Assert-SpecialCommon $stallUia 'hover-stall-uia'
+    Assert-PixelsSurface $stallUia 'hover-stall-uia'
+    if (-not $stallUia.specialShown) { throw 'hover-stall-uia: the pixels did not answer after the abandonment' }
+    if ($stallUia.specialAcquisition -ne 'recognition') {
+        throw "hover-stall-uia: the word came by $($stallUia.specialAcquisition)"
+    }
+    if ($stallUia.specialReadMs -lt $UiaDeadlineMs -or $stallUia.specialReadMs -gt $StallCeilingMs) {
+        throw "hover-stall-uia: the read took $($stallUia.specialReadMs) ms, expected $UiaDeadlineMs-$StallCeilingMs"
+    }
+    if (-not $stallUia.recoveryShown -or $stallUia.recoveryTerm -ne 'Hover') {
+        throw "hover-stall-uia: the recovery read did not answer (shown=$($stallUia.recoveryShown), term=$($stallUia.recoveryTerm))"
+    }
+    if ($stallUia.recoveryReadMs -gt $MaxOcrReadMs) {
+        throw "hover-stall-uia: the recovery read took $($stallUia.recoveryReadMs) ms"
+    }
+
+    # A capture that holds its lane past the deadline: no panel, the honest refusal, and the lane answers again after.
+    $stallOcr = Invoke-HoverPass 'hover-stall-ocr' $pixelsText
+    Assert-SpecialCommon $stallOcr 'hover-stall-ocr'
+    Assert-PixelsSurface $stallOcr 'hover-stall-ocr'
+    if ($stallOcr.specialShown) { throw 'hover-stall-ocr: a panel was drawn while the capture was stuck' }
+    if ($stallOcr.specialOutcome -ne 'miss:captureStuck') {
+        throw "hover-stall-ocr: the outcome is '$($stallOcr.specialOutcome)', expected miss:captureStuck"
+    }
+    if ($stallOcr.specialReadMs -lt $OcrDeadlineMs -or $stallOcr.specialReadMs -gt $StallCeilingMs) {
+        throw "hover-stall-ocr: the read took $($stallOcr.specialReadMs) ms, expected $OcrDeadlineMs-$StallCeilingMs"
+    }
+    if (-not $stallOcr.recoveryShown -or $stallOcr.recoveryTerm -ne 'Hover') {
+        throw "hover-stall-ocr: the lane did not answer again (shown=$($stallOcr.recoveryShown), term=$($stallOcr.recoveryTerm))"
+    }
+    if ($stallOcr.recoveryReadMs -gt $MaxOcrReadMs) {
+        throw "hover-stall-ocr: the recovery read took $($stallOcr.recoveryReadMs) ms"
+    }
+
+    # An elevated window under the pointer: the reader names the refusal, shows its notice, and draws no panel. The
+    # key comes from the elevated launcher, because UIPI withholds a synthetic key from a hook while an elevated
+    # window holds the foreground — the launcher hands the foreground back to this process first.
+    $press = Join-Path $folder 'elevated.press'
+    $stop = Join-Path $folder 'elevated.stop'
+    $ready = Join-Path $folder 'elevated.json'
+    $launcher = Join-Path $folder 'elevated-target.ps1'
+    Remove-Item $press, $stop, $ready -Force -ErrorAction SilentlyContinue
+    @'
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class HoverElevated {
+    public delegate bool EnumProc(IntPtr h, IntPtr p);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr p);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int ht, uint flags);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    public static IntPtr FindNotepad() {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((h, p) => {
+            if (!IsWindowVisible(h)) return true;
+            var name = new StringBuilder(128);
+            GetClassName(h, name, 128);
+            if (name.ToString() == "Notepad") { found = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+}
+"@
+$since = Get-Date
+$notepad = Start-Process -FilePath 'notepad.exe' -ArgumentList '"__TEXT__"' -PassThru
+$handle = [IntPtr]::Zero
+for ($i = 0; $i -lt 80 -and $handle -eq [IntPtr]::Zero; $i++) {
+    Start-Sleep -Milliseconds 250
+    $handle = [HoverElevated]::FindNotepad()
+}
+$placed = $false
+if ($handle -ne [IntPtr]::Zero) {
+    # Topmost: nothing the medium-integrity lab raises may cover the point under test.
+    $placed = [HoverElevated]::SetWindowPos($handle, [IntPtr](-1), 100, 100, 900, 600, 0x0040 -bor 0x0010)
+}
+@{ pid = $notepad.Id; handle = $handle.ToInt64(); placed = $placed } | ConvertTo-Json |
+    Set-Content -LiteralPath '__READY__' -Encoding UTF8
+for ($i = 0; $i -lt 180 -and -not (Test-Path -LiteralPath '__STOP__'); $i++) {
+    if (Test-Path -LiteralPath '__PRESS__') {
+        $value = Get-Content -LiteralPath '__PRESS__' -Raw
+        Remove-Item -LiteralPath '__PRESS__' -Force
+        [long]$handleValue = 0
+        if ([long]::TryParse($value.Trim(), [ref]$handleValue) -and $handleValue -ne 0) {
+            [HoverElevated]::SetForegroundWindow([IntPtr]$handleValue) | Out-Null
+            Start-Sleep -Milliseconds 600
+        }
+        [HoverElevated]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Seconds 4
+        [HoverElevated]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+    }
+    Start-Sleep -Seconds 1
+}
+# Only what this launcher started: a Notepad already open when it began is the person's, and the stage refuses
+# before starting at all when one is.
+Get-Process notepad -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $since } | Stop-Process -Force
+Remove-Item -LiteralPath '__STOP__' -Force -ErrorAction SilentlyContinue
+'@.Replace('__TEXT__', $text).Replace('__PRESS__', $press).Replace('__STOP__', $stop).Replace('__READY__', $ready) |
+        Set-Content -LiteralPath $launcher -Encoding Ascii
+    $task = 'xdict-hover-elevated-' + [Guid]::NewGuid().ToString('N')
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+        -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $launcher + '"')
+    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+        -LogonType Interactive -RunLevel Highest
+    try {
+        Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
+        Start-ScheduledTask -TaskName $task
+        $deadline = [DateTime]::UtcNow.AddSeconds(30)
+        while (-not (Test-Path -LiteralPath $ready)) {
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'the elevated target did not report itself' }
+            Start-Sleep -Milliseconds 250
+        }
+        $elevated = Get-Content -LiteralPath $ready -Raw | ConvertFrom-Json
+        if (-not $elevated.placed) { throw 'the elevated target could not be placed topmost' }
+        $refused = Invoke-HoverPass 'hover-elevated' $text $press -KeepNotepad
+        Assert-SpecialCommon $refused 'hover-elevated'
+        if ($refused.specialShown) { throw 'hover-elevated: an elevated window was read and a panel drawn' }
+        if ($refused.specialOutcome -ne 'miss:elevated') {
+            throw "hover-elevated: the outcome is '$($refused.specialOutcome)', expected miss:elevated"
+        }
+        if ($refused.specialNotice -ne 'elevated') { throw "hover-elevated: the notice is '$($refused.specialNotice)'" }
+        if ($refused.specialReadMs -gt $MaxReadMs) {
+            throw "hover-elevated: the refusal took $($refused.specialReadMs) ms"
+        }
+        if ($refused.pointWindow -notmatch '^Notepad\.exe/Notepad/') {
+            throw "hover-elevated: the window under the point was '$($refused.pointWindow)', not the elevated Notepad"
+        }
+    }
+    finally {
+        New-Item -ItemType File -Path $stop -Force -ErrorAction SilentlyContinue | Out-Null
+        Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    for ($i = 0; $i -lt 40 -and (Get-Process notepad -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }
+    if (Get-Process notepad -ErrorAction SilentlyContinue) { throw 'the elevated Notepad did not exit' }
+
     Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Since $started
-    Write-Host ("hover thresholds: read <= {0} ms, panel <= {1} ms, hook <= {2} us, idle CPU <= {3} %" -f `
-        $MaxReadMs, $MaxPanelMs, $MaxHookMicroseconds, $MaxIdleCpuPercent)
+    Write-Host ("hover thresholds: read <= {0} ms, panel <= {1} ms, hook <= {2} us, idle CPU <= {3} %, ocr read <= {4} ms" -f `
+        $MaxReadMs, $MaxPanelMs, $MaxHookMicroseconds, $MaxIdleCpuPercent, $MaxOcrReadMs)
 }

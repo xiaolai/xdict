@@ -2,6 +2,8 @@
 // The capture lab: the production hotkey, reader, constructor and panel, exercised in the interactive session against a
 // real Notepad, with Escape, the tray route, a rebinding and (in its own mode) an elevated window's refusal.
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -64,7 +66,8 @@ internal static class CaptureLab
         string libraryPath = root.GetProperty("library").GetString()!;
         string textFile = root.GetProperty("text").GetString()!;
         Environment.SetEnvironmentVariable("XDICT_CAPTURE_SETTINGS", settingsPath);
-        if (mode is "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
+        if (mode is "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip"
+            or "hover-ocr" or "hover-noocr" or "hover-stall-uia" or "hover-stall-ocr" or "hover-unaware")
         {
             new CaptureSettings
             {
@@ -94,25 +97,46 @@ internal static class CaptureLab
         report["settingsKey"] = controller.Settings.Key;
         await Mark("controller started");
         report["dictionaries"] = session.Dictionaries.Count;
+        // An earlier run can leave a modifier down or a Search flyout in front; either one keeps every target from
+        // taking the foreground (measured 2026-11-06: SearchHost in front, and no window could be raised). Release
+        // what a chord uses and dismiss the flyout before any target starts.
+        foreach (byte key in new byte[] { 0x11, 0x12, 0x10 }) Win32.keybd_event(key, 0, 2, UIntPtr.Zero);
+        await Task.Delay(100);
+        Key(0x1B);
+        await Task.Delay(200);
 
         Process? target = null;
         IntPtr targetWindow = IntPtr.Zero;
         PdfServer? pdfServer = null;
+        PixelsWindow? pixels = null;
+        bool notepadTarget = false;
         try
         {
         await Mark("target mode " + mode);
-        if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
+        if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip"
+            or "hover-ocr" or "hover-noocr" or "hover-stall-uia" or "hover-stall-ocr" or "hover-unaware")
         {
-            bool elevated = mode == "elevated";
+            bool elevated = mode is "elevated" or "hover-elevated";
             bool notepad = mode is "notepad" or "elevated" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip";
             bool word = mode == "word";
+            notepadTarget = notepad;
+            bool image = mode is "hover-ocr" or "hover-noocr" or "hover-stall-uia" or "hover-stall-ocr"
+                or "hover-unaware";
             // A Word the harness opened through COM is used as it is; starting WINWORD.EXE shows the Start screen.
             if (mode == "pdf") pdfServer = new PdfServer(textFile);
+            // The OCR passes read a plain window that draws one word: no text pattern and no name, so the pixels are
+            // the only answer. Edge's PDF viewer is not such a surface — its accessibility tree occludes the drawing
+            // with a text layer of its own, which would exercise Edge's OCR, not XDict's.
+            string wordText = File.ReadAllText(textFile).Trim();
+            if (image) pixels = new PixelsWindow(wordText.Length == 0 ? "recognize" : wordText,
+                unaware: mode == "hover-unaware");
             target = notepad ? (elevated ? FindElevatedNotepad() : StartNotepad(textFile))
-                : word ? WordHost(textFile) : StartEdge(mode == "pdf" && pdfServer is not null ? pdfServer.Url : textFile);
+                : word ? WordHost(textFile)
+                : image ? null
+                : StartEdge(pdfServer is not null ? pdfServer.Url : textFile);
             report["pdfUrl"] = pdfServer?.Url;
-            if (target is null) { report["error"] = "no target window"; await WriteAsync(output, report); return; }
-            targetWindow = notepad ? NotepadWindow(15000) : word ? WordWindow(15000) : BrowserWindow(15000);
+            if (target is null && pixels is null) { report["error"] = "no target window"; await WriteAsync(output, report); return; }
+            targetWindow = pixels?.Handle ?? (notepad ? NotepadWindow(15000) : word ? WordWindow(15000) : BrowserWindow(15000));
             if (targetWindow == IntPtr.Zero)
             {
                 report["notepads"] = Process.GetProcessesByName("notepad").Select(process => process.Id).ToArray();
@@ -120,13 +144,14 @@ internal static class CaptureLab
                 await WriteAsync(output, report);
                 return;
             }
-            if (!Focus(targetWindow))
+            bool focused = pixels is not null || mode == "hover-elevated" || Focus(targetWindow);
+            if (!focused)
             {
                 report["notepads"] = Process.GetProcessesByName("notepad").Select(process => process.Id).ToArray();
-                report["startedId"] = target.Id;
-                report["startedExited"] = target.HasExited;
-                report["startedMainWindow"] = target.MainWindowHandle.ToInt64();
-                report["foundWindow"] = Win32.MainWindowOf((uint)target.Id).ToInt64();
+                report["startedId"] = target?.Id;
+                report["startedExited"] = target?.HasExited;
+                report["startedMainWindow"] = target?.MainWindowHandle.ToInt64();
+                report["foundWindow"] = target is null ? 0 : Win32.MainWindowOf((uint)target.Id).ToInt64();
                 IntPtr foreground = Win32.GetForegroundWindow();
                 Win32.GetWindowThreadProcessId(foreground, out uint foregroundPid);
                 var name = new char[128];
@@ -139,7 +164,7 @@ internal static class CaptureLab
                 return;
             }
             await Task.Delay(400);
-            if (mode is "notepad" or "word" or "pdf" or "hover" or "hover-double" or "hover-elevated" or "hover-own" or "hover-own-skip")
+            if (mode is "notepad" or "word" or "pdf" or "hover" or "hover-double" or "hover-own" or "hover-own-skip")
             {
                 if (mode == "word")
                 {
@@ -167,7 +192,7 @@ internal static class CaptureLab
             report["foregroundBefore"] = Win32.GetForegroundWindow().ToInt64();
         }
 
-        if (mode is "hover" or "hover-double" or "hover-elevated")
+        if (mode is "hover" or "hover-double")
         {
             report["hoverRunning"] = controller.HoverRunning;
             report["hoverStartFailed"] = controller.HoverStartFailed;
@@ -227,6 +252,9 @@ internal static class CaptureLab
                 report["hoverAck"] = controller.LastAcknowledgement?.Outcome.ToString();
                 report["hoverFocusUnchanged"] = controller.LastFocusUnchanged;
                 if (mode != "hover-double") Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+                // The release must be processed before Escape: an Escape that arrives with Ctrl still down is
+                // Ctrl+Esc, which opens the Start menu and takes the foreground from every later target.
+                await Task.Delay(150);
                 Key(0x1B);
                 await Task.Delay(400);
                 report["hoverDismissedByEscape"] = controller.Panel is not { Shown: true };
@@ -307,10 +335,163 @@ internal static class CaptureLab
                     report["ownLastSentence"] = controller.HoverLastWord?.Sentence;
                     report["ownLastBox"] = controller.HoverLastWord?.Box;
                     Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+                    await Task.Delay(150);
                     Key(0x1B);
                     await Task.Delay(300);
                 }
             }
+        }
+
+        if (mode is "hover-ocr" or "hover-noocr" or "hover-stall-uia" or "hover-stall-ocr" or "hover-unaware"
+            or "hover-elevated")
+        {
+            report["specialRunning"] = controller.HoverRunning;
+            report["specialStartFailed"] = controller.HoverStartFailed;
+            int x = 0, y = 0;
+            IntPtr main = IntPtr.Zero;
+            if (mode == "hover-elevated")
+            {
+                if (!Win32.GetWindowRect(targetWindow, out Win32.RECT windowRect))
+                {
+                    report["error"] = "the elevated target has no window rectangle";
+                    await WriteAsync(output, report);
+                    return;
+                }
+                x = (windowRect.Left + windowRect.Right) / 2;
+                y = windowRect.Top + Math.Min(200, (windowRect.Bottom - windowRect.Top) / 2);
+                // UIPI refuses the key while an elevated window holds the foreground, and a medium process cannot
+                // take it back. The elevated launcher is asked to focus this window and press the key instead; it
+                // parked the target topmost over the pointer, which is the case the reader must refuse.
+                main = Win32.MainWindowOf((uint)Environment.ProcessId);
+                if (main != IntPtr.Zero)
+                {
+                    int parkX = windowRect.Right + 40, parkY = windowRect.Top + 40;
+                    Win32.RECT around = windowRect;
+                    IntPtr monitor = Win32.MonitorFromRect(ref around, Win32.MONITOR_DEFAULTTONEAREST);
+                    var info = new Win32.MONITORINFO { cbSize = (uint)Marshal.SizeOf<Win32.MONITORINFO>() };
+                    if (Win32.GetMonitorInfoW(monitor, ref info))
+                    {
+                        parkX = info.rcWork.Right - 460;
+                        parkY = info.rcWork.Bottom - 300;
+                    }
+                    Win32.SetWindowPos(main, IntPtr.Zero, parkX, parkY, 420, 240, Win32.SWP_SHOWWINDOW);
+                    Thread.Sleep(250);
+                    report["mainWindow"] = DescribeWindow(main);
+                    report["mainVisible"] = Win32.IsWindowVisible(main);
+                    report["mainRect"] = Win32.GetWindowRect(main, out Win32.RECT moved)
+                        ? new[] { moved.Left, moved.Top, moved.Right - moved.Left, moved.Bottom - moved.Top } : null;
+                }
+                report["elevatedFocus"] = Win32.GetForegroundWindow().ToInt64();
+                report["elevatedFocusName"] = DescribeWindow(Win32.GetForegroundWindow());
+            }
+            else
+            {
+                if (pixels is null || !Win32.GetWindowRect(pixels.Handle, out Win32.RECT pixelsRect))
+                {
+                    report["error"] = "the pixels surface has no window rectangle";
+                    await WriteAsync(output, report);
+                    return;
+                }
+                // The word is drawn at the window's centre, so the centre is the point — invariant under the DPI
+                // scaling a dpi-unaware window's surface gets.
+                x = (pixelsRect.Left + pixelsRect.Right) / 2;
+                y = (pixelsRect.Top + pixelsRect.Bottom) / 2;
+                report["pixelsRect"] = new[]
+                {
+                    pixelsRect.Left, pixelsRect.Top, pixelsRect.Right - pixelsRect.Left,
+                    pixelsRect.Bottom - pixelsRect.Top,
+                };
+            }
+            report["specialPoint"] = new[] { x, y };
+            // The overlay the read must skip, named before the read: a pass asserts it was there and still lost.
+            report["cloakedAtPoint"] = CloakedAtPoint(x, y);
+            report["pointWindow"] = DescribeWindow(HoverReader.TopWindowAt(x, y));
+            if (pixels is not null)
+            {
+                report["pixelsVisible"] = Win32.IsWindowVisible(pixels.Handle);
+                report["pixelsCloaked"] = Win32.IsCloaked(pixels.Handle);
+                report["pixelsIconic"] = Win32.IsIconic(pixels.Handle);
+                report["pixelsAwareness"] = Win32.GetWindowDpiAwarenessContext(pixels.Handle).ToInt64();
+                report["pixelsMonitorDpi"] = Win32.MonitorDpi(pixels.Handle);
+            }
+#if DEBUG
+            if (mode == "hover-noocr") Environment.SetEnvironmentVariable("XDICT_HOVER_NO_OCR", "1");
+            if (mode == "hover-stall-uia") Environment.SetEnvironmentVariable("XDICT_HOVER_STALL_UIA", "5000");
+            if (mode == "hover-stall-ocr") Environment.SetEnvironmentVariable("XDICT_HOVER_STALL_OCR", "6000");
+            Environment.SetEnvironmentVariable("XDICT_HOVER_CAPTURE_DUMP", output + ".capture.png");
+#endif
+            Win32.SetCursorPos(x - 3, y);
+            await Task.Delay(120);
+            Win32.SetCursorPos(x, y);
+            await Task.Delay(180);
+            long started = Environment.TickCount64;
+            string? press = root.TryGetProperty("press", out JsonElement pressElement) ? pressElement.GetString() : null;
+            bool external = mode == "hover-elevated" && press is not null;
+            if (external)
+            {
+                report["externalPress"] = true;
+                // The launcher needs this window's handle to take the foreground before pressing: the press itself
+                // is ignored while an elevated window owns it.
+                File.WriteAllText(press!,
+                    main == IntPtr.Zero ? "" : main.ToInt64().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
+            }
+            long deadline = started + 9000;
+            while (controller.Panel is not { Shown: true } && string.IsNullOrEmpty(controller.HoverNotice) &&
+                   Environment.TickCount64 < deadline) await Task.Delay(20);
+            report["specialPanelMs"] = controller.Panel is { Shown: true } ? Environment.TickCount64 - started : -1;
+            report["specialShown"] = controller.Panel is { Shown: true };
+            report["specialTerm"] = controller.Panel?.Term;
+            report["specialAcquisition"] = controller.HoverLastWord?.Acquisition;
+            report["specialSource"] = controller.HoverLastWord?.SourceName;
+            report["specialReadMs"] = controller.HoverLastReadMs;
+            report["specialOutcome"] = controller.HoverLastOutcome;
+            report["specialDiagnostics"] = controller.HoverLastDiagnostics;
+            report["specialLastTerm"] = controller.HoverLastWord?.Term;
+            report["specialLastBox"] = controller.HoverLastWord?.Box;
+            report["specialNotice"] = controller.HoverNotice;
+            report["specialEvents"] = controller.HoverEventsSeen;
+            report["specialModifierDowns"] = controller.HoverModifierDowns;
+            report["specialArmed"] = controller.HoverArmed;
+            report["specialModifierHeld"] = controller.HoverModifierHeld;
+            report["specialLastEvent"] = controller.HoverLastEvent;
+            report["specialSettleChecks"] = controller.HoverSettleChecks;
+            report["specialHookMicroseconds"] = controller.HoverHookMicroseconds;
+            report["specialAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+            if (!external) Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+            await Task.Delay(150);
+            Key(0x1B);
+            await Task.Delay(500);
+#if DEBUG
+            if (mode == "hover-stall-uia" || mode == "hover-stall-ocr")
+            {
+                Environment.SetEnvironmentVariable(
+                    mode == "hover-stall-uia" ? "XDICT_HOVER_STALL_UIA" : "XDICT_HOVER_STALL_OCR", null);
+                // The stalled lane owns the capture until its own work ends (the OCR task sleeps 6 s); let it return.
+                await Task.Delay(7000);
+                int before = controller.LastAcknowledgement?.Request ?? 0;
+                Win32.SetCursorPos(x - 3, y);
+                await Task.Delay(120);
+                Win32.SetCursorPos(x, y);
+                await Task.Delay(180);
+                Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
+                deadline = Environment.TickCount64 + 7000;
+                while ((controller.LastAcknowledgement?.Request ?? before) <= before &&
+                       Environment.TickCount64 < deadline) await Task.Delay(20);
+                report["recoveryShown"] = controller.Panel is { Shown: true };
+                report["recoveryTerm"] = controller.Panel?.Term;
+                report["recoveryReadMs"] = controller.HoverLastReadMs;
+                report["recoveryAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+                report["recoveryHookMicroseconds"] = controller.HoverHookMicroseconds;
+                Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
+                await Task.Delay(150);
+                Key(0x1B);
+                await Task.Delay(300);
+            }
+#endif
         }
 
         if (mode is "main" or "relaunch" or "notepad" or "word" or "pdf" or "suspended" or "elevated")
@@ -421,6 +602,15 @@ internal static class CaptureLab
         {
             // Every early return (no target window, no foreground) still ends its Notepad/Word/Edge and the server.
             try { target?.Kill(); } catch (Exception) { }
+            // Windows 11's Notepad may host the window in a process other than the one started; end the window's own
+            // process too, or a failed pass leaves a Notepad the next stage refuses to run beside.
+            if (notepadTarget && targetWindow != IntPtr.Zero)
+            {
+                Win32.GetWindowThreadProcessId(targetWindow, out uint owner);
+                if (owner != 0 && owner != (uint)Environment.ProcessId && owner != (uint)(target?.Id ?? 0))
+                    try { Process.GetProcessById((int)owner).Kill(); } catch (Exception) { }
+            }
+            pixels?.Dispose();
             pdfServer?.Dispose();
             controller.Dispose();
         }
@@ -617,6 +807,39 @@ internal static class CaptureLab
         catch (Exception error) { return "<" + error.GetType().Name + ">"; }
     }
 
+    /// <summary>The first visible, cloaked top-level window whose box holds the point: an overlay that says it is
+    /// visible while DWM shows nothing. Reported so the stage proves the skip rule was exercised, not just that the
+    /// read answered — a check that cannot fail is not a check.</summary>
+    private static string? CloakedAtPoint(int x, int y)
+    {
+        string? found = null;
+        Win32.EnumWindows((window, _) =>
+        {
+            if (!Win32.IsWindowVisible(window) || Win32.IsIconic(window)) return true;
+            if (!Win32.IsCloaked(window)) return true;
+            long style = (long)Win32.GetWindowLongPtrW(window, Win32.GWL_EXSTYLE);
+            if ((style & Win32.WS_EX_TRANSPARENT) != 0) return true;
+            if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return true;
+            if (x < rect.Left || x >= rect.Right || y < rect.Top || y >= rect.Bottom) return true;
+            Win32.GetWindowThreadProcessId(window, out uint pid);
+            var name = new char[128];
+            int length = Win32.GetClassNameW(window, name, name.Length);
+            found = Win32.ProcessName(pid) + "/" + new string(name, 0, length) + "/" + window.ToInt64();
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>A window as one line: its process, class and handle.</summary>
+    private static string? DescribeWindow(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return null;
+        Win32.GetWindowThreadProcessId(window, out uint pid);
+        var name = new char[128];
+        int length = Win32.GetClassNameW(window, name, name.Length);
+        return Win32.ProcessName(pid) + "/" + new string(name, 0, length) + "/" + window.ToInt64();
+    }
+
     /// <summary>The first elements of a window's tree, names and control types: what a dialog is made of.</summary>
     private static string DescribeTree(IntPtr window)
     {
@@ -810,6 +1033,18 @@ internal static class CaptureLab
         for (int i = 0; i < 50; i++)
         {
             if (window != IntPtr.Zero && Win32.Raise(window)) return true;
+            if (window != IntPtr.Zero && Win32.GetWindowRect(window, out Win32.RECT rect))
+            {
+                // A shell surface (Start, search, the taskbar host) can own the foreground with no app in front, and
+                // no raise call takes it from an immersive process; a click on the target's title bar does (measured
+                // 2026-11-06, after a test run left ShellExperienceHost in front).
+                Win32.SetCursorPos((rect.Left + rect.Right) / 2, rect.Top + 12);
+                Thread.Sleep(50);
+                Win32.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); // left down
+                Win32.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); // left up
+                Thread.Sleep(150);
+                if (Win32.GetForegroundWindow() == window) return true;
+            }
             Thread.Sleep(100);
         }
         return false;
@@ -817,6 +1052,122 @@ internal static class CaptureLab
 
     private static async Task WriteAsync(string path, Dictionary<string, object?> report) =>
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+
+    /// <summary>A wordless surface for the OCR passes: a plain Win32 window that paints one word with GDI and answers
+    /// Accessibility with nothing — no text pattern, no control name. A scanned page is the product case; this is its
+    /// deterministic fixture, and it uses the same GDI drawing path a classic desktop app does. It is created in
+    /// XDict's own process on a thread with its own message loop, so no helper binary or document format is needed.
+    /// The reader's own-window branch reads it exactly as it reads any other window (Accessibility, then pixels).</summary>
+    private sealed class PixelsWindow : IDisposable
+    {
+        public const string Face = "Arial";
+        public const int Size = 96;
+        public const int Width = 1200;
+        public const int Height = 400;
+        private const uint WsPopup = 0x80000000, WsVisible = 0x10000000;
+        private const uint WsExTopmost = 0x00000008, WsExToolWindow = 0x00000080;
+        private const uint WmPaint = 0x000F, WmPrintClient = 0x0318, WmClose = 0x0010, WmDestroy = 0x0002;
+        private const string ClassName = "XDictCaptureLabPixels";
+        private readonly string word;
+        private readonly bool unaware;
+        private readonly ManualResetEventSlim ready = new(false);
+        private readonly Win32.WndProc proc;
+        private readonly Thread thread;
+        private IntPtr handle;
+
+        public PixelsWindow(string word, bool unaware = false)
+        {
+            this.word = word;
+            this.unaware = unaware;
+            // The delegate is held for the window's lifetime: the class registration keeps a raw pointer to it.
+            proc = Window;
+            thread = new Thread(Run) { IsBackground = true, Name = "capture lab pixels" };
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+        }
+
+        public IntPtr Handle
+        {
+            get { ready.Wait(10000); return handle; }
+        }
+
+        private void Run()
+        {
+            // A dpi-unaware window on a scaled display is the classic mixed-DPI case: the system scales its surface
+            // and its thread's coordinates are not the physical ones the reader works in.
+            if (unaware) Win32.SetThreadDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_UNAWARE);
+            IntPtr instance = Win32.GetModuleHandleW(null);
+            var windowClass = new Win32.WNDCLASSEX
+            {
+                cbSize = (uint)Marshal.SizeOf<Win32.WNDCLASSEX>(),
+                style = 0x0001 | 0x0002, // CS_VREDRAW | CS_HREDRAW
+                lpfnWndProc = proc,
+                hInstance = instance,
+                hCursor = Win32.LoadCursorW(IntPtr.Zero, (IntPtr)32512), // IDC_ARROW
+                hbrBackground = (IntPtr)6, // COLOR_WINDOW + 1
+                lpszClassName = ClassName,
+            };
+            Win32.RegisterClassExW(ref windowClass);
+            handle = Win32.CreateWindowExW(WsExTopmost | WsExToolWindow, ClassName, "", WsPopup | WsVisible,
+                240, 240, Width, Height, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
+            Win32.SetWindowPos(handle, Win32.HWND_TOPMOST, 240, 240, Width, Height,
+                Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
+            ready.Set();
+            while (Win32.GetMessageW(out Win32.MSG message, IntPtr.Zero, 0, 0) > 0)
+            {
+                Win32.TranslateMessage(ref message);
+                Win32.DispatchMessageW(ref message);
+            }
+        }
+
+        private void Paint(IntPtr dc)
+        {
+            using var graphics = Graphics.FromHdc(dc);
+            graphics.Clear(Color.White);
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            using var font = new Font(Face, Size, FontStyle.Bold, GraphicsUnit.Pixel);
+            // Centred, because the centre survives DPI scaling: the word's screen point is the window's centre
+            // whether the window draws in physical pixels or its surface is scaled for a dpi-unaware thread.
+            using var format = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+            };
+            graphics.DrawString(word, font, Brushes.Black, new RectangleF(0, 0, Width, Height), format);
+        }
+
+        private IntPtr Window(IntPtr window, uint message, IntPtr wParam, IntPtr lParam)
+        {
+            switch (message)
+            {
+                case WmPaint:
+                {
+                    IntPtr dc = Win32.BeginPaint(window, out Win32.PAINTSTRUCT paint);
+                    try { Paint(dc); }
+                    finally { Win32.EndPaint(window, ref paint); }
+                    return IntPtr.Zero;
+                }
+                case WmPrintClient:
+                    // PrintWindow's own path: the same drawing into the caller's surface.
+                    Paint(wParam);
+                    return IntPtr.Zero;
+                case WmClose:
+                    Win32.DestroyWindow(window);
+                    return IntPtr.Zero;
+                case WmDestroy:
+                    Win32.PostQuitMessage(0);
+                    return IntPtr.Zero;
+                default:
+                    return Win32.DefWindowProcW(window, message, wParam, lParam);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (handle != IntPtr.Zero) Win32.PostMessageW(handle, WmClose, IntPtr.Zero, IntPtr.Zero);
+            thread.Join(2000);
+        }
+    }
 
     /// <summary>A one-file HTTP source on loopback: Edge opens a PDF from a URL where a file path becomes a download.</summary>
     private sealed class PdfServer : IDisposable
