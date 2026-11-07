@@ -6,5 +6,12 @@ publish = false
 
 [workspace]
 
+[features]
+# Declared so the production wire module's own cfg is known here; the acceptance build turns it on, this test not.
+acceptance-contract6 = []
+
 [dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
+# The production wire types, not a second reading of the schema: a fixture that decodes here decodes in the service.
+xdict-core = { path = "../../../../../core/xdict-core", features = ["serde"] }

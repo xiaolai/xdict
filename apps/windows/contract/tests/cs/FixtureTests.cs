@@ -38,6 +38,26 @@ public class FixtureTests
             Validate.Request(requestDocument.RootElement);
             Validate.Reply(replyDocument.RootElement);
 
+            // Through the production records: the file observations as the client builds them, and the handshake's
+            // answer as the client reads it. A field renamed on the client's side fails here, not at a live call.
+            foreach (JsonElement file in requestDocument.RootElement.GetProperty("files").EnumerateArray())
+            {
+                FileObservation observation = file.Deserialize<FileObservation>(Wire.Options)
+                    ?? throw new InvalidOperationException($"{name}: a file record does not decode");
+                Assert.False(string.IsNullOrEmpty(observation.Id), $"{name}: a file record has no id");
+                Assert.Equal(file.GetProperty("handle").GetUInt64(), observation.Handle);
+            }
+            if (request["op"]!.GetValue<string>() == "versions" &&
+                replyDocument.RootElement.TryGetProperty("ok", out JsonElement versions))
+            {
+                Versions typed = versions.Deserialize<Versions>(Wire.Options)
+                    ?? throw new InvalidOperationException($"{name}: the versions answer does not decode");
+                Assert.Equal(versions.GetProperty("protocol").GetUInt32(), typed.Protocol);
+                Assert.Equal(versions.GetProperty("core").GetString(), typed.Core);
+                Assert.Equal(versions.GetProperty("indexFormat").GetUInt32(), typed.IndexFormat);
+                Assert.Equal(versions.GetProperty("normalization").GetUInt32(), typed.Normalization);
+            }
+
             Assert.Equal(request["id"]!.ToJsonString(), reply["id"]!.ToJsonString());
             string op = request["op"]!.GetValue<string>();
             Assert.True(operations.ContainsKey(op), $"{name}: op {op} is in the schema");
