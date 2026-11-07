@@ -15,7 +15,7 @@ public sealed class CaptureController : IDisposable
     private readonly ServiceClient client;
     private readonly LibraryStore store;
     private readonly SearchSession session;
-    private readonly ReadingRecorder readings;
+    private readonly ReadingDelivery readingDelivery;
     private readonly Action<string, double> openInApp;
     private readonly CaptureRequests book = new();
     private readonly CaptureContextSession contexts = new();
@@ -42,7 +42,7 @@ public sealed class CaptureController : IDisposable
         this.client = client;
         this.store = store;
         this.session = session;
-        readings = new ReadingRecorder(client);
+        readingDelivery = new ReadingDelivery(new ReadingRecorder(client));
         this.openInApp = openInApp;
         dispatcher = DispatcherQueue.GetForCurrentThread();
         hotkey = new Hotkey(() => AskGuarded(CaptureTrigger.Selection));
@@ -86,6 +86,8 @@ public sealed class CaptureController : IDisposable
     public long HoverLastReadMs => hover?.LastReadMs ?? 0;
     public string HoverLastDiagnostics => hover?.LastDiagnostics ?? "";
     public int HoverReadsStarted => hover?.ReadsStarted ?? 0;
+    /// <summary>Abandoned UIA reads since the lane last answered: the worker's own state, for the recovery pass.</summary>
+    public int HoverStuckReads => hoverReader.StuckReads;
     public int HoverWordsFound => hover?.WordsFound ?? 0;
     public int HoverEventsSeen => hover?.EventsSeen ?? 0;
     public int HoverModifierDowns => hover?.ModifierDowns ?? 0;
@@ -505,30 +507,15 @@ public sealed class CaptureController : IDisposable
                     context.Length, handle, hit.Edition, key, occurrence, hit.Dictionary);
             }
             view.SetAskAvailable(lastMeaning is not null);
-            Acknowledge(delivery, CaptureOutcome.Shown);
-            // A separate event from the acknowledgement: the capture ended either way; this is the reading the
-            // history may keep, and only when its own switch and sentence allow it.
-            if (drawnHit is { } entry)
-            {
-                LearningSettings settings = LearningSettings.Load();
-                if (HistoryCapture.Records(onScreen: true, current: true, hasEntry: true,
-                        hasSentence: delivery.Term.Context is CaptureContext.Available, settings.HistoryEnabled))
-                {
-                    LibraryDictionary? dictionary =
-                        store.Dictionaries.FirstOrDefault(item => item.Edition == entry.Edition);
-                    _ = Task.Run(async () =>
-                    {
-                        try { await readings.RecordAsync(delivery.Term, entry, dictionary, settings); }
-                        catch (Exception error)
-                        {
-                            // The entry drew; a lost history record must not fail the capture. It is still
-                            // observable, and its message names a type, never the sentence.
-                            System.Diagnostics.Debug.WriteLine(
-                                "the reading was not recorded: " + error.GetType().Name + ": " + error.Message);
-                        }
-                    });
-                }
-            }
+            // The acknowledgement is the ownership proof: the model ends the presentation and records only when the
+            // book kept that ending and an entry drew. A superseded delivery, a failed render and the no-results
+            // placeholder each acknowledge differently or not at all, and none of them writes a reading.
+            LibraryDictionary? dictionary = drawnHit is { } entry
+                ? store.Dictionaries.FirstOrDefault(item => item.Edition == entry.Edition)
+                : null;
+            ReadingDelivery.Outcome ended = readingDelivery.Complete(delivery, book, drawnHit, dictionary,
+                LearningSettings.Load());
+            if (ended.Acknowledged is { } acknowledged) LastAcknowledgement = acknowledged;
         }
         else
         {
