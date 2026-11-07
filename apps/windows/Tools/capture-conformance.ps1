@@ -13,6 +13,10 @@ $revision = (Get-FileHash -LiteralPath $vectors -Algorithm SHA256).Hash.ToLowerI
 Invoke-XDictGate -Name 'capture-conformance' -Inputs @($vectors, (Join-Path $layout.AppRoot 'XDict.Models\Capture.cs'),
     (Join-Path $layout.AppRoot 'XDict.Models\CaptureLifecycle.cs'), (Join-Path $layout.AppRoot 'XDict.Tests'),
     $PSCommandPath, (Join-Path $PSScriptRoot 'gates.ps1')) -Full:$Full -Action {
+    # The suite's lifecycle cases drive the real service through the production coordinator, as the unit gate's do:
+    # without these it fails with a sentence about a missing environment instead of a result.
+    . (Join-Path $PSScriptRoot 'service-fixtures.ps1')
+    $env:XDICT_SERVICE = $layout.Service
     Push-Location $layout.AppRoot
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
