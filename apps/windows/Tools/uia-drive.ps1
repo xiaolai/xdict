@@ -56,6 +56,24 @@ try {
         }
         catch { return $false }
     }
+    # Who has the foreground when our window did not get it. Windows refuses a foreground change while a person is
+    # working, so a lost focus is named — the app that kept it — and never read as the product's failure.
+    $focusHolder = {
+        try {
+            $element = [System.Windows.Automation.AutomationElement]::FocusedElement
+            if ($null -eq $element) { return 'no focused element' }
+            $top = $element
+            while ($true) {
+                $parent = $top.FindFirst([System.Windows.Automation.TreeScope]::Parent,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                if ($null -eq $parent) { break }
+                $top = $parent
+            }
+            $owner = try { (Get-Process -Id $top.Current.ProcessId -ErrorAction Stop).ProcessName } catch { '?' }
+            return ("{0}/{1}/'{2}'" -f $owner, $top.Current.ClassName, $top.Current.Name)
+        }
+        catch { return '<' + $_.Exception.Message + '>' }
+    }
     $findOne = {
         param($parent, $scope, $condition)
         for ($attempt = 0; $attempt -lt 6; $attempt++) {
@@ -88,7 +106,7 @@ try {
         & $setValue $target $text
         try { $target.SetFocus() } catch { }
         Start-Sleep -Milliseconds 300
-        if (-not (& $holdsFocus $app.Id)) { throw 'the search box did not take the foreground; no key was sent' }
+        if (-not (& $holdsFocus $app.Id)) { throw ('the search box did not take the foreground; no key was sent; the foreground is with ' + (& $focusHolder)) }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         Start-Sleep -Seconds 4
     }
@@ -113,7 +131,7 @@ try {
         $chosen.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         try { $list.SetFocus() } catch { }
         Start-Sleep -Milliseconds 250
-        if (-not (& $holdsFocus $app.Id)) { throw 'the result list did not take the foreground; no key was sent' }
+        if (-not (& $holdsFocus $app.Id)) { throw ('the result list did not take the foreground; no key was sent; the foreground is with ' + (& $focusHolder)) }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         Start-Sleep -Seconds 4
     }
@@ -216,7 +234,7 @@ try {
             $result.entryStatus = $(if ($status) { $status.Current.Name } else { '' })
             try { $window.SetFocus() } catch { }
             Start-Sleep -Milliseconds 300
-            if (-not (& $holdsFocus $app.Id)) { throw 'the window did not take the foreground; no key was sent' }
+            if (-not (& $holdsFocus $app.Id)) { throw ('the window did not take the foreground; no key was sent; the foreground is with ' + (& $focusHolder)) }
             [System.Windows.Forms.SendKeys]::SendWait('^f')
             Start-Sleep -Milliseconds 700
             $box = & $byId $window 'FindBox'
@@ -224,7 +242,7 @@ try {
             if ($box) {
                 & $setValue $box 'color'
                 try { $box.SetFocus() } catch { }
-                if (-not (& $holdsFocus $app.Id)) { throw 'the find box did not take the foreground; no key was sent' }
+                if (-not (& $holdsFocus $app.Id)) { throw ('the find box did not take the foreground; no key was sent; the foreground is with ' + (& $focusHolder)) }
                 [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
                 Start-Sleep -Milliseconds 500
                 $value = $box.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)

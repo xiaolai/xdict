@@ -75,6 +75,13 @@ try {
             $value.SetValue($text)
             try { $edit.SetFocus() } catch { }
             Start-Sleep -Milliseconds 250
+            # A key sent to another app's window is not a query: the window must hold the foreground first, and the
+            # app that kept it is named (a person working at the host is the measured case).
+            $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+            if ($null -eq $focused -or $focused.Current.ProcessId -ne $app.Id) {
+                $owner = if ($null -eq $focused) { 'nothing' } else { 'pid ' + $focused.Current.ProcessId }
+                throw "the search box did not take the foreground before '$text'; it is with $owner"
+            }
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
             Start-Sleep -Seconds 2
         }
