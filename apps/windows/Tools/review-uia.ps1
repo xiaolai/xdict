@@ -26,10 +26,18 @@ Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
 
     $resultPath = Join-Path $folder 'result.json'
     $wrapper = Join-Path $folder 'run.ps1'
+    # The driver reads its paths from a JSON file beside itself: no path is ever spliced into PowerShell source, where
+    # an apostrophe would end the string and any quote would make the rest a command.
+    $driverConfig = Join-Path $folder 'driver-config.json'
+    $storageName = 'review-' + [Guid]::NewGuid().ToString('N')
+    @{ library = $library; exe = $exe; storage = $storageName; result = $resultPath } |
+        ConvertTo-Json | Set-Content -LiteralPath $driverConfig -Encoding UTF8
     $template = @'
 $ErrorActionPreference = 'Stop'
-$env:XDICT_LIBRARY = '__LIBRARY__'
-$app = Start-Process -FilePath '__EXE__' -ArgumentList '--review-lab', '--lab-storage', '__STORAGE__' -PassThru
+$config = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'driver-config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$resultPath = $config.result
+$env:XDICT_LIBRARY = $config.library
+$app = Start-Process -FilePath $config.exe -ArgumentList '--review-lab', '--lab-storage', $config.storage -PassThru
 try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
@@ -87,19 +95,16 @@ try {
             catch { $result.error = $_.Exception.Message }
         }
     }
-    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath '__RESULT__' -Encoding UTF8
+    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 catch {
-    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath '__RESULT__' -Encoding UTF8
+    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 finally {
     if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
 }
 '@
-    $storage = 'review-' + [Guid]::NewGuid().ToString('N')
-    $script = $template.Replace('__LIBRARY__', $library).Replace('__EXE__', $exe).Replace('__STORAGE__', $storage) `
-        .Replace('__RESULT__', $resultPath)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
+    Set-Content -LiteralPath $wrapper -Value $template -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $resultPath -Seconds 240
     Write-Host ($uia | ConvertTo-Json -Depth 6)

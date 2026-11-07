@@ -27,6 +27,11 @@ Invoke-XDictGate -Name 'find-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     if (-not $result.tabColor) { throw 'the colour entry did not open in a tab' }
     if (-not $result.findVisible) { throw 'Ctrl+F did not show the find bar over the entry' }
     if ($result.findValue -ne 'color') { throw "the find field holds '$($result.findValue)', not color" }
+    # The typed text is not evidence that the entry was searched: the page's selection is.
+    if ($result.findSelection -like 'unavailable:*') { throw ('the page selection could not be read: ' + $result.findSelection) }
+    if ([string]::IsNullOrWhiteSpace($result.findSelection)) { throw 'the find selected nothing in the entry' }
+    if ($result.findSelection.Trim() -ne 'color') { throw "the find selected '$($result.findSelection)', not color" }
+    if (-not $result.findMoved) { throw 'Find next did not move to another match' }
     if (-not $result.findClosed) { throw 'Escape did not close the find bar' }
     Stop-XDictLabProcesses -Name @('XDict') -Since $started
 }

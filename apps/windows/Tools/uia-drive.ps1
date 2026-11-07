@@ -33,12 +33,28 @@ try {
     $byId = {
         param($parent, $id)
         if ($null -eq $parent) { return $null }
-        try {
-            $condition = New-Object System.Windows.Automation.PropertyCondition(
-                [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
-            return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        $condition = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
+        # A provider exception is not an absence: returning $null made "the Find bar closed" true whenever the tree
+        # stopped answering. Retried, then thrown, so a broken lookup fails the stage instead of passing it.
+        for ($attempt = 0; $attempt -lt 6; $attempt++) {
+            try { return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) }
+            catch {
+                ('findfirst retry (byId ' + $id + '): ' + $_.Exception.Message) | Add-Content -LiteralPath $log
+                Start-Sleep -Milliseconds 500
+            }
         }
-        catch { return $null }
+        throw ('the UIA lookup for ' + $id + ' failed')
+    }
+    # SendKeys goes to whatever holds the foreground: after a focus attempt, the focused element's process is checked
+    # before any key is sent, so a keystroke can never reach another application.
+    $holdsFocus = {
+        param($processId)
+        try {
+            $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+            return $null -ne $focused -and $focused.Current.ProcessId -eq $processId
+        }
+        catch { return $false }
     }
     $findOne = {
         param($parent, $scope, $condition)
@@ -72,6 +88,7 @@ try {
         & $setValue $target $text
         try { $target.SetFocus() } catch { }
         Start-Sleep -Milliseconds 300
+        if (-not (& $holdsFocus $app.Id)) { throw 'the search box did not take the foreground; no key was sent' }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         Start-Sleep -Seconds 4
     }
@@ -96,6 +113,7 @@ try {
         $chosen.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         try { $list.SetFocus() } catch { }
         Start-Sleep -Milliseconds 250
+        if (-not (& $holdsFocus $app.Id)) { throw 'the result list did not take the foreground; no key was sent' }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         Start-Sleep -Seconds 4
     }
@@ -116,7 +134,7 @@ try {
         return & $findOne $tabs ([System.Windows.Automation.TreeScope]::Descendants) $nameCondition
     }
 
-    $window = Find-XDictWindow -Root $root -Seconds 60
+    $window = Find-XDictWindow -Root $root -Seconds 60 -ProcessId $app.Id
     $result.window = ($null -ne $window)
     $result.tabsFound = ($null -ne (& $byId $window 'Tabs'))
     if (-not $window) { throw 'the XDict window was not found through UIA' }
@@ -153,6 +171,7 @@ try {
             $result.entryStatus = $(if ($status) { $status.Current.Name } else { '' })
             try { $window.SetFocus() } catch { }
             Start-Sleep -Milliseconds 300
+            if (-not (& $holdsFocus $app.Id)) { throw 'the window did not take the foreground; no key was sent' }
             [System.Windows.Forms.SendKeys]::SendWait('^f')
             Start-Sleep -Milliseconds 700
             $box = & $byId $window 'FindBox'
@@ -160,11 +179,40 @@ try {
             if ($box) {
                 & $setValue $box 'color'
                 try { $box.SetFocus() } catch { }
+                if (-not (& $holdsFocus $app.Id)) { throw 'the find box did not take the foreground; no key was sent' }
                 [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
                 Start-Sleep -Milliseconds 500
                 $value = $box.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
                 $result.findValue = $value.Current.Value
+                # The field holding the typed text proves nothing about the search. The page's own selection is the
+                # evidence: it must hold the term, and the next match must move it.
+                $document = & $findOne $window ([System.Windows.Automation.TreeScope]::Descendants) $documentCondition
+                $result.findSelection = ''
+                $result.findMoved = $false
+                if ($document) {
+                    try {
+                        $textPattern = $document.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
+                        $selection = $textPattern.GetSelection()
+                        if ($selection.Count -gt 0) {
+                            $result.findSelection = $selection[0].GetText(-1)
+                            $result.findSelectionRects = @($selection[0].GetBoundingRectangles()) -join ';'
+                        }
+                        # A term with more than one occurrence: the next match must be somewhere else on the page.
+                        & $setValue $box 'e'
+                        Start-Sleep -Milliseconds 500
+                        $before = $textPattern.GetSelection()
+                        $beforeRects = if ($before.Count -gt 0) { @($before[0].GetBoundingRectangles()) -join ';' } else { '' }
+                        $next = & $byId $window 'FindNext'
+                        if ($next) { $next.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+                        Start-Sleep -Milliseconds 500
+                        $after = $textPattern.GetSelection()
+                        $afterRects = if ($after.Count -gt 0) { @($after[0].GetBoundingRectangles()) -join ';' } else { '' }
+                        $result.findMoved = ($beforeRects -ne '' -and $afterRects -ne '' -and $beforeRects -ne $afterRects)
+                    }
+                    catch { $result.findSelection = 'unavailable: ' + $_.Exception.Message }
+                }
             }
+            if (-not (& $holdsFocus $app.Id)) { throw 'the find bar lost the foreground; Escape was not sent' }
             [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
             Start-Sleep -Milliseconds 600
             $box = & $byId $window 'FindBox'
@@ -179,11 +227,40 @@ try {
             $result.tabHue = ($null -ne (& $tabNamed $window 'hue'))
             $first = & $tabNamed $window 'color'
             $second = & $tabNamed $window 'hue'
+            $documentCondition = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::Document)
+            $runtime = {
+                param($tab)
+                if ($null -eq $tab) { return '' }
+                $doc = $tab.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $documentCondition)
+                if ($null -eq $doc) { return '' }
+                return ([string]::Join('.', $doc.GetRuntimeId()))
+            }
             if ($first) {
                 $first.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
                 Start-Sleep -Milliseconds 500
                 $result.firstSelected = $first.GetCurrentPattern(
                     [System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected
+                # The selected tab's own pane must have drawn; its identity is what a switch must change and a close
+                # must keep.
+                $result.colorRuntime = & $runtime $first
+                $result.colorDrawn = ($result.colorRuntime -ne '')
+            }
+            if ($second -and $first) {
+                # Switching to the other tab shows the other pane, not the same document under a different header.
+                $second.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+                Start-Sleep -Milliseconds 500
+                $result.hueRuntime = & $runtime $second
+                $result.hueDrawn = ($result.hueRuntime -ne '')
+                $result.switchedPanes = ($result.colorRuntime -ne '' -and $result.hueRuntime -ne '' -and
+                    $result.colorRuntime -ne $result.hueRuntime)
+                # Back to the first: its pane is the same document it had, not a blank tab.
+                $first.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+                Start-Sleep -Milliseconds 500
+                $result.colorRuntimeAfterSwitch = & $runtime $first
+                $result.stateKept = ($result.colorRuntime -ne '' -and
+                    $result.colorRuntime -eq $result.colorRuntimeAfterSwitch)
             }
             if ($second) {
                 $closeCondition = New-Object System.Windows.Automation.AndCondition(
@@ -247,6 +324,7 @@ try {
                     $children = $root.FindAll([System.Windows.Automation.TreeScope]::Children,
                         [System.Windows.Automation.Condition]::TrueCondition)
                     foreach ($candidate in $children) {
+                        if ($candidate.Current.ProcessId -ne $app.Id) { continue }
                         if (& $byId $candidate 'ExploreTitle') { $explore = $candidate; break }
                     }
                 }

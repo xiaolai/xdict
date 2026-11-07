@@ -1,6 +1,6 @@
-# Explore through its own window: open it, ask the tiny dictionary for words ending in "un", read a page of rows and
-# open the first row, which must add the entry to the reader's tabs. The rows' reason labels are the shell's, so the
-# stage asserts the word and the open, not a sentence.
+# Explore through its own window: open it, ask the tiny dictionary for words ending in "olour" (the driver's query is
+# 'olour'), read a page of rows and open the first row, which must add the entry to the reader's tabs. The rows'
+# reason labels are the shell's, so the stage asserts the word and the open, not a sentence.
 [CmdletBinding()]
 param([switch]$Full)
 

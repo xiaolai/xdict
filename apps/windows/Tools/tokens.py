@@ -55,13 +55,18 @@ NAMED_COLOURS = {
 ATTRIBUTE = re.compile(r'([A-Za-z_][\w:.]*)\s*=\s*"([^"]*)"')
 XDOUBLE = re.compile(r'<\s*(?:x:)?Double\b[^>]*>([^<]+)<')
 NUMBER = re.compile(r'[-+]?\d+(?:\.\d+)?')
-CS_NUMBER = re.compile(r'\d+(?:\.\d+)?')
-CS_ASSIGN = re.compile(r'\.(Width|Height|MinWidth|MaxWidth|MinHeight|MaxHeight|FontSize|Opacity)\s*=\s*(\d+(?:\.\d+)?)')
+# An assignment to a token-owned property anywhere it occurs, not only after a dot: an object initializer
+# (`new Button { Width = 42 }`) escaped the gate when the dot was required. \b keeps `SomeWidth` out.
+CS_ASSIGN = re.compile(r'\b(Width|Height|MinWidth|MaxWidth|MinHeight|MaxHeight|FontSize|Opacity)\s*=\s*(\d+(?:\.\d+)?)')
 CS_THICKNESS = re.compile(r'new\s+(Thickness|CornerRadius|GridLength)\s*\(([^)]*)\)')
 CS_INTERVAL = re.compile(r'Interval\s*=\s*TimeSpan\.FromMilliseconds\s*\(\s*(\d+(?:\.\d+)?)\s*\)')
 CS_COLOUR = re.compile(r'\b(?:Colors\.[A-Za-z]+|Color\.FromArgb\s*\()')
 CS_FONT = re.compile(r'new\s+FontFamily\s*\(\s*"[^"]*"')
-EXEMPT = re.compile(r'//\s*token-exempt:\s*(.+)$')
+# The marker is matched on its own so a bare `// token-exempt:` is diagnosed as the missing reason it is, rather than
+# silently ignored by a pattern that requires one.
+EXEMPT = re.compile(r'//\s*token-exempt:?(.*)$')
+# One numeric literal: the whole argument, not a digit inside an identifier (`Tokens.Space.Size2`).
+CS_LITERAL = re.compile(r'[-+]?\d+(?:\.\d+)?')
 
 
 class Refused(Exception):
@@ -234,12 +239,23 @@ def scan_cs(path):
                 attribute, value = match.group(1), float(match.group(2))
                 if value == 0 or (attribute == "Opacity" and value == 1):
                     continue
+                # A declaration of a token's own field (`public const int Width = 1200`) is where the literal belongs;
+                # an assignment to one is a use. The keyword before the identifier is what tells them apart.
+                if re.search(r'\b(?:const|readonly|static)\b[^=;{})]*$', code[:match.start()]):
+                    continue
                 findings.append((number, line.strip(), match.group(0)))
             for match in CS_THICKNESS.finditer(code):
                 text = match.group(2)
                 if "Star" in text or "Auto" in text:
                     continue
-                values = [float(item) for item in CS_NUMBER.findall(text)]
+                # Only an argument that is a literal is a literal: a token expression (`Tokens.Space.Size2`) or a
+                # named argument is not.
+                values = []
+                for item in text.split(","):
+                    item = re.sub(r'^[A-Za-z_]\w*\s*:\s*', '', item.strip())
+                    literal = CS_LITERAL.fullmatch(item)
+                    if literal:
+                        values.append(float(literal.group(0)))
                 if any(value != 0 for value in values):
                     findings.append((number, line.strip(), match.group(0)))
             if CS_INTERVAL.search(code):
@@ -253,7 +269,12 @@ def scan_cs(path):
 
 def scan():
     found = {}
+    scanned = 0
     for root in SCAN_ROOTS:
+        # A missing root must be a refusal, never an empty scan that matches an old baseline and passes: the gate
+        # would then be a check that cannot fail.
+        if not os.path.isdir(root):
+            raise Refused(f"the scan root {os.path.relpath(root, APP)} does not exist")
         for directory, folders, files in os.walk(root):
             folders[:] = [name for name in folders if name not in SKIP_PARTS]
             for name in sorted(files):
@@ -261,13 +282,17 @@ def scan():
                     continue
                 path = os.path.join(directory, name)
                 if name.endswith(".xaml"):
+                    scanned += 1
                     result = scan_xaml(path)
                 elif name.endswith(".cs"):
+                    scanned += 1
                     result = scan_cs(path)
                 else:
                     continue
                 if result:
                     found[os.path.relpath(path, APP).replace(os.sep, "/")] = result
+    if scanned == 0:
+        raise Refused("the scan found no .cs or .xaml files under " + ", ".join(SCAN_ROOTS))
     return found
 
 

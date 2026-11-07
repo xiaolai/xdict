@@ -1,5 +1,6 @@
-# Settings through UI Automation: the main window's Settings button opens one window whose three routes are named,
-# selectable, and each shows its own controls. A route is also reached by keyboard from the navigation pane.
+# Settings through UI Automation: the main window's Settings button opens one window whose nine routes
+# (Dictionaries, Reading, Speech, Lookup, Learning, AI, General, Setup, About) are named, selectable, and each shows
+# its own control. A route is also reached by keyboard from the navigation pane.
 [CmdletBinding()]
 param([switch]$Full, [int]$Scale = 0)
 . (Join-Path $PSScriptRoot 'gates.ps1')
@@ -38,11 +39,18 @@ Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } el
     $result = Join-Path $folder 'result.json'
     $quit = Join-Path $env:LOCALAPPDATA ('XDict\launch\' + $launchId + '.quit')
     $wrapper = Join-Path $folder 'run.ps1'
+    $settingsPath = Join-Path $folder 'app-settings.json'
+    # Paths travel as data in a JSON file beside the driver, never spliced into PowerShell source.
+    $driverConfig = Join-Path $folder 'driver-config.json'
+    @{ library = $library; settings = $settingsPath; exe = $exe; launch = $launchId; result = $result; quit = $quit } |
+        ConvertTo-Json | Set-Content -LiteralPath $driverConfig -Encoding UTF8
     $template = @'
 $ErrorActionPreference = 'Stop'
-$env:XDICT_LIBRARY = '__LIBRARY__'
-$env:XDICT_SETTINGS = '__SETTINGS__'
-$app = Start-Process -FilePath '__EXE__' -ArgumentList ('--launch-id ' + '__LAUNCH__') -PassThru
+$config = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'driver-config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$resultPath = $config.result
+$env:XDICT_LIBRARY = $config.library
+$env:XDICT_SETTINGS = $config.settings
+$app = Start-Process -FilePath $config.exe -ArgumentList ('--launch-id ' + $config.launch) -PassThru
 try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
@@ -99,36 +107,42 @@ try {
             $control = & $byId $settings $controls[$route]
             $result.routeControls[$route] = $null -ne $control
         }
-        # Keyboard: focus the first route and walk down with the Down key; the selected route must change. Synthetic
-        # input is denied while another process holds the foreground (UIPI), so a denial is recorded, not fatal.
+        # Keyboard: focus the first route and walk down with the Down key; the route must actually move. The focused
+        # element before and after is compared, so a key that reached nothing is not mistaken for a moved selection.
+        # Synthetic input is denied while another process holds the foreground (UIPI), so a denial is recorded.
         $first = & $byId $settings 'SettingsDictionaries'
         try { $first.SetFocus() } catch { }
         Start-Sleep -Milliseconds 300
         try {
+            $before = [System.Windows.Automation.AutomationElement]::FocusedElement
+            if ($before.Current.ProcessId -ne $app.Id) {
+                throw 'the Settings window did not take the foreground; no key was sent'
+            }
+            $result.keyboardBefore = $before.Current.AutomationId
             [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
             Start-Sleep -Milliseconds 600
             $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
-            $result.keyboardRoute = $focused.Current.AutomationId + ':' + $focused.Current.ControlType.ProgrammaticName
+            $after = $focused.Current.AutomationId
+            $result.keyboardRoute = $after + ':' + $focused.Current.ControlType.ProgrammaticName
+            $result.keyboardChanged = ($result.keyboardBefore -ne '' -and $after -ne '' -and
+                $result.keyboardBefore -ne $after)
         }
         catch {
             $result.keyboardRoute = 'denied: ' + $_.Exception.Message
         }
     }
-    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath '__RESULT__' -Encoding UTF8
+    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 catch {
-    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath '__RESULT__' -Encoding UTF8
+    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 finally {
-    Set-Content -LiteralPath '__QUIT__' -Value '' -Encoding Ascii
+    Set-Content -LiteralPath $config.quit -Value '' -Encoding Ascii
     Start-Sleep -Seconds 2
     if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
 }
 '@
-    $settingsPath = Join-Path $folder 'app-settings.json'
-    $script = $template.Replace('__LIBRARY__', $library).Replace('__SETTINGS__', $settingsPath).
-        Replace('__LAUNCH__', $launchId).Replace('__EXE__', $exe).Replace('__RESULT__', $result).Replace('__QUIT__', $quit)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
+    Set-Content -LiteralPath $wrapper -Value $template -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $result -Seconds 240
     Write-Host ($uia | ConvertTo-Json -Depth 6)
@@ -146,6 +160,11 @@ finally {
     if ($uia.keyboardRoute -eq '') { throw 'the keyboard did not move the route selection' }
     # A denied synthetic-key probe means the route was never exercised; passing it would make the check unfailable.
     if ($uia.keyboardRoute -like 'denied:*') { throw ('the keyboard route was not exercised: ' + $uia.keyboardRoute) }
+    if (-not $uia.keyboardChanged) {
+        throw ("the Down key left the route where it was: '$($uia.keyboardBefore)' -> '$($uia.keyboardRoute)'")
+    }
+    $movedTo = ([string]$uia.keyboardRoute) -split ':', 2 | Select-Object -First 1
+    if ($routeIds -notcontains $movedTo) { throw "the Down key moved focus to '$movedTo', not a Settings route" }
     Stop-XDictLabProcesses -Name @('XDict') -Since $started
     }
     finally {

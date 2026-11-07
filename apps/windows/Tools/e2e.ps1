@@ -36,43 +36,61 @@ $declared = Get-XDictE2EStageNames
 if (($stages.Name -join ',') -ne ($declared -join ',')) {
     throw 'the E2E stage table and Get-XDictE2EStageNames disagree'
 }
-# One stage in a child process: bounded, its exit code kept, and a log file the report can point at.
+# One stage in a child process: bounded, its exit code kept, and a durable transcript the report points at. The
+# transcript is written by the child itself (Start-Transcript), never through a redirected pipe: a pipe plus MSBuild
+# node reuse deadlocked a build against the next stage's dotnet test (2026-10-22).
 function Invoke-E2EStage {
     param($Stage, [bool]$Full, [string]$ReportDirectory)
     $log = Join-Path $ReportDirectory ($Stage.name + '.log')
     $started = Get-Date
-    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot $Stage.Script)) + $Stage.Args
+    $stagePath = (Join-Path $PSScriptRoot $Stage.Script)
     $acceptsFull = -not ($Stage.ContainsKey('Full')) -or [bool]$Stage.Full
-    if ($Full -and $acceptsFull) { $arguments += '-Full' }
-    # A child process per stage: a stage that exits, crashes or hangs is bounded and its output kept.
+    $stageArguments = @($Stage.Args)
+    if ($Full -and $acceptsFull) { $stageArguments += '-Full' }
     $code = 1
     try {
-        # No output redirection and no shared MSBuild server: a redirected pipe plus node reuse deadlocked a build
-        # against the next stage's dotnet test (2026-10-22). The stage's console is the run's console.
+        # The child runs one encoded command, so no path or argument is ever parsed by a command-line quoter.
+        $quote = { param($text) $text.Replace("'", "''") }
+        $call = '& ''' + (& $quote $stagePath) + ''''
+        if ($stageArguments.Count -gt 0) {
+            $call += ' ' + (($stageArguments | ForEach-Object { '''' + (& $quote $_) + '''' }) -join ' ')
+        }
+        $transcript = (& $quote $log)
+        $command = @"
+`$global:LASTEXITCODE = 0
+Start-Transcript -LiteralPath '$transcript' -Force | Out-Null
+try { $call; `$code = `$LASTEXITCODE } finally { Stop-Transcript | Out-Null }
+exit `$code
+"@
         $info = New-Object System.Diagnostics.ProcessStartInfo
         $info.FileName = 'powershell.exe'
-        $info.Arguments = ($arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+        $info.Arguments = '-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' +
+            [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
         $info.UseShellExecute = $false
         $info.EnvironmentVariables['MSBUILDDISABLENODEREUSE'] = '1'
         $info.EnvironmentVariables['DOTNET_CLI_USE_MSBUILD_SERVER'] = '0'
         $process = [System.Diagnostics.Process]::Start($info)
         if (-not $process.WaitForExit(30 * 60 * 1000)) {
-            try { $process.Kill() } catch { }
+            # The whole tree, not the wrapper: a stage's compilers, apps and scheduled-task children would otherwise
+            # run on into the next stage. Windows PowerShell's Process.Kill() has no tree option; taskkill does.
+            try { & taskkill.exe /T /F /PID $process.Id 2>$null | Out-Null } catch { }
+            try { $process.WaitForExit(15000) | Out-Null } catch { }
             $code = -1
         }
         else {
             $code = $process.ExitCode
         }
-        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: {1} in {2:N1}s; console output stays on the run console (never redirected: a pipe plus MSBuild node reuse deadlocked the next stage)" -f $Stage.name, $(if ($code -eq 0) { 'pass' } else { "exit $code" }), ((Get-Date) - $started).TotalSeconds)
     }
     catch {
         $code = 1
-        Set-Content -LiteralPath ($log + '.err') -Value $_.Exception.Message -Encoding UTF8
-        # The report's log path must exist even when the stage could not start.
-        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: could not run ({1}); see the .err file" -f $Stage.name, $_.Exception.Message)
+        Set-Content -LiteralPath ($log + '.err') -Encoding UTF8 -Value $_.Exception.Message
     }
+    if (-not (Test-Path -LiteralPath $log)) {
+        Set-Content -LiteralPath $log -Encoding UTF8 -Value ''
+    }
+    Add-Content -LiteralPath $log -Encoding UTF8 -Value ("`nstage {0}: {1} in {2:N1}s" -f $Stage.name, $(if ($code -eq 0) { 'pass' } else { "exit $code" }), ((Get-Date) - $started).TotalSeconds)
     $seconds = ((Get-Date) - $started).TotalSeconds
-    return [ordered]@{ name = $Stage.Name; seconds = [math]::Round($seconds, 1); pass = ($code -eq 0); exit = $code; log = ($log + '.out') }
+    return [ordered]@{ name = $Stage.Name; seconds = [math]::Round($seconds, 1); pass = ($code -eq 0); exit = $code; log = $log }
 }
 
 # A finished report, printed once and ending the run when a stage failed.
@@ -132,12 +150,22 @@ if ($Detached) {
         $deadline = [DateTime]::UtcNow.AddMinutes(90)
         while (-not (Test-Path -LiteralPath $Report)) {
             if ([DateTime]::UtcNow -gt $deadline) {
+                if ($task) {
+                    # Stop the run before its marker goes: removing the marker alone would admit a second run while
+                    # the first still holds the apps and the scheduled task.
+                    Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
+                    $ended = [DateTime]::UtcNow.AddSeconds(30)
+                    while ((Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue).State -eq 'Running' -and
+                        [DateTime]::UtcNow -lt $ended) {
+                        Start-Sleep -Milliseconds 500
+                    }
+                }
                 Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
                 throw 'the E2E run produced no report'
             }
             Start-Sleep -Seconds 10
         }
-        # The report is written once, at the end; a partial file is never trusted.
+        # The report is published by a rename, so it is complete the moment it exists.
         $result = Get-Content -LiteralPath $Report -Raw -Encoding UTF8 | ConvertFrom-Json
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         Show-E2EReport -Result $result -Report $Report
@@ -179,7 +207,11 @@ $summary = [ordered]@{
     failed = $failed
 }
 Write-Host ("E2E report path: " + $Report)
-$summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Report -Encoding UTF8
+# Written aside and renamed into place: a detached caller treats the report's existence as "the run finished", and a
+# directly written file exists half-written.
+$reportTemporary = $Report + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
+$summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportTemporary -Encoding UTF8
+Move-Item -LiteralPath $reportTemporary -Destination $Report -Force
 Write-Host ("E2E report written: " + (Test-Path -LiteralPath $Report))
 Stop-XDictLabProcesses -Name @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome', 'WINWORD') -Since $runStarted
 if ($failed -gt 0) { exit 1 }

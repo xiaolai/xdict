@@ -6,6 +6,7 @@ param([switch]$Full, [switch]$Release)
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
 $configuration = if ($Release) { 'Release' } else { 'Debug' }
+$output = Get-XDictAppOutput -Configuration $configuration
 
 Invoke-XDictGate -Name ('build-' + $configuration.ToLower()) -Full:$Full -Action {
     # The service ships as one exe with no installer of its own: a dynamic CRT makes it import VCRUNTIME140.dll,
@@ -28,8 +29,9 @@ Invoke-XDictGate -Name ('build-' + $configuration.ToLower()) -Full:$Full -Action
     dotnet build (Join-Path $layout.AppRoot 'XDict.slnx') -c $configuration -warnaserror
     if ($LASTEXITCODE -ne 0) { throw 'the solution did not build' }
 } -Inputs (Get-XDictBuildInputs -Layout $layout) `
-  -Extra @($configuration, (& rustc --version), (& dotnet --version), $env:RUSTFLAGS)
+  -Extra @($configuration, (& rustc --version), (& dotnet --version), $env:RUSTFLAGS) `
+  -Outputs @((Join-Path $output 'XDict.exe'), (Join-Path $output 'XDictService.exe'),
+             (Join-Path $layout.AppRoot ('service\target\' + $configuration.ToLower() + '\xdict-service.exe')))
 
-$output = Get-XDictAppOutput -Configuration $configuration
 Write-Host ("app: {0}" -f (Join-Path $output 'XDict.exe'))
 Write-Host ("service: {0}" -f (Join-Path $output 'XDictService.exe'))

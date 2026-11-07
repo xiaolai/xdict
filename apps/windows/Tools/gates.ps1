@@ -21,9 +21,12 @@ function Get-XDictTreeHash {
         if ($item.PSIsContainer) {
             foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
                 $path = $file.FullName
+                # The exclusions name folders inside the tree, never a folder the checkout happens to live under:
+                # a workspace beneath `C:\out\` must not exclude every source file from the key.
+                $relative = '\' + $path.Substring($root.Length).TrimStart('\', '/').Replace('/', '\')
                 $skip = $false
                 foreach ($pattern in $Exclude) {
-                    if ($path -match $pattern) { $skip = $true; break }
+                    if ($relative -match $pattern) { $skip = $true; break }
                 }
                 if ($skip) { continue }
                 $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
@@ -53,15 +56,19 @@ function Invoke-XDictGate {
         [Parameter(Mandatory)][string]$Name,
         [string[]]$Inputs = @(),
         [string[]]$Extra = @(),
+        # The files a pass leaves behind. A cached pass is accepted only while every one of them is still there with
+        # the hash it had when the gate passed: a deleted bin or target folder otherwise kept reporting "cached pass".
+        [string[]]$Outputs = @(),
         [Parameter(Mandatory)][scriptblock]$Action,
         [switch]$Full,
         [switch]$NeverCache
     )
     $key = Get-XDictTreeHash -Roots $Inputs -Extra $Extra
     $file = Join-Path (Get-XDictCacheDirectory) ($Name + '.key')
+    $evidence = Join-Path (Get-XDictCacheDirectory) ($Name + '.outputs')
     if (-not $Full -and -not $NeverCache -and (Test-Path -LiteralPath $file)) {
         $passed = (Get-Content -LiteralPath $file -Raw).Trim()
-        if ($passed -eq $key) {
+        if ($passed -eq $key -and (Test-XDictOutputs -Evidence $evidence -Paths $Outputs)) {
             Write-Host ("{0}: cached pass ({1})" -f $Name, $key.Substring(0, 12))
             return
         }
@@ -71,7 +78,37 @@ function Invoke-XDictGate {
     if ($LASTEXITCODE -ne 0) { throw ("{0} failed: exit {1}" -f $Name, $LASTEXITCODE) }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file) | Out-Null
     Set-Content -LiteralPath $file -Value $key -Encoding Ascii
+    Save-XDictOutputs -Evidence $evidence -Paths $Outputs
     Write-Host ("{0}: pass ({1})" -f $Name, $key.Substring(0, 12))
+}
+
+# The recorded hashes a cached pass must still find. No evidence file and no declared outputs agree; a gate that
+# declares outputs and writes none is refused by Save-XDictOutputs, never cached.
+function Test-XDictOutputs {
+    param([string]$Evidence, [string[]]$Paths = @())
+    if (-not $Paths -or $Paths.Count -eq 0) { return $true }
+    if (-not (Test-Path -LiteralPath $Evidence)) { return $false }
+    foreach ($line in Get-Content -LiteralPath $Evidence -Encoding UTF8) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $parts = $line -split "`t", 2
+        if ($parts.Count -ne 2) { return $false }
+        if (-not (Test-Path -LiteralPath $parts[0])) { return $false }
+        if ((Get-FileHash -LiteralPath $parts[0] -Algorithm SHA256).Hash -ne $parts[1]) { return $false }
+    }
+    return $true
+}
+
+function Save-XDictOutputs {
+    param([string]$Evidence, [string[]]$Paths = @())
+    if (-not $Paths -or $Paths.Count -eq 0) {
+        Remove-Item -LiteralPath $Evidence -Force -ErrorAction SilentlyContinue
+        return
+    }
+    $lines = foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path)) { throw "the gate passed but produced no $path" }
+        $path + "`t" + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    }
+    Set-Content -LiteralPath $Evidence -Encoding UTF8 -Value $lines
 }
 
 # Running a command in the interactive desktop session through a one-shot scheduled task: an SSH session cannot open
@@ -101,7 +138,15 @@ function Invoke-XDictTask {
         Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
         Start-ScheduledTask -TaskName $id
         $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
-        while (-not (Test-Path -LiteralPath $Output)) {
+        # Wait for the task to end, not for its result file to appear: a driver writes its result and then cleans
+        # up, so a file that exists may still be half-written and its cleanup may still be running. The run is over
+        # once its LastRunTime is this run's and its state is no longer Running (a task that finished instantly never
+        # shows Running at all).
+        while ($true) {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $id -ErrorAction SilentlyContinue
+            $ran = $null -ne $taskInfo -and $taskInfo.LastRunTime -ge $started.AddSeconds(-2)
+            $state = (Get-ScheduledTask -TaskName $id -ErrorAction SilentlyContinue).State
+            if ($ran -and $state -ne 'Running') { break }
             if ([DateTime]::UtcNow -gt $deadline) {
                 # Unregistering alone leaves the wrapper and its app alive; the next stage's window search takes
                 # the stale window. Stop the task and everything the run started.
@@ -113,6 +158,13 @@ function Invoke-XDictTask {
             }
             Start-Sleep -Milliseconds 250
         }
+        $info = Get-ScheduledTaskInfo -TaskName $id -ErrorAction SilentlyContinue
+        $code = if ($null -ne $info) { [int64]$info.LastTaskResult } else { 0 }
+        if ($code -ne 0) {
+            # The task ended with a failure the result file cannot be trusted to describe; the stage is red.
+            throw ("the task failed: exit {0}; result {1}" -f $code, $Output)
+        }
+        if (-not (Test-Path -LiteralPath $Output)) { throw "the task ended without a result: $Output" }
         return (Get-Content -LiteralPath $Output -Raw -Encoding UTF8 | ConvertFrom-Json)
     }
     finally {

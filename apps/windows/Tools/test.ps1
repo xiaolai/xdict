@@ -8,6 +8,10 @@ $layout = Get-XDictLayout
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'test' -Full:$Full -Action {
+    # tokens.py reads tokens.toml with tomllib: Python 3.11 or newer. Checked before use, so an older interpreter is a
+    # sentence about the prerequisite rather than a traceback from inside the token gate.
+    & python -I -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'the token gate needs Python 3.11 or newer (tomllib) on PATH' }
     & python -I (Join-Path $PSScriptRoot 'tokens.py') gen --check
     if ($LASTEXITCODE -ne 0) { throw 'the Windows token files are stale' }
     & python -I (Join-Path $PSScriptRoot 'tokens.py') check
@@ -26,4 +30,6 @@ Invoke-XDictGate -Name 'test' -Full:$Full -Action {
         --filter 'FullyQualifiedName!~LibraryCorpusTests&FullyQualifiedName!~SearchCorpusTests'
     if ($LASTEXITCODE -ne 0) { throw 'the unit tests failed' }
 } -Inputs @($layout.AppRoot, (Join-Path $layout.RepoRoot 'core'), (Join-Path $layout.RepoRoot 'conformance')) `
-  -Extra @((& dotnet --version))
+  -Extra @((& dotnet --version)) `
+  -Outputs @((Join-Path (Get-XDictAppOutput -Configuration Debug) 'XDict.exe'),
+             (Join-Path $layout.AppRoot 'XDict.Tests\bin\Debug\net10.0\XDict.Tests.dll'))

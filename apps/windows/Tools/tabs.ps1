@@ -27,6 +27,10 @@ Invoke-XDictGate -Name 'tabs-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     if (-not $result.tabColor) { throw 'the colour entry did not open in a tab' }
     if (-not $result.tabHue) { throw 'the hue entry did not open in a second tab' }
     if (-not $result.firstSelected) { throw 'selecting the first tab did not select it' }
+    if (-not $result.colorDrawn) { throw 'the colour tab showed no entry document' }
+    if (-not $result.hueDrawn) { throw 'the hue tab showed no entry document' }
+    if (-not $result.switchedPanes) { throw 'switching tabs did not switch the entry pane' }
+    if (-not $result.stateKept) { throw 'returning to the colour tab lost its entry document' }
     if (-not $result.closed) { throw 'the second tab has no close button' }
     if (-not $result.colorAfterClose) { throw 'closing the second tab removed the first' }
     if ($result.hueAfterClose) { throw 'closing the second tab left it in the strip' }

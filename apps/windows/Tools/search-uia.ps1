@@ -46,7 +46,7 @@ try {
             [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
         return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
-    $window = Find-XDictWindow $root 60
+    $window = Find-XDictWindow -Root $root -Seconds 60 -ProcessId $app.Id
     $result = [ordered]@{ window = ($null -ne $window); ids = @(); roles = @{}; items = @(); statusNoMatch = '' }
     if ($window) {
         foreach ($id in 'SearchBox', 'ScopeBox', 'Results', 'BackButton', 'ForwardButton', 'ReturnButton', 'LibraryButton') {
@@ -156,7 +156,7 @@ try {
     Add-Type -AssemblyName UIAutomationTypes
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     . '__TOOLS__\uia-common.ps1'
-    $window = Find-XDictWindow $root 60
+    $window = Find-XDictWindow -Root $root -Seconds 60 -ProcessId $app.Id
     Start-Sleep -Seconds 3
     $status = $null
     if ($window) {
