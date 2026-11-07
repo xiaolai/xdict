@@ -25,13 +25,17 @@ Invoke-XDictGate -Name 'find-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     if ($result.PSObject.Properties['error'] -and $result.error) { throw "the find driver failed: $($result.error)" }
     if (-not $result.window) { throw 'the XDict window was not found' }
     if (-not $result.tabColor) { throw 'the colour entry did not open in a tab' }
+    if ([string]::IsNullOrWhiteSpace($result.findPage)) { throw 'the entry page was not found for the find check' }
     if (-not $result.findVisible) { throw 'Ctrl+F did not show the find bar over the entry' }
     if ($result.findValue -ne 'color') { throw "the find field holds '$($result.findValue)', not color" }
     # The typed text is not evidence that the entry was searched: the page's selection is.
     if ($result.findSelection -like 'unavailable:*') { throw ('the page selection could not be read: ' + $result.findSelection) }
     if ([string]::IsNullOrWhiteSpace($result.findSelection)) { throw 'the find selected nothing in the entry' }
     if ($result.findSelection.Trim() -ne 'color') { throw "the find selected '$($result.findSelection)', not color" }
-    if (-not $result.findMoved) { throw 'Find next did not move to another match' }
+    if (-not $result.findFollows) {
+        throw "the find did not follow a second term (first '$($result.findSelection)', second '$($result.findSecond)')"
+    }
+    if ($result.findAbsent -eq 'zzzz') { throw 'the page selection took a term the entry does not hold' }
     if (-not $result.findClosed) { throw 'Escape did not close the find bar' }
     Stop-XDictLabProcesses -Name @('XDict')
 }

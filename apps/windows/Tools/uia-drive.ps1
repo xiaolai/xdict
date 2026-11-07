@@ -140,6 +140,51 @@ try {
     if (-not $window) { throw 'the XDict window was not found through UIA' }
     Start-Sleep -Seconds 2
     $list = & $byId $window 'Results'
+    $documentCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Document)
+    # **The entry page is a top-level UIA element, not a descendant of the XAML tab.** WebView2 composes its content
+    # in its own window, which UI Automation exposes by the page's URL (the probe of 2026-11-07 found a document
+    # titled after another app's page when the search started from the tab). The visible page is the `xdict://`
+    # element whose rectangle lies inside the main window and is on screen.
+    $number = {
+        param($value)
+        # A UIA rectangle is infinities when the element has none; formatting one as an int throws.
+        if ([double]::IsInfinity($value) -or [double]::IsNaN($value)) { return 'inf' }
+        return [string][int]$value
+    }
+    $pageInventory = {
+        @($root.FindAll([System.Windows.Automation.TreeScope]::Children,
+                [System.Windows.Automation.Condition]::TrueCondition) |
+            Where-Object { $_.Current.Name -like 'xdict://*' } |
+            ForEach-Object {
+                $r = $_.Current.BoundingRectangle
+                $_.Current.Name + '|' + (& $number $r.X) + ',' + (& $number $r.Y) + ',' + (& $number $r.Width) + ',' +
+                    (& $number $r.Height) + '|off=' + $_.Current.IsOffscreen + '|pid=' + $_.Current.ProcessId
+            })
+    }
+    $visiblePage = {
+        param($window)
+        # **Only the selected tab's page is in the tree.** WebView2 exposes its page as a top-level element named by
+        # the page's URL; the hidden tab's pane is not enumerated at all (measured 2026-11-07), and the element's
+        # rectangle is empty (`inf`), so neither its position nor `IsOffscreen` can choose between tabs — the
+        # enumeration itself already has, and the URL names the entry drawn.
+        $pages = @($root.FindAll([System.Windows.Automation.TreeScope]::Children,
+            [System.Windows.Automation.Condition]::TrueCondition) |
+            Where-Object { $_.Current.Name -like 'xdict://*' })
+        if ($pages.Count -eq 0) { return $null }
+        return $pages[0]
+    }
+    $pageText = {
+        param($page)
+        if ($null -eq $page) { return '' }
+        $document = & $findOne $page ([System.Windows.Automation.TreeScope]::Descendants) $documentCondition
+        if ($null -eq $document) { return '' }
+        try {
+            return $document.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(400)
+        }
+        catch { return '' }
+    }
 
     switch ($mode) {
         'find' {
@@ -163,10 +208,10 @@ try {
                 }
                 catch { $result.selectedTab = '' }
             }
-            $documentCondition = New-Object System.Windows.Automation.PropertyCondition(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-                [System.Windows.Automation.ControlType]::Document)
-            $result.document = ($null -ne (& $findOne $window ([System.Windows.Automation.TreeScope]::Descendants) $documentCondition))
+            $page = & $visiblePage $window
+            $result.findPage = if ($page) { $page.Current.Name } else { '' }
+            $result.pages = & $pageInventory
+            $result.document = ($null -ne $page)
             $status = & $byId $window 'StatusText'
             $result.entryStatus = $(if ($status) { $status.Current.Name } else { '' })
             try { $window.SetFocus() } catch { }
@@ -185,33 +230,45 @@ try {
                 $value = $box.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
                 $result.findValue = $value.Current.Value
                 # The field holding the typed text proves nothing about the search. The page's own selection is the
-                # evidence: it must hold the term, and the next match must move it.
-                $document = & $findOne $window ([System.Windows.Automation.TreeScope]::Descendants) $documentCondition
+                # evidence: it must hold the term, follow a second one, and ignore one the entry does not hold.
+                $document = if ($page) { & $findOne $page ([System.Windows.Automation.TreeScope]::Descendants) $documentCondition } else { $null }
                 $result.findSelection = ''
-                $result.findMoved = $false
                 if ($document) {
                     try {
+                        # The page's selection is reported only while the page itself holds focus: the find bar does
+                        # after the key, so the document is focused before it is read (it keeps the selection).
+                        try { $document.SetFocus() } catch { }
+                        Start-Sleep -Milliseconds 250
                         $textPattern = $document.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
                         $selection = $textPattern.GetSelection()
                         if ($selection.Count -gt 0) {
                             $result.findSelection = $selection[0].GetText(-1)
                             $result.findSelectionRects = @($selection[0].GetBoundingRectangles()) -join ';'
                         }
-                        # A term with more than one occurrence: the next match must be somewhere else on the page.
-                        & $setValue $box 'e'
+                        # A second, different term the page holds: the page's own selection follows it. Chromium
+                        # reports no bounding rectangles for a selection, so "the next match moved" is read as the
+                        # selection changing to the other term — and a term the page does not hold changes nothing.
+                        & $setValue $box 'hue'
                         Start-Sleep -Milliseconds 500
-                        $before = $textPattern.GetSelection()
-                        $beforeRects = if ($before.Count -gt 0) { @($before[0].GetBoundingRectangles()) -join ';' } else { '' }
-                        $next = & $byId $window 'FindNext'
-                        if ($next) { $next.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+                        try { $document.SetFocus() } catch { }
+                        Start-Sleep -Milliseconds 250
+                        $second = $textPattern.GetSelection()
+                        $result.findSecond = if ($second.Count -gt 0) { $second[0].GetText(-1) } else { '' }
+                        $result.findFollows = ($result.findSelection -ne '' -and $result.findSecond -ne '' -and
+                            $result.findSelection -ne $result.findSecond)
+                        & $setValue $box 'zzzz'
                         Start-Sleep -Milliseconds 500
-                        $after = $textPattern.GetSelection()
-                        $afterRects = if ($after.Count -gt 0) { @($after[0].GetBoundingRectangles()) -join ';' } else { '' }
-                        $result.findMoved = ($beforeRects -ne '' -and $afterRects -ne '' -and $beforeRects -ne $afterRects)
+                        try { $document.SetFocus() } catch { }
+                        Start-Sleep -Milliseconds 250
+                        $third = $textPattern.GetSelection()
+                        $result.findAbsent = if ($third.Count -gt 0) { $third[0].GetText(-1) } else { '' }
                     }
                     catch { $result.findSelection = 'unavailable: ' + $_.Exception.Message }
                 }
             }
+            # Escape is the find bar's own key: the box takes the focus back from the page before it is sent.
+            try { $box.SetFocus() } catch { }
+            Start-Sleep -Milliseconds 250
             if (-not (& $holdsFocus $app.Id)) { throw 'the find bar lost the foreground; Escape was not sent' }
             [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
             Start-Sleep -Milliseconds 600
@@ -227,40 +284,36 @@ try {
             $result.tabHue = ($null -ne (& $tabNamed $window 'hue'))
             $first = & $tabNamed $window 'color'
             $second = & $tabNamed $window 'hue'
-            $documentCondition = New-Object System.Windows.Automation.PropertyCondition(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-                [System.Windows.Automation.ControlType]::Document)
-            $runtime = {
-                param($tab)
-                if ($null -eq $tab) { return '' }
-                $doc = $tab.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $documentCondition)
-                if ($null -eq $doc) { return '' }
-                return ([string]::Join('.', $doc.GetRuntimeId()))
-            }
             if ($first) {
                 $first.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-                Start-Sleep -Milliseconds 500
+                Start-Sleep -Milliseconds 700
                 $result.firstSelected = $first.GetCurrentPattern(
                     [System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected
-                # The selected tab's own pane must have drawn; its identity is what a switch must change and a close
-                # must keep.
-                $result.colorRuntime = & $runtime $first
-                $result.colorDrawn = ($result.colorRuntime -ne '')
+                # The visible entry page, by its own URL and its own words: the tab's document cannot be reached
+                # from the tab element, and the header alone says nothing about what the pane drew.
+                $colourPage = & $visiblePage $window
+                $result.colorPage = if ($colourPage) { $colourPage.Current.Name } else { '' }
+                $result.colorText = (& $pageText $colourPage) -replace '\s+', ' '
             }
             if ($second -and $first) {
-                # Switching to the other tab shows the other pane, not the same document under a different header.
                 $second.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-                Start-Sleep -Milliseconds 500
-                $result.hueRuntime = & $runtime $second
-                $result.hueDrawn = ($result.hueRuntime -ne '')
-                $result.switchedPanes = ($result.colorRuntime -ne '' -and $result.hueRuntime -ne '' -and
-                    $result.colorRuntime -ne $result.hueRuntime)
-                # Back to the first: its pane is the same document it had, not a blank tab.
+                Start-Sleep -Milliseconds 700
+                $huePage = & $visiblePage $window
+                $result.huePage = if ($huePage) { $huePage.Current.Name } else { '' }
+                # Both tabs are open here: the inventory records that the hidden one's page is not enumerated at
+                # all, which is the measurement that makes the visible page the tab's own evidence.
+                $result.pages = & $pageInventory
+                $result.hueText = (& $pageText $huePage) -replace '\s+', ' '
+                $result.switchedPanes = ($result.colorPage -ne '' -and $result.huePage -ne '' -and
+                    $result.colorPage -ne $result.huePage)
+                # Back to the first: the same page it had, not a blank tab.
                 $first.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-                Start-Sleep -Milliseconds 500
-                $result.colorRuntimeAfterSwitch = & $runtime $first
-                $result.stateKept = ($result.colorRuntime -ne '' -and
-                    $result.colorRuntime -eq $result.colorRuntimeAfterSwitch)
+                Start-Sleep -Milliseconds 700
+                $backPage = & $visiblePage $window
+                $result.colorPageAfterSwitch = if ($backPage) { $backPage.Current.Name } else { '' }
+                $result.colorTextAfterSwitch = (& $pageText $backPage) -replace '\s+', ' '
+                $result.stateKept = ($result.colorPage -ne '' -and
+                    $result.colorPage -eq $result.colorPageAfterSwitch)
             }
             if ($second) {
                 $closeCondition = New-Object System.Windows.Automation.AndCondition(
@@ -279,6 +332,8 @@ try {
             }
             $result.colorAfterClose = ($null -ne (& $tabNamed $window 'color'))
             $result.hueAfterClose = ($null -ne (& $tabNamed $window 'hue'))
+            $closingPage = & $visiblePage $window
+            $result.colorPageAfterClose = if ($closingPage) { $closingPage.Current.Name } else { '' }
         }
         'all' {
             & $search $window 'word'

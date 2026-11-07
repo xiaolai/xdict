@@ -51,15 +51,37 @@ function Invoke-E2EStage {
     try {
         # The child runs one encoded command, so no path or argument is ever parsed by a command-line quoter.
         $quote = { param($text) $text.Replace("'", "''") }
-        $call = '& ''' + (& $quote $stagePath) + ''''
-        if ($stageArguments.Count -gt 0) {
-            $call += ' ' + (($stageArguments | ForEach-Object { '''' + (& $quote $_) + '''' }) -join ' ')
+        # **A hashtable splat, so a switch stays a switch.** An array splat passes '-Full' as a positional string; a
+        # quoted flag inline binds nothing, and the stage then exits 0 without having run — a silent green. The
+        # table's own `-Name value` / `-Switch` pairs are split back into named parameters here.
+        $parameters = [ordered]@{}
+        for ($index = 0; $index -lt $stageArguments.Count; $index++) {
+            [string]$item = [string]$stageArguments[$index]
+            if ([string]::IsNullOrWhiteSpace($item) -or -not $item.StartsWith('-')) { continue }
+            $name = $item.TrimStart('-')
+            # A following word that is not itself a switch is this one's value, an empty string included.
+            $followed = $index + 1 -lt $stageArguments.Count
+            if ($followed -and -not ([string]$stageArguments[$index + 1]).StartsWith('-')) {
+                $parameters[$name] = [string]$stageArguments[$index + 1]
+                $index++
+            }
+            else {
+                $parameters[$name] = $true
+            }
         }
+        $table = ($parameters.GetEnumerator() | ForEach-Object {
+            if ($_.Value -is [bool]) { $_.Key + ' = $true' }
+            else { $_.Key + " = '" + (& $quote ([string]$_.Value)) + "'" }
+        }) -join '; '
         $transcript = (& $quote $log)
         $command = @"
+`$ErrorActionPreference = 'Stop'
+`$stageParameters = @{ $table }
 `$global:LASTEXITCODE = 0
 Start-Transcript -LiteralPath '$transcript' -Force | Out-Null
-try { $call; `$code = `$LASTEXITCODE } finally { Stop-Transcript | Out-Null }
+try { & '$(& $quote $stagePath)' @stageParameters; `$code = if (`$null -ne `$LASTEXITCODE) { `$LASTEXITCODE } else { 0 } }
+catch { Write-Host ('stage failed: ' + `$_.Exception.Message); `$code = 1 }
+finally { Stop-Transcript | Out-Null }
 exit `$code
 "@
         $info = New-Object System.Diagnostics.ProcessStartInfo
