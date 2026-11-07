@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use xdict_core::{
     ByteSource, Config, Core, CoreError, Location, MAX_SYNC_BYTES, Missing, Opened, Package,
-    Progress, Resource, TextView, View,
+    Progress, ReanchorReport, Resource, TextView, View, ZoneOffset,
 };
 
 use crate::failure::Failure;
@@ -351,10 +351,10 @@ impl Service {
             }
             "ledgerHistory" => {
                 let body: LedgerHistoryBody = decode(&request.operation)?;
-                record(
-                    self.core
-                        .ledger_history(body.now, body.utc_offset_seconds)?,
-                )
+                record(self.core.ledger_history(
+                    body.now,
+                    vec![ZoneOffset::fixed(body.utc_offset_seconds)],
+                )?)
             }
             "ledgerRemove" => {
                 let body: LedgerRemovalBody = decode(&request.operation)?;
@@ -406,12 +406,23 @@ impl Service {
             }
             "studyReanchor" => {
                 let body: ReanchorBody = decode(&request.operation)?;
-                record(self.core.study_reanchor(
-                    body.old_edition,
-                    body.new_edition,
-                    body.stamp,
-                    body.operation_prefix,
-                )?)
+                let mut after = None;
+                let mut outcomes = Vec::new();
+                loop {
+                    let report = self.core.study_reanchor(
+                        body.old_edition.clone(),
+                        body.new_edition.clone(),
+                        body.stamp.clone(),
+                        body.operation_prefix.clone(),
+                        after,
+                    )?;
+                    outcomes.extend(report.outcomes);
+                    match report.next {
+                        Some(next) => after = Some(next),
+                        None => break,
+                    }
+                }
+                record(ReanchorReport { outcomes, next: None })
             }
             "reviewQueue" => {
                 let body: QueueBody = decode(&request.operation)?;
