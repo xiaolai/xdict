@@ -351,10 +351,12 @@ impl Service {
             }
             "ledgerHistory" => {
                 let body: LedgerHistoryBody = decode(&request.operation)?;
-                record(self.core.ledger_history(
-                    body.now,
-                    vec![ZoneOffset::fixed(body.utc_offset_seconds)],
-                )?)
+                record(
+                    self.core.ledger_history(
+                        body.now,
+                        vec![ZoneOffset::fixed(body.utc_offset_seconds)],
+                    )?,
+                )
             }
             "ledgerRemove" => {
                 let body: LedgerRemovalBody = decode(&request.operation)?;
@@ -422,7 +424,10 @@ impl Service {
                         None => break,
                     }
                 }
-                record(ReanchorReport { outcomes, next: None })
+                record(ReanchorReport {
+                    outcomes,
+                    next: None,
+                })
             }
             "reviewQueue" => {
                 let body: QueueBody = decode(&request.operation)?;
