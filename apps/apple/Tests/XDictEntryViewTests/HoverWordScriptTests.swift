@@ -193,8 +193,8 @@ struct HoverWordScriptTests {
 
     /// Runs `path` with `arguments`, its output into `log` (never a pipe nobody drains while it runs), no input, only the
     /// environment it needs, **responsible for itself**: launched as the runner's child, the lab's web view never
-    /// finished loading a page (measured 2026-10-19, three runs; run from a shell it loads at once). Bounded: a lab still
-    /// running after a minute is ended, and its status is the signal's.
+    /// finished loading a page (measured 2026-10-19, three runs; run from a shell it loads at once). Bounded: a lab
+    /// whose log has stopped growing for two minutes is ended, and its status is the signal's.
     private static func spawn(_ path: String, _ arguments: [String], log: String) throws -> Int32 {
         var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)
@@ -221,15 +221,29 @@ struct HoverWordScriptTests {
         let spawned = posix_spawn(&pid, path, &actions, &attributes, argv, envp)
         guard spawned == 0 else { throw LabFailed(description: "posix_spawn failed: \(spawned)") }
         var status: Int32 = 0
-        let deadline = Date().addingTimeInterval(60)
+        // **A page that stops making progress is the failure, not a run that took long** (2026-11-07: a 60-second
+        // stopwatch on the whole run killed a lab that was still working beside `make land`'s cargo lane, and the one
+        // kill failed all 75 dependent tests with "the lab ended -9"). The lab writes a line per page, so the log's
+        // growth says it is alive; the slowest page alone (a 100,000-deep tree) costs it half a minute.
+        let started = Date()
+        let stallLimit: TimeInterval = 120, totalLimit: TimeInterval = 600
+        var seen = -1
+        var progressed = started
         while waitpid(pid, &status, WNOHANG) == 0 {
-            if Date() > deadline {
+            let now = Date()
+            let attributes = try? FileManager.default.attributesOfItem(atPath: log)
+            let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+            if size != seen {
+                seen = size
+                progressed = now
+            }
+            if now.timeIntervalSince(progressed) > stallLimit || now.timeIntervalSince(started) > totalLimit {
                 // SIGKILL: an app whose main thread waits on its web view answers SIGTERM only when that wait ends.
                 kill(pid, SIGKILL)
                 waitpid(pid, &status, 0)
                 break
             }
-            Thread.sleep(forTimeInterval: 0.05)
+            Thread.sleep(forTimeInterval: 0.25)
         }
         // Exited: its code; ended by a signal: the signal's number, as negative.
         return status & 0x7f == 0 ? (status >> 8) & 0xff : -(status & 0x7f)
