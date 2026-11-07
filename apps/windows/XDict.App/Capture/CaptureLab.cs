@@ -109,6 +109,7 @@ internal static class CaptureLab
         IntPtr targetWindow = IntPtr.Zero;
         PdfServer? pdfServer = null;
         PixelsWindow? pixels = null;
+        CloakedOverlay? overlay = null;
         bool notepadTarget = false;
         try
         {
@@ -126,21 +127,28 @@ internal static class CaptureLab
             if (mode == "pdf") pdfServer = new PdfServer(textFile);
             // The OCR passes read a plain window that draws one word: no text pattern and no name, so the pixels are
             // the only answer. Edge's PDF viewer is not such a surface — its accessibility tree occludes the drawing
-            // with a text layer of its own, which would exercise Edge's OCR, not XDict's.
-            string wordText = File.ReadAllText(textFile).Trim();
-            if (image) pixels = new PixelsWindow(wordText.Length == 0 ? "recognize" : wordText,
-                unaware: mode == "hover-unaware");
+            // with a text layer of its own, which would exercise Edge's OCR, not XDict's. Only those passes read the
+            // file: a Word or PDF pass hands the document to its own app, which holds it open (measured 2026-11-07:
+            // the lab failed on the .docx Word had locked before it opened any target).
+            if (image)
+            {
+                string wordText = File.ReadAllText(textFile).Trim();
+                pixels = new PixelsWindow(wordText.Length == 0 ? "recognize" : wordText, unaware: mode == "hover-unaware");
+            }
             target = notepad ? (elevated ? FindElevatedNotepad() : StartNotepad(textFile))
                 : word ? WordHost(textFile)
                 : image ? null
-                : StartEdge(pdfServer is not null ? pdfServer.Url : textFile);
+                : StartEdge(pdfServer is not null ? pdfServer.Url : textFile,
+                    Path.Combine(Path.GetDirectoryName(Path.GetFullPath(output))!, "edge-profile"));
             report["pdfUrl"] = pdfServer?.Url;
             if (target is null && pixels is null) { report["error"] = "no target window"; await WriteAsync(output, report); return; }
             targetWindow = pixels?.Handle ?? (notepad ? NotepadWindow(15000) : word ? WordWindow(15000) : BrowserWindow(15000));
             if (targetWindow == IntPtr.Zero)
             {
                 report["notepads"] = Process.GetProcessesByName("notepad").Select(process => process.Id).ToArray();
-                report["error"] = "the target opened no window";
+                report["error"] = DesktopLocked()
+                    ? "the desktop is locked; unlock the host and rerun"
+                    : "the target opened no window";
                 await WriteAsync(output, report);
                 return;
             }
@@ -159,7 +167,9 @@ internal static class CaptureLab
                 report["foreground"] = foreground.ToInt64();
                 report["foregroundPid"] = foregroundPid;
                 report["foregroundClass"] = new string(name, 0, length);
-                report["error"] = "the target did not come to the foreground";
+                report["error"] = DesktopLocked()
+                    ? "the desktop is locked; unlock the host and rerun"
+                    : "the target did not come to the foreground";
                 await WriteAsync(output, report);
                 return;
             }
@@ -180,11 +190,21 @@ internal static class CaptureLab
                     Thread.Sleep(800);
                     Focus(targetWindow);
                 }
+                // **The document holding the fixture must be the front one.** Windows 11's Notepad restores its
+                // tabs, so the file the lab opened can sit behind a restored start page and the pass would read
+                // another document's text (measured 2026-11-07: a term of 'x' from a document that was not the
+                // fixture's). The loop is bounded and its outcome is recorded, never assumed.
+                report["frontDocument"] = EnsureFrontDocument(targetWindow, "run");
                 ClickDocument(targetWindow);
                 if (mode == "word") report["wordElements"] = OnSta(() => DescribeTree(targetWindow));
-                if (mode == "pdf") report["pdfElements"] = OnSta(() => DescribeTree(targetWindow));
+                if (mode == "pdf")
+                {
+                    report["pdfElements"] = OnSta(() => DescribeTree(targetWindow));
+                    report["pdfDocuments"] = OnSta(() => DescribeDocuments(targetWindow));
+                }
                 report["documentFocus"] = OnSta(() => System.Windows.Automation.AutomationElement.FocusedElement?.Current.ControlType.ProgrammaticName ?? "");
-                report["selectionAfterSelection"] = OnSta(() => SelectWordByUia(targetWindow, 1));
+                report["selectionAfterSelection"] = OnSta(() => SelectWordByUia(targetWindow, "run"));
+                report["documentText"] = OnSta(() => DescribeDocuments(targetWindow));
                 report["focusAfterSelection"] = OnSta(() => System.Windows.Automation.AutomationElement.FocusedElement?.Current.ControlType.ProgrammaticName ?? "");
             }
             else if (mode is "main" or "relaunch" or "suspended") ClickCenter(targetWindow);
@@ -199,6 +219,8 @@ internal static class CaptureLab
             report["hoverModifier"] = controller.Hover.Modifier.ToString();
             report["hoverGesture"] = controller.Hover.Gesture.ToString();
             report["hoverSettle"] = controller.Hover.SettleMs;
+            // The hover reads the word's rectangle in the front document, so that document must be the fixture's.
+            report["frontDocument"] = EnsureFrontDocument(targetWindow, "run");
             var word = OnSta(() => WordRectByUia(targetWindow, 1));
             report["hoverWord"] = word.Text;
             if (word.Rect is { } box)
@@ -295,9 +317,16 @@ internal static class CaptureLab
             {
                 // Put the panel's term over `gamma`, so the word behind it differs from the panel's own word.
                 controller.Panel.ShowAt(new SelectionBox((int)rect.X, (int)(rect.Y - 43), 1, 1));
-                await Task.Delay(300);
-                System.Windows.Rect? term = OnSta(PanelTermRect);
+                // The panel's own tree is rebuilt as it moves; a rectangle read too early is no rectangle at all.
+                System.Windows.Rect? term = null;
+                for (long wait = Environment.TickCount64 + 2000; Environment.TickCount64 < wait; )
+                {
+                    await Task.Delay(100);
+                    term = OnSta(PanelTermRect);
+                    if (term is not null) break;
+                }
                 report["ownTermRect"] = term is { } t0 ? new[] { (int)t0.X, (int)t0.Y, (int)t0.Width, (int)t0.Height } : null;
+                report["ownTermRectFound"] = term is not null;
                 if (term is { } box)
                 {
                     // The title line sits at the top of its block; the block's centre can be over the entry below it.
@@ -401,13 +430,24 @@ internal static class CaptureLab
                     pixelsRect.Left, pixelsRect.Top, pixelsRect.Right - pixelsRect.Left,
                     pixelsRect.Bottom - pixelsRect.Top,
                 };
+                // The overlay the read must skip, made here above the surface's centre: DWM draws none of it, Win32
+                // says it is visible, and it is topmost. The host cannot be relied on to have one on screen.
+                overlay = new CloakedOverlay("cloak", x, y);
+                report["overlayWindow"] = DescribeWindow(overlay.Handle);
+                report["overlaySet"] = overlay.CloakResult;
+                report["overlayCloaked"] = overlay.Cloaked;
+                report["overlayRaised"] = overlay.Raised;
             }
             report["specialPoint"] = new[] { x, y };
             // The overlay the read must skip, named before the read: a pass asserts it was there and still lost.
+            report["aboveTarget"] = AboveInventory(targetWindow, x, y);
             report["cloakedAtPoint"] = CloakedAtPoint(x, y);
             // Only an overlay **above** the target exercises the skip: one below it would never have won the read.
             report["cloakedAbove"] = CloakedAbove(targetWindow, x, y);
             report["pointWindow"] = DescribeWindow(HoverReader.TopWindowAt(x, y));
+            // What the read would fall back to behind the surface. A negative pass asserts it is nothing: any app
+            // there is an answer the product is right to give, so the fixture — not the product — is what failed.
+            report["behindWindow"] = pixels is null ? null : DescribeWindow(HoverReader.FirstOrdinaryBehind(pixels.Handle, x, y));
             if (pixels is not null)
             {
                 report["pixelsVisible"] = Win32.IsWindowVisible(pixels.Handle);
@@ -585,8 +625,13 @@ internal static class CaptureLab
                 report["dismissedByEscape"] = controller.Panel is not { Shown: true };
                 report["foregroundAfterEscape"] = Win32.GetForegroundWindow().ToInt64();
                 report["targetStillForeground"] = Win32.GetForegroundWindow() == targetWindow;
-                // The next key must reach the host app: type into Notepad and read the window title's dirty mark.
-                Key(0x58); // 'X'
+                // The next key must reach the host app. A character proves it where the host is the lab's own page;
+                // a **document that outlives the pass is never edited**: typing 'X' over the selected word replaced
+                // it, and the next pass read "The x reader" (measured 2026-11-07). A plain editor gets an arrow key,
+                // which moves the caret and changes no text.
+                bool disposableHost = mode is "main" or "relaunch" or "suspended";
+                report["hostKeyProbe"] = disposableHost ? "X" : "Right";
+                Key(disposableHost ? (byte)0x58 : (byte)0x27);
                 await Task.Delay(200);
                 report["hostReceivedKey"] = Win32.GetForegroundWindow() == targetWindow;
 
@@ -663,6 +708,7 @@ internal static class CaptureLab
                     catch (Exception) { }
                 }
             }
+            overlay?.Dispose();
             pixels?.Dispose();
             pdfServer?.Dispose();
             controller.Dispose();
@@ -727,7 +773,7 @@ internal static class CaptureLab
     private static IntPtr ProcessWindow(string name, int milliseconds) =>
         PollWindow([name], Win32.MainWindowOf, milliseconds);
 
-    private static Process StartEdge(string htmlFile)
+    private static Process StartEdge(string htmlFile, string profile)
     {
         string[] candidates =
         [
@@ -739,7 +785,14 @@ internal static class CaptureLab
         if (executable is null) throw new InvalidOperationException("no Edge or Chrome found");
         // A bare Windows path is a search term to Chromium; a file URI opens the page or the PDF viewer.
         string target = File.Exists(htmlFile) ? new Uri(htmlFile).AbsoluteUri : htmlFile;
-        return Process.Start(new ProcessStartInfo(executable, "\"" + target + "\"") { UseShellExecute = true })!;
+        // **Its own profile under the lab folder.** A browser started beside the reader's session hands the page to
+        // the running browser and exits, so the process that owns the window carries no lab argument and cleanup
+        // cannot tell it from the person's browser (measured 2026-11-07: a lab window survived the run and answered
+        // a later pass). A private profile keeps every process of this run's browser carrying the lab path — the
+        // cleanup's own evidence — and keeps the person's session out of the fixture.
+        Directory.CreateDirectory(profile);
+        string arguments = "\"" + target + "\" --user-data-dir=\"" + profile + "\" --no-first-run --no-default-browser-check";
+        return Process.Start(new ProcessStartInfo(executable, arguments) { UseShellExecute = true })!;
     }
 
     private static IntPtr BrowserWindow(int milliseconds) =>
@@ -756,31 +809,27 @@ internal static class CaptureLab
         Thread.Sleep(300);
     }
 
-    /// <summary>Selects the word at `index` through the document's own TextPattern range and returns the selection's text.</summary>
-    private static string SelectWordByUia(IntPtr window, int index)
+    /// <summary>The fixture's own word, selected through the text pattern of the document that holds its sentence.
+    /// **Not "the second word of the first text pattern in the window"**: a host may expose another document beside
+    /// the page (measured 2026-11-07: a selection of 'x' from a document that was not the fixture's), and a selection
+    /// from the wrong document is a fixture that proves nothing about the reader.</summary>
+    private static string SelectWordByUia(IntPtr window, string word)
     {
-        var document = TextDocument(window);
-        if (document is null) return "<no document>";
+        var document = TextDocument(window, word);
+        if (document is null) return "<no document holding " + word + ">";
         if (!document.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
             return "<no text pattern>";
         var text = (System.Windows.Automation.TextPattern)raw;
-        System.Windows.Automation.Text.TextPatternRange word = text.DocumentRange.Clone();
-        word.MoveEndpointByRange(System.Windows.Automation.Text.TextPatternRangeEndpoint.End,
-            text.DocumentRange, System.Windows.Automation.Text.TextPatternRangeEndpoint.Start);
-        word.Move(System.Windows.Automation.Text.TextUnit.Word, index);
-        word.ExpandToEnclosingUnit(System.Windows.Automation.Text.TextUnit.Word);
-        // RichEdit's word unit takes its trailing space; a reader's drag would not, so take it back off.
-        for (int i = 0; i < 4 && word.GetText(-1).EndsWith(' '); i++)
-            word.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.End,
-                System.Windows.Automation.Text.TextUnit.Character, -1);
-        word.Select();
+        System.Windows.Automation.Text.TextPatternRange? found = text.DocumentRange.FindText(word, false, false);
+        if (found is null) return "<" + word + " not found in the document>";
+        found.Select();
         var selection = text.GetSelection();
-        string detail = "words=" + word.GetText(-1) + " sel=" + selection.Length;
+        string detail = "words=" + found.GetText(-1) + " sel=" + selection.Length;
         if (selection.Length == 0)
         {
             // PDFium's TextPattern does not take a programmatic selection; drag the pointer across the word's box,
             // which is how a reader selects in a PDF.
-            System.Windows.Rect box = word.GetBoundingRectangles().FirstOrDefault();
+            System.Windows.Rect box = found.GetBoundingRectangles().FirstOrDefault();
             detail += " rect=" + (box.IsEmpty ? "empty" : box.ToString());
             if (!box.IsEmpty) DragAcross(box);
             Thread.Sleep(400);
@@ -860,6 +909,18 @@ internal static class CaptureLab
         catch (Exception error) { return "<" + error.GetType().Name + ">"; }
     }
 
+    /// <summary>Whether the interactive desktop is locked: Windows shows the sign-in surface (LogonUI) over it, and
+    /// no window can come to the foreground while it does. A GUI stage says so instead of blaming the target.</summary>
+    private static bool DesktopLocked()
+    {
+        try
+        {
+            int session = Process.GetCurrentProcess().SessionId;
+            return Process.GetProcessesByName("LogonUI").Any(process => process.SessionId == session);
+        }
+        catch (Exception) { return false; }
+    }
+
     /// <summary>The first visible, cloaked top-level window whose box holds the point: an overlay that says it is
     /// visible while DWM shows nothing. Reported so the stage proves the skip rule was exercised, not just that the
     /// read answered — a check that cannot fail is not a check.</summary>
@@ -881,6 +942,29 @@ internal static class CaptureLab
             return false;
         }, IntPtr.Zero);
         return found;
+    }
+
+    /// <summary>The windows above the target, in the order the read walks them: what a skip-rule failure is read
+    /// against, since "not above the target" is otherwise a conclusion with no evidence under it.</summary>
+    private static string[] AboveInventory(IntPtr target, int x, int y)
+    {
+        var lines = new List<string>();
+        Win32.EnumWindows((window, _) =>
+        {
+            if (lines.Count >= 12) return false;
+            if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return true;
+            bool atPoint = x >= rect.Left && x < rect.Right && y >= rect.Top && y < rect.Bottom;
+            long style = (long)Win32.GetWindowLongPtrW(window, Win32.GWL_EXSTYLE);
+            // The target closes the list and is kept: whether it is itself topmost is half of a z-order answer.
+            lines.Add(DescribeWindow(window) + (window == target ? "|TARGET" : "") +
+                "|visible=" + Win32.IsWindowVisible(window) +
+                "|cloaked=" + Win32.IsCloaked(window) +
+                "|topmost=" + ((style & Win32.WS_EX_TOPMOST) != 0) +
+                "|transparent=" + ((style & Win32.WS_EX_TRANSPARENT) != 0) +
+                "|atPoint=" + atPoint);
+            return window != target;
+        }, IntPtr.Zero);
+        return lines.ToArray();
     }
 
     /// <summary>The first visible, cloaked window **above** the target that covers the point. A cloaked window below
@@ -977,8 +1061,35 @@ internal static class CaptureLab
         return new System.Windows.Automation.OrCondition(named("关闭"), named("Close"));
     }
 
-    /// <summary>The window's text-bearing Document, not the address bar's Edit; the first text element as fallback.</summary>
-    private static System.Windows.Automation.AutomationElement? TextDocument(IntPtr window)
+    /// <summary>Every Document the window exposes and the first characters each holds: a viewer that answers a
+    /// text pattern with no text is told apart from one whose text the lab did not select.</summary>
+    private static string[] DescribeDocuments(IntPtr window)
+    {
+        var root = System.Windows.Automation.AutomationElement.FromHandle(window);
+        if (root is null) return ["<no root>"];
+        var documents = root.FindAll(System.Windows.Automation.TreeScope.Descendants,
+            new System.Windows.Automation.PropertyCondition(
+                System.Windows.Automation.AutomationElement.ControlTypeProperty,
+                System.Windows.Automation.ControlType.Document));
+        var lines = new List<string>();
+        foreach (System.Windows.Automation.AutomationElement candidate in documents)
+        {
+            string text = "<no text pattern>";
+            if (candidate.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
+                try
+                {
+                    text = ((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(120)
+                        .Replace("\r", "\\r").Replace("\n", "\\n");
+                }
+                catch (Exception error) { text = "<" + error.GetType().Name + ">"; }
+            lines.Add("name='" + candidate.Current.Name + "'|text='" + text + "'");
+        }
+        return lines.ToArray();
+    }
+
+    /// <summary>The window's text-bearing Document, not the address bar's Edit. With `mustHold`, only a document
+    /// whose text holds that word; the first with text as fallback.</summary>
+    private static System.Windows.Automation.AutomationElement? TextDocument(IntPtr window, string? mustHold = null)
     {
         var root = System.Windows.Automation.AutomationElement.FromHandle(window);
         if (root is null) return null;
@@ -990,14 +1101,19 @@ internal static class CaptureLab
                     System.Windows.Automation.AutomationElement.ControlTypeProperty,
                     System.Windows.Automation.ControlType.Document)));
         // Edge's PDF viewer exposes a hidden empty Document beside the page's; the page's is the one with text.
+        System.Windows.Automation.AutomationElement? firstWithText = null;
         foreach (System.Windows.Automation.AutomationElement candidate in documents)
             if (candidate.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
                 try
                 {
-                    if (((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(64).Trim().Length > 0)
-                        return candidate;
+                    string held = ((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(4096);
+                    if (held.Trim().Length == 0) continue;
+                    if (mustHold is null) return candidate;
+                    if (held.Contains(mustHold, StringComparison.OrdinalIgnoreCase)) return candidate;
+                    firstWithText ??= candidate;
                 }
                 catch (Exception) { }
+        if (mustHold is not null) return firstWithText;
         if (documents.Count > 0) return documents[0];
         return root.FindFirst(System.Windows.Automation.TreeScope.Descendants,
             new System.Windows.Automation.PropertyCondition(
@@ -1026,6 +1142,31 @@ internal static class CaptureLab
     /// Focuses Notepad's document: UIA `SetFocus` on its own STA thread, then a click at its centre, retried until the
     /// focused element is the document (the WinUI menu bar holds focus first).
     /// </summary>
+    /// <summary>Switches to the tab whose document holds `word`, then points the caret into it. A restored start
+    /// page or another tab in front is the measured case; Ctrl+Tab is Notepad's own tab key and a click is what
+    /// gives a document the focus, so each attempt is both.</summary>
+    private static string EnsureFrontDocument(IntPtr window, string word)
+    {
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            string held = OnSta(() =>
+            {
+                var focused = System.Windows.Automation.AutomationElement.FocusedElement;
+                if (focused is null ||
+                    focused.Current.ControlType != System.Windows.Automation.ControlType.Document) return "";
+                if (!focused.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
+                    return "";
+                try { return ((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(4096); }
+                catch (Exception) { return ""; }
+            });
+            if (held.Contains(word, StringComparison.OrdinalIgnoreCase)) return "front after " + attempt;
+            if (attempt > 0) { Chord(0x11, 0x09); Thread.Sleep(250); } // Ctrl+Tab: the next tab
+            ClickDocument(window);
+            Thread.Sleep(250);
+        }
+        return "not front after 6 attempts";
+    }
+
     private static void ClickDocument(IntPtr window)
     {
         for (int attempt = 0; attempt < 6; attempt++)
@@ -1220,9 +1361,10 @@ internal static class CaptureLab
                 IntPtr font = CreateFontW(-Size, 0, 0, 0, 700, 0, 0, 0, 1, 0, 0, 5, 0, Face);
                 SendMessageW(edit, 0x0030, font, (IntPtr)1); // WM_SETFONT
             }
-            // Top of the ordinary windows, not topmost: a topmost overlay (the cloaked one the pass needs) must stay
-            // above it, or the skip rule would never be exercised by the read.
-            Win32.SetWindowPos(handle, IntPtr.Zero, 240, 240, Width, Height,
+            // Topmost, so nothing else on screen can cover the surface the pass reads (measured 2026-11-07: a
+            // browser window left by a failed pass sat over it and the read named that window). The cloaked overlay
+            // is made after this one and is topmost too, so it is above it and the skip rule is exercised.
+            Win32.SetWindowPos(handle, Win32.HWND_TOPMOST, 240, 240, Width, Height,
                 Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
             ready.Set();
             while (Win32.GetMessageW(out Win32.MSG message, IntPtr.Zero, 0, 0) > 0)
@@ -1268,6 +1410,112 @@ internal static class CaptureLab
                     SetTextColor(wParam, 0x00FFFFFF);
                     SetBkColor(wParam, 0x00FFFFFF);
                     return GetStockObject(0); // WHITE_BRUSH
+                case WmClose:
+                    Win32.DestroyWindow(window);
+                    return IntPtr.Zero;
+                case WmDestroy:
+                    Win32.PostQuitMessage(0);
+                    return IntPtr.Zero;
+                default:
+                    return Win32.DefWindowProcW(window, message, wParam, lParam);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (handle != IntPtr.Zero) Win32.PostMessageW(handle, WmClose, IntPtr.Zero, IntPtr.Zero);
+            thread.Join(2000);
+        }
+    }
+
+    /// <summary>An overlay the reader must skip: a topmost, hit-testable window that DWM cloaks, so Win32 says it is
+    /// visible and nothing of it is drawn — a suspended UWP app or the shell's full-screen island. The lab makes its
+    /// own because the host cannot be relied on to have one on screen (measured 2026-11-07: none above the surface,
+    /// and the skip rule went unexercised). It paints a word of its own, so a reader that read it would answer that
+    /// word instead of the surface's.</summary>
+    private sealed class CloakedOverlay : IDisposable
+    {
+        private const uint WsPopup = 0x80000000, WsVisible = 0x10000000;
+        private const uint WsExToolWindow = 0x00000080, WsExNoActivate = 0x08000000;
+        private const uint WmDestroy = 0x0002, WmClose = 0x0010;
+        private const string ClassName = "XDictCaptureLabCloak";
+        private readonly ManualResetEventSlim ready = new(false);
+        private readonly Win32.WndProc proc;
+        private readonly Thread thread;
+        private IntPtr handle;
+
+        public string Word { get; }
+        public int CloakResult { get; private set; } = -1;
+        public bool Raised { get; private set; }
+
+        public CloakedOverlay(string word, int x, int y)
+        {
+            Word = word;
+            proc = Window;
+            thread = new Thread(() => Run(x, y)) { IsBackground = true, Name = "capture lab cloak" };
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+        }
+
+        public IntPtr Handle
+        {
+            get { ready.Wait(10000); return handle; }
+        }
+
+        public bool Cloaked => handle != IntPtr.Zero && Win32.IsCloaked(handle);
+
+        private void Run(int x, int y)
+        {
+            IntPtr instance = Win32.GetModuleHandleW(null);
+            var windowClass = new Win32.WNDCLASSEX
+            {
+                cbSize = (uint)Marshal.SizeOf<Win32.WNDCLASSEX>(),
+                lpfnWndProc = proc,
+                hInstance = instance,
+                hCursor = Win32.LoadCursorW(IntPtr.Zero, (IntPtr)32512), // IDC_ARROW
+                hbrBackground = (IntPtr)6, // COLOR_WINDOW + 1
+                lpszClassName = ClassName,
+            };
+            Win32.RegisterClassExW(ref windowClass);
+            const int width = 600, height = 300;
+            handle = Win32.CreateWindowExW(WsExToolWindow | WsExNoActivate, ClassName, "", WsPopup | WsVisible,
+                x - width / 2, y - height / 2, width, height, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
+            if (handle != IntPtr.Zero)
+            {
+                // Cloaked first, then raised to the top: the cloak is DWM's own attribute and arrives after the call,
+                // and a window raised before it was cloaked does not stay above the surface (measured 2026-11-07:
+                // the enumeration put it below, and the skip rule went unexercised). The read-back is the evidence.
+                int cloak = 1;
+                CloakResult = Win32.DwmSetWindowAttribute(handle, Win32.DWMWA_CLOAK, ref cloak, sizeof(int));
+                for (int attempt = 0; attempt < 40 && !Win32.IsCloaked(handle); attempt++) Thread.Sleep(25);
+                Raised = Win32.SetWindowPos(handle, Win32.HWND_TOPMOST, x - width / 2, y - height / 2, width, height,
+                    Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
+            }
+            ready.Set();
+            while (Win32.GetMessageW(out Win32.MSG message, IntPtr.Zero, 0, 0) > 0)
+            {
+                Win32.TranslateMessage(ref message);
+                Win32.DispatchMessageW(ref message);
+            }
+        }
+
+        private IntPtr Window(IntPtr window, uint message, IntPtr wParam, IntPtr lParam)
+        {
+            switch (message)
+            {
+                case 0x000F: // WM_PAINT
+                {
+                    IntPtr dc = Win32.BeginPaint(window, out Win32.PAINTSTRUCT paint);
+                    try
+                    {
+                        using var graphics = Graphics.FromHdc(dc);
+                        graphics.Clear(Color.White);
+                        using var font = new Font(PixelsWindow.Face, 40, FontStyle.Bold, GraphicsUnit.Pixel);
+                        graphics.DrawString(Word, font, Brushes.Black, new PointF(20, 20));
+                    }
+                    finally { Win32.EndPaint(window, ref paint); }
+                    return IntPtr.Zero;
+                }
                 case WmClose:
                     Win32.DestroyWindow(window);
                     return IntPtr.Zero;

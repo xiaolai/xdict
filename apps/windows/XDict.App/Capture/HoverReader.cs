@@ -494,7 +494,7 @@ public sealed class HoverReader : IDisposable
     /// <summary>The first visible, uncloaked window of another process under the point, below `ours` in the z-order
     /// (EnumWindows enumerates top-level windows top to bottom). This is the "first ordinary app behind it": our
     /// windows, tool windows and click-through overlays are not apps the reader is reading.</summary>
-    private static IntPtr FirstOrdinaryBehind(IntPtr ours, int x, int y)
+    internal static IntPtr FirstOrdinaryBehind(IntPtr ours, int x, int y)
     {
         IntPtr found = IntPtr.Zero;
         bool passed = false;

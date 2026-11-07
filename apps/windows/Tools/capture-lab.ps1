@@ -48,6 +48,11 @@ function Invoke-NotepadPass {
     $notepadRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $notepadConfig + '"') -Output (Join-Path $folder 'notepad-result.json')
     Write-Host ($notepadRun | ConvertTo-Json -Depth 6)
     if ($notepadRun.PSObject.Properties['error']) { throw "the Notepad pass failed: $($notepadRun.error)" }
+    if ($notepadRun.selectionAfterSelection -like '<no document holding*') {
+        # Notepad is single-instance and restores its tabs: another document in front means the fixture never loaded.
+        throw ("the Notepad window does not hold the fixture ($($notepadRun.selectionAfterSelection)); " +
+            "its document text is $($notepadRun.documentText)")
+    }
     if (-not $notepadRun.panelShown) { throw 'the Notepad chord produced no panel' }
     if ($notepadRun.panelMs -lt 0 -or $notepadRun.panelMs -gt 1000) { throw "the Notepad panel took $($notepadRun.panelMs) ms" }
     if ($notepadRun.term -ne 'run') { throw "the Notepad panel's term is '$($notepadRun.term)', expected run (refusal $($notepadRun.refusal); $($notepadRun.focusInfo))" }
@@ -65,6 +70,7 @@ function Invoke-SuspendedPass {
         ConvertTo-Json | Set-Content -LiteralPath $suspendedConfig -Encoding UTF8
     $suspended = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $suspendedConfig + '"') -Output (Join-Path $folder 'suspended-result.json')
     Write-Host ($suspended | ConvertTo-Json -Depth 6)
+    if ($suspended.PSObject.Properties['error']) { throw "the suspended-service pass failed: $($suspended.error)" }
     if (-not $suspended.panelShown) { throw 'the panel did not show with the service suspended' }
     if ($suspended.panelMs -lt 0 -or $suspended.panelMs -gt 1000) { throw "the suspended-service panel took $($suspended.panelMs) ms" }
     if ($suspended.term -ne 'run') { throw "the suspended-service panel's term is '$($suspended.term)'" }
@@ -147,6 +153,7 @@ $word.Quit()
             Stop-XDictLabProcesses -Name @('WINWORD')
         }
         Write-Host ($wordRun | ConvertTo-Json -Depth 6)
+        if ($wordRun.PSObject.Properties['error']) { throw "the Word pass failed: $($wordRun.error)" }
         if (-not $wordRun.panelShown -or $wordRun.term -ne 'run') {
             # Only a reader that exposes no text is an environment gap (Office unactivated overlays a sign-in
             # dialog); a run that fails any other way is a regression, never a skip.
@@ -164,11 +171,21 @@ $word.Quit()
             ConvertTo-Json | Set-Content -LiteralPath $pdfConfig -Encoding UTF8
         $pdfRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $pdfConfig + '"') -Output (Join-Path $folder 'pdf-result.json')
         Write-Host ($pdfRun | ConvertTo-Json -Depth 6)
+        if ($pdfRun.PSObject.Properties['error']) { throw "the PDF pass failed: $($pdfRun.error)" }
         if (-not $pdfRun.panelShown -or $pdfRun.term -ne 'run') {
-            if ($pdfRun.refusal -notin @('noTextPattern', 'noSelection')) {
+            # Edge's PDF viewer on this build answers a text pattern with an object character and no words, so the
+            # fixture cannot select one and nothing about the reader is measured. The lab's own selection says which
+            # way it failed: a document that holds the sentence and a reader that still missed it is a regression.
+            if ($pdfRun.selectionAfterSelection -like '<no document holding*') {
+                Write-Host ("PDF NOT MEASURED (the viewer exposes no text): $($pdfRun.selectionAfterSelection); " +
+                    "documents: $($pdfRun.pdfDocuments -join ' / ')")
+            }
+            elseif ($pdfRun.refusal -notin @('noTextPattern', 'noSelection', 'emptySelection')) {
                 throw ("the PDF capture regressed: term '$($pdfRun.term)' refusal '$($pdfRun.refusal)' -- $($pdfRun.focusInfo)")
             }
-            Write-Host ("PDF NOT MEASURED (the viewer exposes no text): term '$($pdfRun.term)' refusal '$($pdfRun.refusal)'")
+            else {
+                Write-Host ("PDF NOT MEASURED (the viewer exposes no text): term '$($pdfRun.term)' refusal '$($pdfRun.refusal)'")
+            }
         }
     }
     else { Write-Host 'WORD NOT MEASURED: Word is not installed on this host' }

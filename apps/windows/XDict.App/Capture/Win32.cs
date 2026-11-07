@@ -12,6 +12,7 @@ internal static partial class Win32
     public const int WS_EX_NOACTIVATE = 0x08000000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const int WS_EX_TOPMOST = 0x00000008;
     public const uint GA_ROOT = 2;
     public static readonly IntPtr HWND_MESSAGE = new(-3);
     public static readonly IntPtr HWND_TOPMOST = new(-1);
@@ -162,10 +163,17 @@ internal static partial class Win32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern bool PostMessageW(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
+    public const int DWMWA_CLOAK = 13;
     public const int DWMWA_CLOAKED = 14;
 
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out int value, int size);
+
+    /// <summary>Cloaks a window of ours: DWM stops drawing it while Win32 still reports it visible and hit-testable,
+    /// which is the state the hover lab makes when the host has no suspended app or shell island on screen to skip.
+    /// Zero is S_OK; the read-back through <see cref="IsCloaked"/> is the evidence, never this return alone.</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hWnd, int attribute, ref int value, int size);
 
     /// <summary>Whether DWM has cloaked the window: a suspended UWP app's, or a shell surface that is not shown.
     /// Such a window reports IsWindowVisible true and can cover the screen while the reader sees nothing — ClickToDo's

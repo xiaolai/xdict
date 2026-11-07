@@ -72,7 +72,8 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     function Invoke-HoverPass([string]$Mode, [string]$PassText = $text, [string]$Press = '', [switch]$KeepNotepad) {
         # The elevated pass owns its Notepad: the launcher started it and the launcher ends it, so the pass must not
         # stop it here (this session can kill an elevated process, and doing so leaves the lab without a target).
-        $stopNames = if ($KeepNotepad) { @('XDict') } else { @('XDict', 'notepad') }
+        # A browser a failed capture pass left behind is a lab window over the surface: the read would name it.
+        $stopNames = if ($KeepNotepad) { @('XDict', 'msedge', 'chrome') } else { @('XDict', 'notepad', 'msedge', 'chrome') }
         Stop-XDictLabProcesses -Name $stopNames -Marker $folder
         Start-Sleep -Milliseconds 400
         $config = Join-Path $folder ($Mode + '-config.json')
@@ -100,11 +101,24 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     # The pixels surface: the pointer is over the lab's wordless window, and a cloaked overlay covers the same point.
     # Both facts are asserted, so a pass cannot turn green by reading the overlay or the desktop instead.
     function Assert-PixelsSurface($run, [string]$Mode) {
+        # The lab's own overlay, above the surface and cloaked by DWM. Its read-back is asserted first: an overlay
+        # that failed to cloak would leave the skip rule unexercised while some other window satisfied the search.
+        if (-not $run.overlayCloaked) {
+            throw "$Mode`: the lab's overlay was not cloaked (set result $($run.overlaySet), window '$($run.overlayWindow)')"
+        }
         if ([string]::IsNullOrEmpty($run.cloakedAbove)) {
             throw "$Mode`: no cloaked window above the target covered the point; the skip rule was not exercised"
         }
         if ($run.pointWindow -notmatch '^XDict\.exe/XDictCaptureLabPixels/') {
             throw "$Mode`: the window under the point was '$($run.pointWindow)', not the lab's pixels window"
+        }
+    }
+
+    # A negative pass expects no word at all, and the product is right to read the first ordinary app behind the
+    # surface. Any app there makes the fixture — not the product — the thing that failed, so it is named.
+    function Assert-NothingBehind($run, [string]$Mode) {
+        if (-not [string]::IsNullOrEmpty($run.behindWindow)) {
+            throw "$Mode`: '$($run.behindWindow)' is behind the surface and would answer; close it and rerun"
         }
     }
 
@@ -156,6 +170,11 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     $own = Invoke-HoverPass 'hover-own'
     if ($own.PSObject.Properties['error']) { throw "the own-window pass failed: $($own.error)" }
     if (-not $own.ownPanel) { throw 'hover-own: the selection did not present a panel' }
+    # The hover case only runs once the panel's term has been found and moved; without it the pass proved nothing,
+    # so it is a named failure rather than a missing property.
+    if (-not $own.ownTermRectFound) {
+        throw "hover-own: the panel's term rectangle was not found (planned word '$($own.ownPlannedWord)')"
+    }
     if ($own.ownHoverTerm -ne 'run') {
         throw "hover-own: the panel's own word was '$($own.ownHoverTerm)', expected run"
     }
@@ -169,6 +188,9 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     }
 
     $skip = Invoke-HoverPass 'hover-own-skip'
+    if (-not $skip.ownTermRectFound) {
+        throw "hover-own-skip: the panel's term rectangle was not found (planned word '$($skip.ownPlannedWord)')"
+    }
     if ($skip.ownHoverTerm -ne 'gamma') {
         throw "hover-own-skip: the fault did not show the behind word (got '$($skip.ownHoverTerm)')"
     }
@@ -196,6 +218,7 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     $noOcr = Invoke-HoverPass 'hover-noocr' $pixelsText
     Assert-SpecialCommon $noOcr 'hover-noocr'
     Assert-PixelsSurface $noOcr 'hover-noocr'
+    Assert-NothingBehind $noOcr 'hover-noocr'
     if ($noOcr.specialShown) { throw 'hover-noocr: a panel was drawn without a recogniser' }
     if ($noOcr.specialOutcome -ne 'miss:ocrUnavailable') {
         throw "hover-noocr: the outcome is '$($noOcr.specialOutcome)', expected miss:ocrUnavailable"
@@ -237,6 +260,7 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     $stallOcr = Invoke-HoverPass 'hover-stall-ocr' $pixelsText
     Assert-SpecialCommon $stallOcr 'hover-stall-ocr'
     Assert-PixelsSurface $stallOcr 'hover-stall-ocr'
+    Assert-NothingBehind $stallOcr 'hover-stall-ocr'
     if ($stallOcr.specialShown) { throw 'hover-stall-ocr: a panel was drawn while the capture was stuck' }
     if ($stallOcr.specialOutcome -ne 'miss:captureStuck') {
         throw "hover-stall-ocr: the outcome is '$($stallOcr.specialOutcome)', expected miss:captureStuck"
