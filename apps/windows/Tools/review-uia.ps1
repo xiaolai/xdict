@@ -19,7 +19,11 @@ Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
+    # **The import and the review share one storage.** The review runs in a store of its own so an erase or a seeded
+    # note never touches the reader's learning data; a library imported into the default store is "needsImport" there,
+    # and the review has no card (measured 2026-11-07).
+    $storageName = 'review-' + [Guid]::NewGuid().ToString('N')
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '" --lab-storage ' + $storageName) `
         -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep'
     Stop-XDictLabProcesses -Name @('XDict')
     Start-Sleep -Seconds 1
@@ -29,7 +33,6 @@ Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     # The driver reads its paths from a JSON file beside itself: no path is ever spliced into PowerShell source, where
     # an apostrophe would end the string and any quote would make the rest a command.
     $driverConfig = Join-Path $folder 'driver-config.json'
-    $storageName = 'review-' + [Guid]::NewGuid().ToString('N')
     @{ library = $library; exe = $exe; storage = $storageName; result = $resultPath } |
         ConvertTo-Json | Set-Content -LiteralPath $driverConfig -Encoding UTF8
     $template = @'
@@ -37,6 +40,8 @@ $ErrorActionPreference = 'Stop'
 $config = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'driver-config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $resultPath = $config.result
 $env:XDICT_LIBRARY = $config.library
+$result = [ordered]@{ review = $false; word = ''; gloss = $false; graded = ''; undone = ''; note = '';
+    noteSaved = ''; error = ''; appExited = -1; windows = '' }
 $app = Start-Process -FilePath $config.exe -ArgumentList '--review-lab', '--lab-storage', $config.storage -PassThru
 try {
     Add-Type -AssemblyName UIAutomationClient
@@ -72,10 +77,22 @@ try {
         if ($control) { return $control.Current.Name }
         return ''
     }
-    $result = [ordered]@{ review = $false; word = ''; gloss = $false; graded = ''; undone = ''; note = '';
-        noteSaved = ''; error = '' }
     $review = Find-Review
     $result.review = $null -ne $review
+    if (-not $review) {
+        # "Did not open" alone is not a failure anyone can act on: record what the app was doing instead.
+        if ($app.HasExited) { $result.appExited = $app.ExitCode }
+        $windows = @()
+        foreach ($candidate in $root.FindAll([System.Windows.Automation.TreeScope]::Children,
+                [System.Windows.Automation.Condition]::TrueCondition)) {
+            if ($candidate.Current.ProcessId -ne $app.Id) { continue }
+            $status = & $byId $candidate 'StatusText'
+            $line = $candidate.Current.Name + ' [' + $candidate.Current.ClassName + ']'
+            if ($status) { $line += ' status=' + $status.Current.Name }
+            $windows += $line
+        }
+        $result.windows = ($windows -join ' | ')
+    }
     if ($review) {
         $result.word = Name-ById 'ReviewWord'
         if (-not (Invoke-ById 'ReviewShowAnswer')) { throw 'the Show answer button was not found' }
@@ -98,7 +115,9 @@ try {
     $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 catch {
-    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
+    # The evidence gathered before the failure survives it: a sentence and an empty object cannot be acted on.
+    $result.error = $_.Exception.Message
+    $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 finally {
     if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
@@ -109,7 +128,9 @@ finally {
     $uia = Invoke-XDictTask -Script $wrapper -Output $resultPath -Seconds 240
     Write-Host ($uia | ConvertTo-Json -Depth 6)
     if ($uia.PSObject.Properties['error'] -and $uia.error) { throw "the review harness failed: $($uia.error)" }
-    if (-not $uia.review) { throw 'the review window did not open' }
+    if (-not $uia.review) {
+        throw ("the review window did not open (app exit $($uia.appExited); windows: $($uia.windows))")
+    }
     if ($uia.word -ne 'run') { throw "the review showed '$($uia.word)', not the seeded word" }
     if (-not $uia.gloss) { throw 'the answer had no gloss control after the reveal' }
     # The sentences are localized; Windows PowerShell reads this file as ANSI, so the Chinese words are built from
