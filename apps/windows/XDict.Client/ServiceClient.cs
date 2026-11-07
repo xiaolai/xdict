@@ -224,7 +224,34 @@ public sealed class ServiceClient : IDisposable
             IReadOnlyList<object> requestFiles = files ?? Array.Empty<object>();
             if (contract == Wire.Version && operation is not ("versions" or "import" or "open"))
             {
-                await current.Restore.WaitAsync(token).ConfigureAwait(false);
+                // Whether this request would reopen a dictionary on a restarted service: the packages it names were
+                // opened on a connection that is no longer the current one.
+                bool NeedsReopen()
+                {
+                    lock (state)
+                    {
+                        foreach (string dict in DictionaryIds(requestBody).ToArray())
+                            if (opened.TryGetValue(dict, out OpenPackage? package) && package is not null &&
+                                package.Connection != current)
+                                return true;
+                        foreach (string edition in EditionIds(operation, requestBody).ToArray())
+                            foreach (var pair in opened)
+                                if (pair.Value.Edition == edition && pair.Value.Connection != current) return true;
+                    }
+                    return false;
+                }
+                // The service charges a reopen to the lookup class. A request holding another class's credit takes a
+                // lookup credit for its reopen, so the reopen meets a lookup class this client can still fill and is
+                // never answered busy (a bulk `entry` sent beside eight lookups was).
+                bool reopenCredit = false;
+                while (true)
+                {
+                    await current.Restore.WaitAsync(token).ConfigureAwait(false);
+                    if (credit == current.Lookup || reopenCredit || !NeedsReopen()) break;
+                    current.Restore.Release();
+                    await current.Lookup.WaitAsync(token).ConfigureAwait(false);
+                    reopenCredit = true;
+                }
                 try
                 {
                     var required = new List<object>(requestFiles);
@@ -246,7 +273,8 @@ public sealed class ServiceClient : IDisposable
                         try
                         {
                             reopened = await live.Send(Wire.Version, reopenId, "open", package.Body,
-                                () => Materialize(live, package.Files), () => reopenSent = true, token)
+                                () => Materialize(live, package.Files),
+                                () => { reopenSent = true; RequestSent?.Invoke(reopenId, "open"); }, token)
                                 .WaitAsync(token).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException)
@@ -293,7 +321,11 @@ public sealed class ServiceClient : IDisposable
                     requestFiles = required.OfType<FileObservation>().DistinctBy(file => file.Id).Cast<object>()
                         .Concat(required.Where(file => file is not FileObservation)).ToArray();
                 }
-                finally { current.Restore.Release(); }
+                finally
+                {
+                    current.Restore.Release();
+                    if (reopenCredit) current.Lookup.Release();
+                }
             }
             // Before any handle is duplicated: a refused envelope must leave nothing in the service (its handles are
             // only closed by the process that owns them, and that is the service).

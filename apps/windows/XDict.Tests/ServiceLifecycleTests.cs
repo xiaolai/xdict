@@ -166,7 +166,12 @@ public class ServiceLifecycleTests
             first.Kill();
             await first.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
-        client.Handshake(); // a new service, the package not yet reopened on it
+        // A new service, the package not yet reopened on it. **A call made in the moment the service dies answers
+        // `staleHandle`** — the type the client gives a request that met a service which is gone (CONTRACT.md §5: a
+        // killed service makes every handle stale, and the app starts a new one) — and the call after it reconnects
+        // (`RepliesSurviveAZombieService`). So the handshake is asked once more rather than read as a failure.
+        try { client.Handshake(); }
+        catch (ServiceFailureException) { client.Handshake(); }
         using var process = Process.GetProcessById(client.ProcessId);
         var sent = new ConcurrentQueue<string>();
         int lookups = 0;
