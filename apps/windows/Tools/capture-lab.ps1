@@ -41,7 +41,7 @@ function Invoke-MainPass {
 function Invoke-NotepadPass {
     # 2b. The same path over Notepad (its WinUI menu bar holds focus first; the document is clicked on purpose).
     if (-not $Only -or $Only -eq 'notepad') {
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
     $notepadConfig = Join-Path $folder 'notepad-config.json'
     @{ output = (Join-Path $folder 'notepad-result.json'); mode = 'notepad'; settings = $settings; library = $library; text = $text } |
         ConvertTo-Json | Set-Content -LiteralPath $notepadConfig -Encoding UTF8
@@ -59,7 +59,7 @@ function Invoke-NotepadPass {
 function Invoke-SuspendedPass {
     # 2b2. The panel with the dictionary service suspended: it must be on screen within the same second.
     if (-not $Only -or $Only -eq 'suspended') {
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
     $suspendedConfig = Join-Path $folder 'suspended-config.json'
     @{ output = (Join-Path $folder 'suspended-result.json'); mode = 'suspended'; settings = $settings; library = $library; text = $html } |
         ConvertTo-Json | Set-Content -LiteralPath $suspendedConfig -Encoding UTF8
@@ -81,7 +81,7 @@ function Invoke-WordAndPdfPass {
         if (Test-Path -LiteralPath $candidate) { $wordExe = $candidate; break }
     }
     if ($wordExe) {
-        Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome', 'WINWORD') -Since $started
+        Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome', 'WINWORD')
         $docx = Join-Path $folder 'selection.docx'
         $pdf = Join-Path $folder 'selection.pdf'
         $makeDoc = Join-Path $folder 'make-doc.ps1'
@@ -144,7 +144,7 @@ $word.Quit()
             Set-Content -LiteralPath $stop -Value 'stop' -Encoding Ascii
             Start-Sleep -Seconds 2
             Unregister-ScheduledTask -TaskName $hostTask -Confirm:$false -ErrorAction SilentlyContinue
-            Stop-XDictLabProcesses -Name @('WINWORD') -Since $started
+            Stop-XDictLabProcesses -Name @('WINWORD')
         }
         Write-Host ($wordRun | ConvertTo-Json -Depth 6)
         if (-not $wordRun.panelShown -or $wordRun.term -ne 'run') {
@@ -158,7 +158,7 @@ $word.Quit()
         elseif ($wordRun.acknowledgement -ne 'Shown') { throw "the Word entry was not acknowledged: $($wordRun.acknowledgement)" }
 
         # 2d. A PDF in Edge's built-in reader, the word selected through the reader's own text pattern.
-        Stop-XDictLabProcesses -Name @('XDict', 'msedge', 'chrome', 'WINWORD') -Since $started
+        Stop-XDictLabProcesses -Name @('XDict', 'msedge', 'chrome', 'WINWORD')
         $pdfConfig = Join-Path $folder 'pdf-config.json'
         @{ output = (Join-Path $folder 'pdf-result.json'); mode = 'pdf'; settings = $settings; library = $library; text = $pdf } |
             ConvertTo-Json | Set-Content -LiteralPath $pdfConfig -Encoding UTF8
@@ -178,7 +178,7 @@ $word.Quit()
 function Invoke-RelaunchPass {
     # 3. A relaunch reads the rebinding back and the new chord works.
     if (-not $Only -or $Only -eq 'relaunch') {
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
     Start-Sleep -Seconds 1
     $relaunchConfig = Join-Path $folder 'relaunch-config.json'
     @{ output = (Join-Path $folder 'relaunch-result.json'); mode = 'relaunch'; settings = $settings; library = $library; text = $html } |
@@ -194,7 +194,7 @@ function Invoke-RelaunchPass {
 function Invoke-ElevatedPass {
     # 4. An elevated window is refused with its sentence, never read.
     if ((-not $SkipElevated) -and (-not $Only -or $Only -eq 'elevated')) {
-        Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+        Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
         $elevatedTask = 'xdict-elevated-target-' + [Guid]::NewGuid().ToString('N')
         # The elevated target closes itself: a medium-integrity process cannot close an elevated window, and a
         # leftover elevated window would hold the foreground and deny the next stage's synthetic input.
@@ -243,7 +243,7 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     $notNeeded = [System.Convert]::ToUInt32('80000000', 16)
     $null = [XDictLab.Power]::SetThreadExecutionState($stayAwake)
     try {
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\capture-lab\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
@@ -282,7 +282,7 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $prepared = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') -Output (Join-Path $folder 'library-result.json')
     if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 
     Invoke-MainPass
 
@@ -296,7 +296,7 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
 
     Invoke-ElevatedPass
 
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome')
     }
     finally { $null = [XDictLab.Power]::SetThreadExecutionState($notNeeded) }
 }

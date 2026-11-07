@@ -151,7 +151,7 @@ function Invoke-XDictTask {
                 # Unregistering alone leaves the wrapper and its app alive; the next stage's window search takes
                 # the stale window. Stop the task and everything the run started.
                 Stop-ScheduledTask -TaskName $id -ErrorAction SilentlyContinue
-                Stop-XDictLabProcesses -Since $started
+                Stop-XDictLabProcesses
                 # The measurement tolerates one sample's timeout and records it; every other caller fails loud.
                 if ($TolerateTimeout) { return $null }
                 throw "the task produced no result: $Output"
@@ -212,35 +212,45 @@ function New-XDictUiaLibrary {
     return $library
 }
 
-# Ends the windows a lab opened, never the reader's own: only processes started after the run began are killed. A
-# cleanup by process name alone closed whatever Word, Edge or Notepad the host's owner had open.
-function Stop-XDictLabProcesses {
-    param([string[]]$Name = @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome'), [datetime]$Since = [datetime]::MinValue,
-        [string]$Marker = '')
-    if ($Marker) {
-        # A marker names this run's own artefacts (its unique lab folder) in the command line. That is an identity,
-        # unlike a process name and start time, which can match a process the person opened during the run.
-        # Windows 11's packaged Notepad carries the document path base64-encoded in /SESSION:, so it is decoded first.
-        $wanted = @($Name | ForEach-Object { $_ -replace '\.exe$', '' })
-        foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-                Where-Object { $wanted -contains ($_.Name -replace '\.exe$', '') })) {
-            $line = $process.CommandLine
-            if ($line -and $line -match '/SESSION:([A-Za-z0-9+/=]+)') {
-                try { $line = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($Matches[1])) }
-                catch { }
-            }
-            if ($line -and $line.IndexOf($Marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
-            }
-        }
-        return
-    }
-    foreach ($process in @(Get-Process -Name $Name -ErrorAction SilentlyContinue)) {
-        try {
-            if ($null -ne $process.StartTime -and $process.StartTime -lt $Since) { continue }
-            Stop-Process -Id $process.Id -Force -ErrorAction Stop
-        }
+# **Identity, never a process name and a start time.** A lab launches XDict with one of its own switches and opens its
+# documents and pages from a folder under %LOCALAPPDATA%\XDict; that evidence is what cleanup acts on. A process of the
+# same name without it is the host owner's own — their browser, their Notepad, their XDict — and is left alone.
+function Get-XDictCommandLine {
+    param($Process)
+    $line = $Process.CommandLine
+    # Windows 11's packaged Notepad carries the document path base64-encoded in /SESSION:, so it is decoded first.
+    if ($line -and $line -match '/SESSION:([A-Za-z0-9+/=]+)') {
+        try { $line = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($Matches[1])) }
         catch { }
+    }
+    return $line
+}
+
+function Test-XDictLabEvidence {
+    param([string]$CommandLine)
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return $false }
+    if ($CommandLine -match '--(?:capture|entry|library|measure|review|sound|sound-link|trail)-lab\b|--launch-id\b|--lab-storage\b') {
+        return $true
+    }
+    $labRoot = Join-Path $env:LOCALAPPDATA 'XDict'
+    return $CommandLine.IndexOf($labRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+}
+
+function Stop-XDictLabProcesses {
+    param([string[]]$Name = @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome'), [string]$Marker = '')
+    $wanted = @($Name | ForEach-Object { $_ -replace '\.exe$', '' })
+    foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $wanted -contains ($_.Name -replace '\.exe$', '') })) {
+        $line = Get-XDictCommandLine $process
+        $ours = if ($Marker) {
+            $line -and $line.IndexOf($Marker, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        }
+        else {
+            Test-XDictLabEvidence $line
+        }
+        if ($ours) {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 

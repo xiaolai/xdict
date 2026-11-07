@@ -33,5 +33,5 @@ Invoke-XDictGate -Name 'find-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     if ($result.findSelection.Trim() -ne 'color') { throw "the find selected '$($result.findSelection)', not color" }
     if (-not $result.findMoved) { throw 'Find next did not move to another match' }
     if (-not $result.findClosed) { throw 'Escape did not close the find bar' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

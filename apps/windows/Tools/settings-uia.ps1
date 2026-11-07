@@ -20,7 +20,7 @@ Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } el
         Start-Sleep -Seconds 1
     }
     try {
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\settings-uia\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
@@ -32,7 +32,7 @@ Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } el
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
         -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     Start-Sleep -Seconds 1
 
     $launchId = 'settings-' + [Guid]::NewGuid().ToString('N')
@@ -165,7 +165,7 @@ finally {
     }
     $movedTo = ([string]$uia.keyboardRoute) -split ':', 2 | Select-Object -First 1
     if ($routeIds -notcontains $movedTo) { throw "the Down key moved focus to '$movedTo', not a Settings route" }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     }
     finally {
         if ($Scale -gt 0) {

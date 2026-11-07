@@ -32,5 +32,5 @@ Invoke-XDictGate -Name 'trail-lab' -Inputs (Get-XDictLabInputs -Layout $layout) 
     if ($uia.firstBack) { throw 'Back was enabled after the first visit' }
     if (-not $uia.secondBack) { throw 'Back was not enabled after the second visit' }
     if ($uia.afterBack) { throw 'Back did not move back to the first visit' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

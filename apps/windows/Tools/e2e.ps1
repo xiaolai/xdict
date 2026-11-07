@@ -213,7 +213,7 @@ $reportTemporary = $Report + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportTemporary -Encoding UTF8
 Move-Item -LiteralPath $reportTemporary -Destination $Report -Force
 Write-Host ("E2E report written: " + (Test-Path -LiteralPath $Report))
-Stop-XDictLabProcesses -Name @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome', 'WINWORD') -Since $runStarted
+Stop-XDictLabProcesses -Name @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome', 'WINWORD')
 if ($failed -gt 0) { exit 1 }
 }
 finally { $null = [XDictLab.Power]::SetThreadExecutionState($notNeeded) }

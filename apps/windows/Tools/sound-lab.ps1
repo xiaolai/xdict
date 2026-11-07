@@ -9,7 +9,7 @@ $started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'sound-lab' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\sound-lab\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $config = Join-Path $folder 'config.json'
@@ -24,5 +24,5 @@ Invoke-XDictGate -Name 'sound-lab' -Inputs (Get-XDictLabInputs -Layout $layout) 
     if ($sound.ipa -lt 1) { throw 'the IPA render produced no bytes' }
     if ($sound.chinese -lt 1) { throw 'the Chinese render produced no bytes' }
     if ($sound.played -ne $true) { throw 'the WAV did not play to its end' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

@@ -30,5 +30,5 @@ Invoke-XDictGate -Name 'explore-uia' -Inputs (Get-XDictLabInputs -Layout $layout
     if ($rows.Count -lt 1) { throw 'Explore answered no row for words ending in olour' }
     if (-not ($rows | Where-Object { $_ -match '(?i)colour' })) { throw 'the Explore page has no colour row' }
     if (-not $result.tabColour) { throw 'opening the Explore row did not add its entry to the reader' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

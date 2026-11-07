@@ -34,5 +34,5 @@ Invoke-XDictGate -Name 'tabs-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     if (-not $result.closed) { throw 'the second tab has no close button' }
     if (-not $result.colorAfterClose) { throw 'closing the second tab removed the first' }
     if ($result.hueAfterClose) { throw 'closing the second tab left it in the strip' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

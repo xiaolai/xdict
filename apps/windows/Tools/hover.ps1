@@ -46,7 +46,7 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     # would then wait on that same thread — a property of the harness, not of hover.
     Set-Content -LiteralPath $library -Value '[]' -Encoding UTF8
     # Any previous run's lab app is ours too; the marker names the shared hover-lab root, not this run's folder.
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Since $started -Marker 'XDict\hover-lab'
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Marker 'XDict\hover-lab'
     # Notepad is single-instance on Windows 11: a stale lab Notepad would take the file as a tab and the read would
     # look at another document. Lab-owned Notepads (their command line names this run's folder) are ended; **any other
     # Notepad is the person's**, and the stage refuses rather than touch it.
@@ -73,7 +73,7 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
         # The elevated pass owns its Notepad: the launcher started it and the launcher ends it, so the pass must not
         # stop it here (this session can kill an elevated process, and doing so leaves the lab without a target).
         $stopNames = if ($KeepNotepad) { @('XDict') } else { @('XDict', 'notepad') }
-        Stop-XDictLabProcesses -Name $stopNames -Since $started -Marker $folder
+        Stop-XDictLabProcesses -Name $stopNames -Marker $folder
         Start-Sleep -Milliseconds 400
         $config = Join-Path $folder ($Mode + '-config.json')
         $result = Join-Path $folder ($Mode + '-result.json')
@@ -202,8 +202,9 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     }
     if ($noOcr.specialNotice -ne 'ocrUnavailable') { throw "hover-noocr: the notice is '$($noOcr.specialNotice)'" }
 
-    # A UIA provider that never answers: the read is abandoned at its deadline, the pixels answer, and the lane is
-    # free again afterwards (the recovery read is a UIA hit, under the plain read threshold).
+    # A UIA provider that never answers: the read is abandoned at its deadline and the pixels answer. Recovery is read
+    # from a UIA-only window (a blank surface whose word is its title): OCR cannot produce it, so the word proves the
+    # worker answered again, and StuckReads proves the lane's own state, not only a panel that appeared.
     $stallUia = Invoke-HoverPass 'hover-stall-uia' $pixelsText
     Assert-SpecialCommon $stallUia 'hover-stall-uia'
     Assert-PixelsSurface $stallUia 'hover-stall-uia'
@@ -215,8 +216,15 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
         throw "hover-stall-uia: the read took $($stallUia.specialReadMs) ms, expected $UiaDeadlineMs-$StallCeilingMs"
     }
     if (-not $stallUia.specialDismissed) { throw 'hover-stall-uia: the first panel was still up before recovery' }
-    if (-not $stallUia.recoveryShown -or $stallUia.recoveryTerm -ne 'Hover') {
-        throw "hover-stall-uia: the recovery read did not answer (shown=$($stallUia.recoveryShown), term=$($stallUia.recoveryTerm))"
+    if (-not $stallUia.recoveryShown -or $stallUia.recoveryTerm -ne 'resume') {
+        throw "hover-stall-uia: the UIA-only recovery read did not answer (shown=$($stallUia.recoveryShown), term=$($stallUia.recoveryTerm))"
+    }
+    # A text-pattern word from the UIA-only edit: the pixels of that surface are white on white.
+    if ($stallUia.recoveryAcquisition -ne 'textRange') {
+        throw "hover-stall-uia: the recovery word came by '$($stallUia.recoveryAcquisition)', not the UIA lane"
+    }
+    if ([int]$stallUia.recoveryStuckReads -ne 0) {
+        throw "hover-stall-uia: the worker still counts $($stallUia.recoveryStuckReads) abandoned reads after it answered"
     }
     if ([int]$stallUia.recoveryRequest -le [int]$stallUia.specialRequest) {
         throw "hover-stall-uia: recovery was not a new request ($($stallUia.recoveryRequest))"
@@ -377,7 +385,7 @@ finally {
     }
     }
 
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Since $started -Marker $folder
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad') -Marker $folder
     Write-Host ("hover thresholds: read <= {0} ms, panel <= {1} ms, hook <= {2} us, idle CPU <= {3} %, ocr read <= {4} ms" -f `
         $MaxReadMs, $MaxPanelMs, $MaxHookMicroseconds, $MaxIdleCpuPercent, $MaxOcrReadMs)
 }

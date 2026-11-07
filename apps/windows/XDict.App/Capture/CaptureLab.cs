@@ -480,20 +480,52 @@ internal static class CaptureLab
                 // The stalled lane owns the capture until its own work ends (the OCR task sleeps 6 s); let it return.
                 await Task.Delay(7000);
                 int before = controller.LastAcknowledgement?.Request ?? 0;
-                Win32.SetCursorPos(x - 3, y);
-                await Task.Delay(120);
-                Win32.SetCursorPos(x, y);
-                await Task.Delay(180);
-                Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
-                deadline = Environment.TickCount64 + 7000;
-                while ((controller.LastAcknowledgement?.Request ?? before) <= before &&
-                       Environment.TickCount64 < deadline) await Task.Delay(20);
+                int rx = x, ry = y;
+                if (mode == "hover-stall-uia")
+                {
+                    // **A UIA-only target for the recovery read**: a blank window whose word is its title. OCR can
+                    // answer nothing on it, so a word proves the UIA worker answered again — the pixels surface the
+                    // first phase used would let a OCR hit stand in for a lane that never recovered.
+                    using var only = new PixelsWindow("resume", uiaOnly: true);
+                    if (!Win32.GetWindowRect(only.Handle, out Win32.RECT onlyRect))
+                    {
+                        report["error"] = "the UIA-only recovery window has no rectangle";
+                        await WriteAsync(output, report);
+                        return;
+                    }
+                    rx = (onlyRect.Left + onlyRect.Right) / 2;
+                    ry = (onlyRect.Top + onlyRect.Bottom) / 2;
+                    report["recoveryUiaOnlyRect"] = new[]
+                    {
+                        onlyRect.Left, onlyRect.Top, onlyRect.Right - onlyRect.Left, onlyRect.Bottom - onlyRect.Top,
+                    };
+                    Win32.SetCursorPos(rx - 3, ry);
+                    await Task.Delay(120);
+                    Win32.SetCursorPos(rx, ry);
+                    await Task.Delay(180);
+                    Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
+                    deadline = Environment.TickCount64 + 7000;
+                    while ((controller.LastAcknowledgement?.Request ?? before) <= before &&
+                           Environment.TickCount64 < deadline) await Task.Delay(20);
+                }
+                else
+                {
+                    Win32.SetCursorPos(x - 3, y);
+                    await Task.Delay(120);
+                    Win32.SetCursorPos(x, y);
+                    await Task.Delay(180);
+                    Win32.keybd_event(0x11, 0, 0, UIntPtr.Zero);
+                    deadline = Environment.TickCount64 + 7000;
+                    while ((controller.LastAcknowledgement?.Request ?? before) <= before &&
+                           Environment.TickCount64 < deadline) await Task.Delay(20);
+                }
                 report["recoveryShown"] = controller.Panel is { Shown: true };
                 report["recoveryTerm"] = controller.Panel?.Term;
                 report["recoveryReadMs"] = controller.HoverLastReadMs;
                 report["recoveryAck"] = controller.LastAcknowledgement?.Outcome.ToString();
                 report["recoveryRequest"] = controller.LastAcknowledgement?.Request;
                 report["recoveryAcquisition"] = controller.HoverLastWord?.Acquisition;
+                report["recoveryStuckReads"] = controller.HoverStuckReads;
                 report["recoveryOutcome"] = controller.HoverLastOutcome;
                 report["recoveryHookMicroseconds"] = controller.HoverHookMicroseconds;
                 Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
@@ -1098,11 +1130,30 @@ internal static class CaptureLab
     private static async Task WriteAsync(string path, Dictionary<string, object?> report) =>
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateFontW(int height, int width, int escapement, int orientation, int weight,
+        uint italic, uint underline, uint strike, uint charset, uint outPrecision, uint clipPrecision, uint quality,
+        uint pitch, string face);
+
+    [DllImport("gdi32.dll")]
+    private static extern uint SetTextColor(IntPtr dc, uint colour);
+
+    [DllImport("gdi32.dll")]
+    private static extern uint SetBkColor(IntPtr dc, uint colour);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr GetStockObject(int index);
+
     /// <summary>A wordless surface for the OCR passes: a plain Win32 window that paints one word with GDI and answers
     /// Accessibility with nothing — no text pattern, no control name. A scanned page is the product case; this is its
     /// deterministic fixture, and it uses the same GDI drawing path a classic desktop app does. It is created in
     /// XDict's own process on a thread with its own message loop, so no helper binary or document format is needed.
-    /// The reader's own-window branch reads it exactly as it reads any other window (Accessibility, then pixels).</summary>
+    /// The reader's own-window branch reads it exactly as it reads any other window (Accessibility, then pixels).
+    /// **The UIA-only variant** swaps the drawing for a read-only edit whose text is the word, white on white: the
+    /// provider answers a text pattern, the pixels answer nothing, and a word from it can only be the UIA lane's.</summary>
     private sealed class PixelsWindow : IDisposable
     {
         public const string Face = "Arial";
@@ -1115,15 +1166,17 @@ internal static class CaptureLab
         private const string ClassName = "XDictCaptureLabPixels";
         private readonly string word;
         private readonly bool unaware;
+        private readonly bool uiaOnly;
         private readonly ManualResetEventSlim ready = new(false);
         private readonly Win32.WndProc proc;
         private readonly Thread thread;
         private IntPtr handle;
 
-        public PixelsWindow(string word, bool unaware = false)
+        public PixelsWindow(string word, bool unaware = false, bool uiaOnly = false)
         {
             this.word = word;
             this.unaware = unaware;
+            this.uiaOnly = uiaOnly;
             // The delegate is held for the window's lifetime: the class registration keeps a raw pointer to it.
             proc = Window;
             thread = new Thread(Run) { IsBackground = true, Name = "capture lab pixels" };
@@ -1155,6 +1208,18 @@ internal static class CaptureLab
             Win32.RegisterClassExW(ref windowClass);
             handle = Win32.CreateWindowExW(WsExToolWindow, ClassName, "", WsPopup | WsVisible,
                 240, 240, Width, Height, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
+            // The UIA-only variant: a read-only edit whose text is the word, drawn white on white. The UIA provider
+            // answers its text pattern while the pixels carry nothing, so a word from this window can only be the
+            // UIA lane's.
+            if (uiaOnly)
+            {
+                const uint child = 0x40000000, visible = 0x10000000, centre = 0x0001, multiline = 0x0004,
+                    readOnlyStyle = 0x0800;
+                IntPtr edit = Win32.CreateWindowExW(0, "EDIT", word, child | visible | centre | multiline | readOnlyStyle,
+                    300, 140, 600, 120, handle, IntPtr.Zero, instance, IntPtr.Zero);
+                IntPtr font = CreateFontW(-Size, 0, 0, 0, 700, 0, 0, 0, 1, 0, 0, 5, 0, Face);
+                SendMessageW(edit, 0x0030, font, (IntPtr)1); // WM_SETFONT
+            }
             // Top of the ordinary windows, not topmost: a topmost overlay (the cloaked one the pass needs) must stay
             // above it, or the skip rule would never be exercised by the read.
             Win32.SetWindowPos(handle, IntPtr.Zero, 240, 240, Width, Height,
@@ -1198,6 +1263,11 @@ internal static class CaptureLab
                     // PrintWindow's own path: the same drawing into the caller's surface.
                     Paint(wParam);
                     return IntPtr.Zero;
+                case 0x0133: // WM_CTLCOLOREDIT
+                    // The edit's glyphs in white on white: UIA still holds the text; the pixels hold nothing.
+                    SetTextColor(wParam, 0x00FFFFFF);
+                    SetBkColor(wParam, 0x00FFFFFF);
+                    return GetStockObject(0); // WHITE_BRUSH
                 case WmClose:
                     Win32.DestroyWindow(window);
                     return IntPtr.Zero;

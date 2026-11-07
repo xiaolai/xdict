@@ -33,5 +33,5 @@ Invoke-XDictGate -Name 'all-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -F
     if ($result.status -notmatch '(^|\D)2(\D|$)') {
         throw "the All page did not announce two sections: '$($result.status)'"
     }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

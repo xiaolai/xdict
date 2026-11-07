@@ -51,7 +51,7 @@ if (-not $SkipImport) {
         if (Test-Path -LiteralPath $library) { $imported = @((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json)).Count }
     }
     Write-Host ("dictionaries in the measurement library: " + $imported)
-    Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'XDictService')
     Start-Sleep -Seconds 3
 }
 if (-not (Test-Path -LiteralPath $library)) { throw "the library to measure is missing: $library" }
@@ -62,7 +62,7 @@ if ($null -eq $warmRun) { throw 'the warm measurement produced no result' }
 $coldSamples = New-Object System.Collections.Generic.List[object]
 $coldOpens = New-Object System.Collections.Generic.List[double]
 for ($i = 0; $i -lt $Cold; $i++) {
-    Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict', 'XDictService')
     Start-Sleep -Milliseconds 500
     $coldOutput = Join-Path $folder ('cold-' + $i + '.json')
     $coldRun = Invoke-MeasureApp -Mode 'cold' -Count 1 -Output $coldOutput
@@ -74,10 +74,10 @@ if ($coldSamples.Count -lt $Cold) {
     throw "the cold measurement produced $($coldSamples.Count) of $Cold samples; p50/p95 over fewer would be a lie"
 }
 $memoryOutput = Join-Path $folder 'memory.json'
-Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
+Stop-XDictLabProcesses -Name @('XDict', 'XDictService')
 Start-Sleep -Milliseconds 500
 $memory = Invoke-MeasureApp -Mode 'memory' -Count 0 -Output $memoryOutput
-Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
+Stop-XDictLabProcesses -Name @('XDict', 'XDictService')
 
 function Percentile($values, [double]$p) {
     $sorted = @($values | Sort-Object)

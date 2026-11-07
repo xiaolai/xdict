@@ -9,7 +9,7 @@ $started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\review-uia\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
@@ -21,7 +21,7 @@ Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
         -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep'
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     Start-Sleep -Seconds 1
 
     $resultPath = Join-Path $folder 'result.json'
@@ -120,5 +120,5 @@ finally {
     if ($uia.graded -notmatch $recorded) { throw "the grade did not report a record: '$($uia.graded)'" }
     if ($uia.undone -notmatch $undone) { throw "the undo did not report an undo: '$($uia.undone)'" }
     if ($uia.noteSaved -notmatch $saved) { throw "the note did not report a save: '$($uia.noteSaved)'" }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }

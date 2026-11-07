@@ -9,7 +9,7 @@ $started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'sound-link-lab' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\sound-link\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $config = Join-Path $folder 'config.json'
@@ -26,5 +26,5 @@ Invoke-XDictGate -Name 'sound-link-lab' -Inputs (Get-XDictLabInputs -Layout $lay
     if ($kinds['here.mp3'] -ne 'Playable') { throw 'here.mp3 is not Playable' }
     if ($kinds['present.spx'] -ne 'Unsupported') { throw 'present.spx is not Unsupported' }
     if ($kinds['gone.mp3'] -ne 'Missing') { throw 'gone.mp3 is not Missing' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+    Stop-XDictLabProcesses -Name @('XDict')
 }
