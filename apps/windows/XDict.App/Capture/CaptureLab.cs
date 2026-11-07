@@ -194,9 +194,17 @@ internal static class CaptureLab
                 // tabs, so the file the lab opened can sit behind a restored start page and the pass would read
                 // another document's text (measured 2026-11-07: a term of 'x' from a document that was not the
                 // fixture's). The loop is bounded and its outcome is recorded, never assumed.
-                report["frontDocument"] = EnsureFrontDocument(targetWindow, "run");
+                await Mark("closing restored tabs");
+                report["tabsClosed"] =
+                    OnSta(() => CloseForeignTabs(targetWindow, Path.GetFileName(textFile)));
+                await Mark("tabs: " + report["tabsClosed"]);
+                report["frontDocument"] = EnsureFrontDocument(targetWindow, Path.GetFileName(textFile), FixtureSentence);
+                await Mark("front: " + report["frontDocument"]);
                 ClickDocument(targetWindow);
                 if (mode == "word") report["wordElements"] = OnSta(() => DescribeTree(targetWindow));
+                // Notepad restores its tabs, and how a tab is named is what the fixture's tab is chosen by.
+                if (mode is "notepad" or "hover" or "hover-double" or "hover-own" or "hover-own-skip")
+                    report["hostTree"] = OnSta(() => DescribeTree(targetWindow));
                 if (mode == "pdf")
                 {
                     report["pdfElements"] = OnSta(() => DescribeTree(targetWindow));
@@ -219,8 +227,11 @@ internal static class CaptureLab
             report["hoverModifier"] = controller.Hover.Modifier.ToString();
             report["hoverGesture"] = controller.Hover.Gesture.ToString();
             report["hoverSettle"] = controller.Hover.SettleMs;
-            // The hover reads the word's rectangle in the front document, so that document must be the fixture's.
-            report["frontDocument"] = EnsureFrontDocument(targetWindow, "run");
+            // The hover reads the word's rectangle in the front document, so that document must be the fixture's —
+            // and **by a word only the hover fixture holds**: 'run' alone is in every fixture, and a restored
+            // capture-lab tab was accepted as the hover one (measured 2026-11-07).
+            report["tabsClosed"] = OnSta(() => CloseForeignTabs(targetWindow, Path.GetFileName(textFile)));
+            report["frontDocument"] = EnsureFrontDocument(targetWindow, Path.GetFileName(textFile), FixtureSentence, "alpha beta gamma");
             var word = OnSta(() => WordRectByUia(targetWindow, 1));
             report["hoverWord"] = word.Text;
             if (word.Rect is { } box)
@@ -311,8 +322,20 @@ internal static class CaptureLab
                 await Task.Delay(20);
             report["ownPanel"] = controller.Panel is { Shown: true };
             report["ownSelectionTerm"] = controller.Panel?.Term;
+            // The fixture's document must be the front tab here too, found by the word this pass needs: a restored
+            // start page or another run's tab in front left the scan with no such word (measured 2026-11-07).
+            report["tabsClosed"] = OnSta(() => CloseForeignTabs(targetWindow, Path.GetFileName(textFile)));
+            report["frontDocument"] = EnsureFrontDocument(targetWindow, Path.GetFileName(textFile), FixtureSentence, "alpha beta gamma");
             var gamma = OnSta(() => FindWordRectByUia(targetWindow, "gamma"));
             report["ownPlannedWord"] = gamma.Text;
+            report["ownPlannedRect"] = gamma.Rect is { } planned
+                ? new[] { (int)planned.X, (int)planned.Y, (int)planned.Width, (int)planned.Height } : null;
+            // Defaults, so a case the pass could not set up is a named failure in the stage and never a missing
+            // property: the last time this branch stopped early, the stage reported a PowerShell error instead.
+            report["ownTermRectFound"] = false;
+            report["ownHoverTerm"] = null;
+            report["ownHoverRequest"] = null;
+            report["ownHoverAck"] = null;
             if (gamma.Rect is { } rect && controller.Panel is { Shown: true })
             {
                 // Put the panel's term over `gamma`, so the word behind it differs from the panel's own word.
@@ -437,6 +460,20 @@ internal static class CaptureLab
                 report["overlaySet"] = overlay.CloakResult;
                 report["overlayCloaked"] = overlay.Cloaked;
                 report["overlayRaised"] = overlay.Raised;
+                // **The z-order the read will walk is the condition under test, so it is established here, not
+                // assumed.** A topmost window does not always land above an earlier topmost one (measured
+                // 2026-11-07: raised, cloaked, and enumerated below the surface), so it is raised again until the
+                // read's own enumeration sees it above — and how many raises that took is recorded.
+                int raises = 0;
+                for (; raises < 10 && CloakedAbove(targetWindow, x, y) is null; raises++)
+                {
+                    Win32.SetWindowPos(overlay.Handle, Win32.HWND_TOPMOST, x - 300, y - 150, 600, 300,
+                        Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
+                    Thread.Sleep(60);
+                }
+                report["overlayRaises"] = raises;
+                report["overlayTopmost"] =
+                    ((long)Win32.GetWindowLongPtrW(overlay.Handle, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOPMOST) != 0;
             }
             report["specialPoint"] = new[] { x, y };
             // The overlay the read must skip, named before the read: a pass asserts it was there and still lost.
@@ -708,6 +745,14 @@ internal static class CaptureLab
                     catch (Exception) { }
                 }
             }
+            // Notepad saves its tab list even when it is killed, so each pass leaves one behind and the next run
+            // opens them all in front of its own (measured 2026-11-07: seventeen tabs). Closing the lab's own tabs
+            // here keeps that list empty; a person's document matches none of the lab's names and is never touched.
+            if (notepadTarget && targetWindow != IntPtr.Zero)
+            {
+                try { OnSta(() => CloseForeignTabs(targetWindow, "\0none"), 5000); }
+                catch (Exception) { }
+            }
             overlay?.Dispose();
             pixels?.Dispose();
             pdfServer?.Dispose();
@@ -856,7 +901,16 @@ internal static class CaptureLab
             word.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.End,
                 System.Windows.Automation.Text.TextUnit.Character, -1);
         word.Select();
-        System.Windows.Rect[] boxes = word.GetBoundingRectangles();
+        // **Scrolled to before its rectangles are asked for.** A word the view has scrolled out of has no rectangle
+        // in the provider, and the rectangle is what the pass places the panel over (measured 2026-11-07: 'gamma'
+        // was found by text and had none). A provider that needs a beat after the scroll is waited for, not assumed.
+        word.ScrollIntoView(true);
+        System.Windows.Rect[] boxes = [];
+        for (int attempt = 0; attempt < 5 && boxes.Length == 0; attempt++)
+        {
+            if (attempt > 0) Thread.Sleep(100);
+            boxes = word.GetBoundingRectangles();
+        }
         return (word.GetText(-1), boxes.Length > 0 ? boxes[0] : null);
     }
 
@@ -869,7 +923,8 @@ internal static class CaptureLab
             var found = WordRectByUia(window, index);
             if (found.Text.Trim() == wanted) return found;
         }
-        return (wanted, null);
+        // The sentinel names the failure: returning the wanted word would read as "found, no rectangle".
+        return ("<" + wanted + " not found>", null);
     }
 
     /// <summary>The panel's own term rectangle, found through UI Automation as a reader's assistive technology would.</summary>
@@ -1087,8 +1142,11 @@ internal static class CaptureLab
         return lines.ToArray();
     }
 
-    /// <summary>The window's text-bearing Document, not the address bar's Edit. With `mustHold`, only a document
-    /// whose text holds that word; the first with text as fallback.</summary>
+    /// <summary>The window's **visible** text-bearing Document, not the address bar's Edit and not a hidden tab's.
+    /// With `mustHold`, only a document whose text holds that word; the first visible one with text as fallback.
+    /// Edge's PDF viewer exposes a hidden empty Document beside the page's, and Notepad keeps a document per tab, so
+    /// a hidden one is a real candidate: its text reads fine but its rectangles place the pointer on whatever the
+    /// visible document happens to draw there (measured 2026-11-07: the hover read 'beta').</summary>
     private static System.Windows.Automation.AutomationElement? TextDocument(IntPtr window, string? mustHold = null)
     {
         var root = System.Windows.Automation.AutomationElement.FromHandle(window);
@@ -1100,19 +1158,20 @@ internal static class CaptureLab
                 new System.Windows.Automation.PropertyCondition(
                     System.Windows.Automation.AutomationElement.ControlTypeProperty,
                     System.Windows.Automation.ControlType.Document)));
-        // Edge's PDF viewer exposes a hidden empty Document beside the page's; the page's is the one with text.
-        System.Windows.Automation.AutomationElement? firstWithText = null;
+        System.Windows.Automation.AutomationElement? firstVisible = null, firstWithText = null;
         foreach (System.Windows.Automation.AutomationElement candidate in documents)
             if (candidate.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object raw))
                 try
                 {
                     string held = ((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(4096);
                     if (held.Trim().Length == 0) continue;
-                    if (mustHold is null) return candidate;
-                    if (held.Contains(mustHold, StringComparison.OrdinalIgnoreCase)) return candidate;
-                    firstWithText ??= candidate;
+                    bool holds = mustHold is null || held.Contains(mustHold, StringComparison.OrdinalIgnoreCase);
+                    if (!holds) { firstWithText ??= candidate; continue; }
+                    if (!candidate.Current.IsOffscreen) return candidate;
+                    firstVisible ??= candidate;
                 }
                 catch (Exception) { }
+        if (firstVisible is not null) return firstVisible;
         if (mustHold is not null) return firstWithText;
         if (documents.Count > 0) return documents[0];
         return root.FindFirst(System.Windows.Automation.TreeScope.Descendants,
@@ -1142,10 +1201,15 @@ internal static class CaptureLab
     /// Focuses Notepad's document: UIA `SetFocus` on its own STA thread, then a click at its centre, retried until the
     /// focused element is the document (the WinUI menu bar holds focus first).
     /// </summary>
-    /// <summary>Switches to the tab whose document holds `word`, then points the caret into it. A restored start
-    /// page or another tab in front is the measured case; Ctrl+Tab is Notepad's own tab key and a click is what
-    /// gives a document the focus, so each attempt is both.</summary>
-    private static string EnsureFrontDocument(IntPtr window, string word)
+    /// <summary>The sentence every capture fixture is made from: the lab writes it, the .docx and PDF carry it.</summary>
+    private const string FixtureSentence = "The run reader selects this sentence.";
+
+    /// <summary>Switches to the tab whose document holds every one of `words`, then points the caret into it. Windows 11's
+    /// Notepad restores its tabs, so a start page or **another run's document** can be in front (measured
+    /// 2026-11-07: a restored capture-lab tab, whose first line holds the same 'run', was taken for the hover
+    /// fixture). The tab is chosen by the file name the lab opened it with — not by cycling until something looks
+    /// right — and a click is what gives its document the focus.</summary>
+    private static string EnsureFrontDocument(IntPtr window, string fileName, params string[] words)
     {
         for (int attempt = 0; attempt < 6; attempt++)
         {
@@ -1159,12 +1223,129 @@ internal static class CaptureLab
                 try { return ((System.Windows.Automation.TextPattern)raw).DocumentRange.GetText(4096); }
                 catch (Exception) { return ""; }
             });
-            if (held.Contains(word, StringComparison.OrdinalIgnoreCase)) return "front after " + attempt;
-            if (attempt > 0) { Chord(0x11, 0x09); Thread.Sleep(250); } // Ctrl+Tab: the next tab
+            // **Every** word, not one: a document holding one line of the fixture is another document's (measured
+            // 2026-11-07: a tab holding only the alpha line was taken for the hover fixture).
+            if (words.All(word => held.Contains(word, StringComparison.OrdinalIgnoreCase)))
+                return "front after " + attempt;
+            if (!OnSta(() => SelectTab(window, fileName)) && attempt > 0)
+            {
+                Chord(0x11, 0x09); // Ctrl+Tab: no tab of ours is named yet, so the next one may be
+                Thread.Sleep(250);
+            }
             ClickDocument(window);
             Thread.Sleep(250);
         }
         return "not front after 6 attempts";
+    }
+
+    /// <summary>Closes the lab's own restored tabs, keeping the file this pass opened. Windows 11's Notepad restores
+    /// every tab it ever had, so a host that has run this stage a dozen times opens a dozen old fixtures in front of
+    /// ours (measured 2026-11-07: seventeen tabs). Only files the lab itself wrote are touched, and each is selected
+    /// through the tab strip before its close key is sent, so a tab with unsaved edits still prompts and stays.</summary>
+    private static string CloseForeignTabs(IntPtr window, string keepFileName)
+    {
+        // One thread, one deadline: the loop is a conversation with the tab strip, and a fresh thread per step spent
+        // more time starting than asking (measured 2026-11-07: a step of it timed out at the 2.5 s join).
+        return OnSta(() =>
+        {
+            string[] ours = ["selection", "words", "word.txt", "pixels"];
+            var tabCondition = new System.Windows.Automation.PropertyCondition(
+                System.Windows.Automation.AutomationElement.ControlTypeProperty,
+                System.Windows.Automation.ControlType.TabItem);
+            int closed = 0;
+            for (int round = 0; round < 32; round++)
+            {
+                // **A fresh root every round.** Selecting a tab rebuilds Notepad's strip, and a tree cached before
+                // the change answers a later search with a stale element that never returns (measured 2026-11-07:
+                // the cleanup hung).
+                var root = System.Windows.Automation.AutomationElement.FromHandle(window);
+                if (root is null) return "no window";
+                int before = root.FindAll(System.Windows.Automation.TreeScope.Descendants, tabCondition).Count;
+                System.Windows.Automation.AutomationElement? victim = null;
+                foreach (System.Windows.Automation.AutomationElement tab in
+                         root.FindAll(System.Windows.Automation.TreeScope.Descendants, tabCondition))
+                {
+                    string name = tab.Current.Name;
+                    if (name.StartsWith(keepFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!ours.Any(prefix => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))) continue;
+                    victim = tab;
+                    break;
+                }
+                if (victim is null) break;
+                try
+                {
+                    ((System.Windows.Automation.SelectionItemPattern)
+                        victim.GetCurrentPattern(System.Windows.Automation.SelectionItemPattern.Pattern)).Select();
+                }
+                catch (Exception) { break; }
+                Thread.Sleep(150);
+                Chord(0x11, 0x57); // Ctrl+W: Notepad's close-tab
+                Thread.Sleep(300);
+                var after = System.Windows.Automation.AutomationElement.FromHandle(window);
+                int remaining = after is null
+                    ? 0 : after.FindAll(System.Windows.Automation.TreeScope.Descendants, tabCondition).Count;
+                if (remaining >= before)
+                {
+                    // A restored document left dirty by an earlier run prompts for its save; answering "don't save"
+                    // is what lets the strip be cleaned. The lab's own fixtures are never edited by it, so the edits
+                    // being discarded are a previous run's debris.
+                    if (!DismissSavePrompt(window)) break; // a prompt that is not this one, or no prompt at all
+                    continue;
+                }
+                closed++;
+            }
+            return closed + " tabs closed";
+        }, 30000);
+    }
+
+    /// <summary>Answers Notepad's unsaved-changes prompt with "don't save", by its own button's name. The prompt is
+    /// in the window's own tree (a XAML popup), so no key is sent to a dialog the lab cannot see.</summary>
+    private static bool DismissSavePrompt(IntPtr window)
+    {
+        string[] labels = ["不保存", "Don't save", "Don’t save", "否"];
+        var root = System.Windows.Automation.AutomationElement.FromHandle(window);
+        if (root is null) return false;
+        var button = new System.Windows.Automation.PropertyCondition(
+            System.Windows.Automation.AutomationElement.ControlTypeProperty,
+            System.Windows.Automation.ControlType.Button);
+        foreach (System.Windows.Automation.AutomationElement candidate in
+                 root.FindAll(System.Windows.Automation.TreeScope.Descendants, button))
+        {
+            string name = candidate.Current.Name.Trim();
+            if (!labels.Any(label => name.Equals(label, StringComparison.OrdinalIgnoreCase))) continue;
+            try
+            {
+                ((System.Windows.Automation.InvokePattern)candidate.GetCurrentPattern(
+                    System.Windows.Automation.InvokePattern.Pattern)).Invoke();
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+        return false;
+    }
+
+    /// <summary>Selects the tab a file was opened in, by the name the tab strip shows. False when no tab carries it
+    /// yet (Notepad is still starting) or the host has no tab strip at all.</summary>
+    private static bool SelectTab(IntPtr window, string fileName)
+    {
+        var root = System.Windows.Automation.AutomationElement.FromHandle(window);
+        if (root is null) return false;
+        var condition = new System.Windows.Automation.PropertyCondition(
+            System.Windows.Automation.AutomationElement.ControlTypeProperty,
+            System.Windows.Automation.ControlType.TabItem);
+        foreach (System.Windows.Automation.AutomationElement tab in
+                 root.FindAll(System.Windows.Automation.TreeScope.Descendants, condition))
+        {
+            if (!tab.Current.Name.Contains(fileName, StringComparison.OrdinalIgnoreCase)) continue;
+            try
+            {
+                ((System.Windows.Automation.SelectionItemPattern)
+                    tab.GetCurrentPattern(System.Windows.Automation.SelectionItemPattern.Pattern)).Select();
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+        return false;
     }
 
     private static void ClickDocument(IntPtr window)
@@ -1205,7 +1386,7 @@ internal static class CaptureLab
         catch (Exception) { return false; }
     }
 
-    private static T OnSta<T>(Func<T> work)
+    private static T OnSta<T>(Func<T> work, int timeoutMs = 10000)
     {
         T result = default!;
         Exception? failure = null;
@@ -1217,7 +1398,7 @@ internal static class CaptureLab
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        if (!thread.Join(2500))
+        if (!thread.Join(timeoutMs))
             throw new TimeoutException("the UI Automation read did not finish; later steps would overlap it");
         if (failure is not null) throw new InvalidOperationException("the UI Automation read failed: " + failure.Message, failure);
         return result;

@@ -31,9 +31,12 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $library = Join-Path $folder 'library.json'
-    $text = Join-Path $folder 'words.txt'
+    # **Named for this run.** Notepad restores its tabs, and a tab is found by the file name it shows: a name that
+    # every run reuses cannot tell this run's fixture from a restored one (measured 2026-11-07).
+    $runId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $text = Join-Path $folder ('words-' + $runId + '.txt')
     # The pixels passes draw this whole file as one word, so it holds the word alone.
-    $pixelsText = Join-Path $folder 'pixels-word.txt'
+    $pixelsText = Join-Path $folder ('pixels-' + $runId + '.txt')
     # Two paragraphs: the first holds the word the gesture asks; the second puts `gamma` under the panel's term, so
     # the own-window case has a different word behind it to be red against.
     Set-Content -LiteralPath $text -Encoding UTF8 -Value @(
@@ -137,6 +140,20 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
         if (-not $run.specialRequest) { throw "$Mode`: the panel carries no acknowledgement request" }
     }
 
+    # The pointer must be where the pass put it: another input source (a person on the console, a remote mouse)
+    # moves it, the reader sees movement between the two taps, and the pass would report a gesture fault that is not
+    # the product's. Measured 2026-11-07: the cursor sat at (1915,1038) while the point was (325,383).
+    function Assert-PointerHeld($run, [string]$Mode) {
+        if ($null -eq $run.hoverCursor -or $null -eq $run.hoverPoint) { return }
+        $dx = [Math]::Abs([int]$run.hoverCursor[0] - [int]$run.hoverPoint[0])
+        $dy = [Math]::Abs([int]$run.hoverCursor[1] - [int]$run.hoverPoint[1])
+        if ($dx -gt 2 -or $dy -gt 2) {
+            throw ("$Mode`: the pointer was moved out from under the pass (wanted ($($run.hoverPoint[0])," +
+                "$($run.hoverPoint[1])), found ($($run.hoverCursor[0]),$($run.hoverCursor[1]))); " +
+                'the host was in use — rerun when it is idle')
+        }
+    }
+
     function Assert-HoverCommon($run, [string]$Mode) {
         if (-not $run.hoverRunning) { throw "$Mode`: hover did not start" }
         if ($run.hoverStartFailed) { throw "$Mode`: Windows refused the pointer or key hooks" }
@@ -160,18 +177,23 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     }
 
     $hold = Invoke-HoverPass 'hover'
+    Assert-PointerHeld $hold 'hover'
     Assert-HoverCommon $hold 'hover'
     if ($hold.hoverModifierDowns -lt 1) { throw 'hover: the key press reached no hook' }
 
     $double = Invoke-HoverPass 'hover-double'
+    Assert-PointerHeld $double 'hover-double'
     Assert-HoverCommon $double 'hover-double'
     if ($double.hoverGesture -ne 'DoubleTap') { throw 'hover-double: the gesture was not the double tap' }
 
     $own = Invoke-HoverPass 'hover-own'
     if ($own.PSObject.Properties['error']) { throw "the own-window pass failed: $($own.error)" }
     if (-not $own.ownPanel) { throw 'hover-own: the selection did not present a panel' }
-    # The hover case only runs once the panel's term has been found and moved; without it the pass proved nothing,
-    # so it is a named failure rather than a missing property.
+    # The hover case only runs once the planned word and the panel's term have been placed; without either the pass
+    # proved nothing, so each is a named failure rather than a missing property.
+    if ($null -eq $own.ownPlannedRect) {
+        throw "hover-own: the planned word '$($own.ownPlannedWord)' had no rectangle in the document"
+    }
     if (-not $own.ownTermRectFound) {
         throw "hover-own: the panel's term rectangle was not found (planned word '$($own.ownPlannedWord)')"
     }
@@ -188,6 +210,9 @@ Invoke-XDictGate -Name 'hover' -Inputs (Get-XDictLabInputs -Layout $layout) -Ful
     }
 
     $skip = Invoke-HoverPass 'hover-own-skip'
+    if ($null -eq $skip.ownPlannedRect) {
+        throw "hover-own-skip: the planned word '$($skip.ownPlannedWord)' had no rectangle in the document"
+    }
     if (-not $skip.ownTermRectFound) {
         throw "hover-own-skip: the panel's term rectangle was not found (planned word '$($skip.ownPlannedWord)')"
     }

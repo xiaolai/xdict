@@ -88,6 +88,10 @@ function Invoke-WordAndPdfPass {
     }
     if ($wordExe) {
         Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome', 'WINWORD')
+        # **The COM host's Word carries no lab path** — its command line is `/Automation -Embedding` — so the
+        # evidence rule cannot identify it, and a Word left behind answers the hover stage's wordless surface
+        # (measured 2026-11-07). The processes this pass creates are the ones that did not exist when it started.
+        $wordBefore = @(Get-Process WINWORD -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
         $docx = Join-Path $folder 'selection.docx'
         $pdf = Join-Path $folder 'selection.pdf'
         $makeDoc = Join-Path $folder 'make-doc.ps1'
@@ -151,6 +155,10 @@ $word.Quit()
             Start-Sleep -Seconds 2
             Unregister-ScheduledTask -TaskName $hostTask -Confirm:$false -ErrorAction SilentlyContinue
             Stop-XDictLabProcesses -Name @('WINWORD')
+            foreach ($left in @(Get-Process WINWORD -ErrorAction SilentlyContinue |
+                    Where-Object { $wordBefore -notcontains $_.Id })) {
+                Stop-Process -Id $left.Id -Force -ErrorAction SilentlyContinue
+            }
         }
         Write-Host ($wordRun | ConvertTo-Json -Depth 6)
         if ($wordRun.PSObject.Properties['error']) { throw "the Word pass failed: $($wordRun.error)" }
@@ -266,7 +274,9 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
     if (-not (Test-Path -LiteralPath $tiny)) { throw "the tiny fixture is missing: $tiny" }
     $library = Join-Path $folder 'library.json'
-    $text = Join-Path $folder 'selection.txt'
+    # Named for this run: Notepad restores its tabs and a tab is chosen by the name it shows.
+    $runId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $text = Join-Path $folder ('selection-' + $runId + '.txt')
     Set-Content -LiteralPath $text -Value 'The run reader selects this sentence.' -Encoding UTF8
     $html = Join-Path $folder 'selection.html'
     Set-Content -LiteralPath $html -Encoding UTF8 -Value @'
