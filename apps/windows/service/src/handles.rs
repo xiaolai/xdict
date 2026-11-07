@@ -512,8 +512,9 @@ mod tests {
             handle: raw,
             identity: Some(wrong),
             observed_at: 7,
+            write: false,
         };
-        assert!(admit(std::slice::from_ref(&spec), &ledger).is_err());
+        assert!(admit(std::slice::from_ref(&spec), &ledger, false).is_err());
         assert_eq!(ledger.state("a"), None, "a refused observation was merged");
 
         // The control: the same observation of the file the handle holds is admitted and merged.
@@ -523,7 +524,7 @@ mod tests {
             identity: Some(actual),
             ..spec
         };
-        let Ok(sources) = admit(std::slice::from_ref(&spec), &ledger) else {
+        let Ok(sources) = admit(std::slice::from_ref(&spec), &ledger, false) else {
             panic!("the matching observation was refused");
         };
         assert_eq!(ledger.state("a"), Some(Some(actual)));
