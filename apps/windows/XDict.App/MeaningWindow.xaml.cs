@@ -23,6 +23,7 @@ public sealed partial class MeaningWindow : Window
     private AIComposition? composition;
     private AIAnswer? answer;
     private CancellationTokenSource? inFlight;
+    private bool closed;
     private bool busy;
     private bool loaded;
 
@@ -53,7 +54,13 @@ public sealed partial class MeaningWindow : Window
         TranslationLabel.Text = Strings.Get("meaning.translation");
         SaveNoteButton.Content = Strings.Get("meaning.saveNote");
         EntryUnavailable.Text = Strings.Get("meaning.entryUnavailable");
-        AppWindow.Closing += (_, _) => inFlight?.Cancel();
+        AppWindow.Closing += (_, _) =>
+        {
+            // Closing must stop the whole lifetime, not only a request that has already started: a load still in
+            // flight used to continue into ComposeAsync/AskAsync and send the captured sentence after dismissal.
+            closed = true;
+            inFlight?.Cancel();
+        };
         Root.Loaded += OnLoaded;
     }
 
@@ -68,8 +75,10 @@ public sealed partial class MeaningWindow : Window
     {
         settings = AISettings.Load();
         await LoadEntryAsync();
+        if (closed) return;
         if (!BuildSource()) return;
         await ComposeAsync();
+        if (closed) return;
         if (settings.AskOnOpen && host is not null && !string.IsNullOrWhiteSpace(request.Sentence))
             await AskAsync();
     }
@@ -179,9 +188,9 @@ public sealed partial class MeaningWindow : Window
 
     private async Task AskAsync()
     {
-        if (busy || host is null) return;
+        if (closed || busy || host is null) return;
         if (composition is null) await ComposeAsync();
-        if (composition is null) return;
+        if (closed || composition is null) return;
         busy = true;
         AskButton.IsEnabled = false;
         CancelButton.IsEnabled = true;

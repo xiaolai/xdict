@@ -20,6 +20,7 @@ public sealed class CaptureController : IDisposable
     private readonly CaptureRequests book = new();
     private readonly CaptureContextSession contexts = new();
     private readonly SelectionReader reader = new();
+    private readonly HoverReader hoverReader = new();
     private readonly Hotkey hotkey;
     private readonly TrayIcon tray;
     private readonly DispatcherQueue? dispatcher;
@@ -147,8 +148,15 @@ public sealed class CaptureController : IDisposable
         hover = null;
         hoverStartFailed = false;
         hoverNotice = null;
-        if (!settings.Hover.Enabled) return;
-        var watcher = new HoverWatcher(() => settings.Hover, book,
+        // The panel dismisses itself with its own hooks unless a watcher is running to do it. Whenever hover is
+        // off — disabled here, or refused by Windows below — the panel must get that job back, or a panel shown by
+        // the selection route loses Escape and click-away until the next restart.
+        if (!settings.Hover.Enabled)
+        {
+            if (panel is not null) panel.UseOwnHooks = true;
+            return;
+        }
+        var watcher = new HoverWatcher(hoverReader, () => settings.Hover, book,
             (x, y) => book.Begin(CaptureTrigger.PointerGesture), PresentPointer, reason =>
             {
                 hoverNotice = reason;
@@ -157,6 +165,7 @@ public sealed class CaptureController : IDisposable
         {
             watcher.Dispose();
             hoverStartFailed = true;
+            if (panel is not null) panel.UseOwnHooks = true;
             return;
         }
         hover = watcher;
@@ -677,6 +686,7 @@ public sealed class CaptureController : IDisposable
         hotkey.Dispose();
         tray.Dispose();
         reader.Dispose();
+        hoverReader.Dispose();
         panel = null;
     }
 

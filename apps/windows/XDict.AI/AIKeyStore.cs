@@ -39,8 +39,16 @@ public sealed class WindowsCredentialStore(string target = "XDict.AI.http") : IA
     {
         if (string.IsNullOrEmpty(key))
         {
-            // Not there is the desired state; any other refusal is left to the caller's sentence.
-            _ = CredDeleteW(target, CredentialTypeGeneric, 0);
+            // Not there is the desired state; any other refusal must reach the reader, or a removal that failed
+            // would be reported as one that worked.
+            if (!CredDeleteW(target, CredentialTypeGeneric, 0))
+            {
+                const int ErrorNotFound = 1168;
+                int error = Marshal.GetLastWin32Error();
+                if (error != ErrorNotFound)
+                    throw new AIProviderException(AIProviderError.NotConfigured,
+                        "the saved key could not be removed (Win32 " + error + ")");
+            }
             return;
         }
         byte[] bytes = Encoding.UTF8.GetBytes(key);

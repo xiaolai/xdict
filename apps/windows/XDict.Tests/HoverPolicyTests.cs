@@ -3,6 +3,14 @@ using Xunit;
 
 public class HoverPolicyTests
 {
+    /// <summary>Both halves: a refusal must be a refusal, not merely carry a refusal enum value in a verdict that
+    /// looks (HoverVerdict.Yes names ModifierNotHeld by default).</summary>
+    private static void Refused(HoverVerdict verdict, HoverRefusal expected)
+    {
+        Assert.False(verdict.Look);
+        Assert.Equal(expected, verdict.Refusal);
+    }
+
     [Fact]
     public void TheShippedPolicyIsADeliberateHoldThatNeverReadsAPasswordManager()
     {
@@ -23,9 +31,8 @@ public class HoverPolicyTests
     public void AHoldRefusesWithoutTheKeyBeforeItLooksAtAnythingElse()
     {
         var policy = new HoverPolicy();
-        Assert.Equal(HoverRefusal.ModifierNotHeld,
-            policy.Decide(modifierHeld: false, tappedTwice: false, stillForMs: 5000, processName: "1Password.exe",
-                wordKey: "k", lastWordKey: "k", captureInFlight: true).Refusal);
+        Refused(policy.Decide(modifierHeld: false, tappedTwice: false, stillForMs: 5000, processName: "1Password.exe",
+            wordKey: "k", lastWordKey: "k", captureInFlight: true), HoverRefusal.ModifierNotHeld);
         Assert.True(policy.Decide(modifierHeld: true, tappedTwice: false, stillForMs: 5000, processName: "notepad.exe",
             wordKey: "k", lastWordKey: null, captureInFlight: false).Look);
     }
@@ -34,9 +41,8 @@ public class HoverPolicyTests
     public void ADoubleTapRefusesUntilTheTapCompletesAndDoesNotNeedTheKeyDown()
     {
         var policy = new HoverPolicy { Gesture = HoverGesture.DoubleTap };
-        Assert.Equal(HoverRefusal.NotTapped,
-            policy.Decide(modifierHeld: false, tappedTwice: false, stillForMs: 5000, processName: "notepad.exe",
-                wordKey: null, lastWordKey: null, captureInFlight: false).Refusal);
+        Refused(policy.Decide(modifierHeld: false, tappedTwice: false, stillForMs: 5000, processName: "notepad.exe",
+            wordKey: null, lastWordKey: null, captureInFlight: false), HoverRefusal.NotTapped);
         Assert.True(policy.Decide(modifierHeld: false, tappedTwice: true, stillForMs: 5000, processName: "notepad.exe",
             wordKey: null, lastWordKey: null, captureInFlight: false).Look);
     }
@@ -45,12 +51,16 @@ public class HoverPolicyTests
     public void EveryCheaperRefusalComesBeforeTheRestAndTheRestBeforeTheRepeat()
     {
         var policy = new HoverPolicy();
-        HoverRefusal Refuse(long still, string process, string? last, bool inFlight) =>
-            policy.Decide(true, false, still, process, "same", last, inFlight).Refusal;
-        Assert.Equal(HoverRefusal.ExcludedApp, Refuse(5000, "Keeper.exe", null, false));
-        Assert.Equal(HoverRefusal.CaptureInFlight, Refuse(5000, "notepad.exe", null, true));
-        Assert.Equal(HoverRefusal.StillMoving, Refuse(299, "notepad.exe", null, false));
-        Assert.Equal(HoverRefusal.SamePlace, Refuse(5000, "notepad.exe", "same", false));
+        void Refuse(long still, string process, string? last, bool inFlight, HoverRefusal expected) =>
+            Refused(policy.Decide(true, false, still, process, "same", last, inFlight), expected);
+        Refuse(5000, "Keeper.exe", null, false, HoverRefusal.ExcludedApp);
+        Refuse(5000, "notepad.exe", null, true, HoverRefusal.CaptureInFlight);
+        Refuse(299, "notepad.exe", null, false, HoverRefusal.StillMoving);
+        Refuse(5000, "notepad.exe", "same", false, HoverRefusal.SamePlace);
+        // Overlapping conditions: the cheapest still wins, in the declared order.
+        Refuse(0, "Keeper.exe", "same", true, HoverRefusal.ExcludedApp);
+        Refuse(0, "notepad.exe", "same", true, HoverRefusal.CaptureInFlight);
+        Refuse(0, "notepad.exe", "same", false, HoverRefusal.StillMoving);
         Assert.True(policy.Decide(true, false, 300, "notepad.exe", "same", "other", false).Look);
     }
 

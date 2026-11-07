@@ -20,8 +20,11 @@ pub mod words;
 
 pub use crate::core::{
     Core, DISPLAY_OPTIONS, EDITION_SCHEME, EditionStyle, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, MAX_SUGGEST,
-    MAX_SYNC_BYTES, NORMALIZATION, PROTOCOL, STYLE, StyleReport,
+    NORMALIZATION, PROTOCOL, STYLE, StyleReport,
 };
+/// The peer-log ceiling names a filesystem read, which wasm has no access to; the constant is gated with it.
+#[cfg(not(target_family = "wasm"))]
+pub use crate::core::MAX_SYNC_BYTES;
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
 pub use examples::{
     EXTRACTOR as EXAMPLES_EXTRACTOR, FORMAT as EXAMPLES_FORMAT, MAX_HITS as MAX_EXAMPLE_HITS,

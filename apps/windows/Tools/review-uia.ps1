@@ -29,7 +29,7 @@ Invoke-XDictGate -Name 'review-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     $template = @'
 $ErrorActionPreference = 'Stop'
 $env:XDICT_LIBRARY = '__LIBRARY__'
-$app = Start-Process -FilePath '__EXE__' -ArgumentList '--review-lab' -PassThru
+$app = Start-Process -FilePath '__EXE__' -ArgumentList '--review-lab', '--lab-storage', '__STORAGE__' -PassThru
 try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
@@ -96,7 +96,9 @@ finally {
     if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
 }
 '@
-    $script = $template.Replace('__LIBRARY__', $library).Replace('__EXE__', $exe).Replace('__RESULT__', $resultPath)
+    $storage = 'review-' + [Guid]::NewGuid().ToString('N')
+    $script = $template.Replace('__LIBRARY__', $library).Replace('__EXE__', $exe).Replace('__STORAGE__', $storage) `
+        .Replace('__RESULT__', $resultPath)
     Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $resultPath -Seconds 240

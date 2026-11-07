@@ -212,12 +212,13 @@ public sealed partial class ReviewWindow : Window
             Say(Strings.Get("review.revealFirst"));
             return;
         }
-        // The note belongs to the card being graded; a dirty one is written first or the grade does not happen.
-        if (!await SaveNoteAsync()) return;
+        // The guard is taken before the first await: the note is written first, and a second grade click during that
+        // write must not start a second grading operation.
         busy = true;
         SetBusy(true);
         try
         {
+            if (!await SaveNoteAsync()) return;
             ReviewOutcome outcome = await session.GradeAsync(grade);
             Say(Strings.Get(outcome.Ineligible ? "review.ineligible" : "review.graded"));
             ShowCurrent();
@@ -249,6 +250,7 @@ public sealed partial class ReviewWindow : Window
         SetBusy(true);
         try
         {
+            if (!await SaveNoteAsync()) return;
             await session.UndoAsync();
             Say(Strings.Get("review.undone"));
             ShowCurrent();
@@ -280,9 +282,12 @@ public sealed partial class ReviewWindow : Window
     private async Task<bool> SaveNoteAsync()
     {
         if (shown is null || draft is null || !draft.IsDirty) return true;
+        // The editor is closed to edits while its text is being saved: an edit typed into the TextBox after the
+        // submitted snapshot would otherwise be newer than the acknowledgement and only look saved.
+        NoteBox.IsReadOnly = true;
         try
         {
-            await draft.SaveAsync(client, DictionaryName(shown), handle(shown.Target.Edition));
+            await draft.SaveAsync(client, DictionaryName(shown));
             SaveNoteButton.IsEnabled = false;
             SayNote(Strings.Get("review.noteSaved"));
             return true;
@@ -291,6 +296,10 @@ public sealed partial class ReviewWindow : Window
         {
             SayNote(Strings.Format("review.noteFailed", Describe(error)));
             return false;
+        }
+        finally
+        {
+            NoteBox.IsReadOnly = false;
         }
     }
 
@@ -319,10 +328,17 @@ public sealed partial class ReviewWindow : Window
         {
             conflicts = await session.ConflictsAsync();
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            // Conflicts need a synced log; a store without one answers none. Grading must not fail with it.
-            ConflictsPanel.Visibility = Visibility.Collapsed;
+            // A failed conflict read is not "no conflicts": an empty panel would present an unavailable list as an
+            // empty one. Say the read failed; grading is unaffected.
+            ConflictRows.Children.Clear();
+            ConflictRows.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("review.conflictsFailed", Describe(error)),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            ConflictsPanel.Visibility = Visibility.Visible;
             return;
         }
         ConflictsPanel.Visibility = conflicts.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -370,6 +386,7 @@ public sealed partial class ReviewWindow : Window
         SetBusy(true);
         try
         {
+            if (!await SaveNoteAsync()) return;
             await session.ResolveAsync(conflict, keep);
             Say(Strings.Get("review.resolved"));
             ShowCurrent();
@@ -429,11 +446,14 @@ public sealed partial class ReviewWindow : Window
         }
     }
 
-    /// <summary>Quit closes the review without the note prompt; the process is ending and the note is unsaved by the reader's choice.</summary>
-    public void CloseForQuit()
+    /// <summary>The process is quitting: write the note first. False when the write failed, so the caller can keep
+    /// the application open rather than discard words the reader never chose to lose.</summary>
+    public async Task<bool> CloseForQuitAsync()
     {
+        if (draft?.IsDirty == true && !await SaveNoteAsync()) return false;
         closeConfirmed = true;
         Close();
+        return true;
     }
 
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)

@@ -7,6 +7,7 @@ namespace XDict.Models;
 public sealed class StudyNoteDraft(StudyCard card, StudyNote? existing = null)
 {
     private string original = existing?.Text ?? card.Note.Text;
+    private StudyNote? saved = existing;
 
     public string Text { get; private set; } = existing?.Text ?? card.Note.Text;
     public StudyTarget Target => card.Target;
@@ -17,10 +18,10 @@ public sealed class StudyNoteDraft(StudyCard card, StudyNote? existing = null)
     public void Revert() => Text = original;
 
     /// <summary>Null when there is nothing to save; otherwise the note the core wrote (or its duplicate).</summary>
-    public async Task<StudyNote?> SaveAsync(ServiceClient client, string dictionaryName, string? dict = null,
+    public async Task<StudyNote?> SaveAsync(ServiceClient client, string dictionaryName,
         Func<double>? now = null, Func<string>? device = null, CancellationToken cancellation = default)
     {
-        if (!IsDirty) return existing;
+        if (!IsDirty) return saved;
         var body = new
         {
             entry = Target.EntryRef,
@@ -33,10 +34,14 @@ public sealed class StudyNoteDraft(StudyCard card, StudyNote? existing = null)
             },
             operation = "note:" + Guid.NewGuid().ToString("N"),
         };
+        string submitted = Text;
         StudyNote note = StudyWire.Read<StudyNote>(
             await client.CallAsync("studyNoteAt", body, cancellation: cancellation).ConfigureAwait(false));
+        // The acknowledgement is the saved text, and the new clean baseline. Edits typed while the request was in
+        // flight are newer than it: they stay, and they stay dirty, rather than being silently replaced.
         original = note.Text;
-        Text = note.Text;
+        if (string.Equals(Text, submitted, StringComparison.Ordinal)) Text = note.Text;
+        saved = note;
         return note;
     }
 

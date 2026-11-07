@@ -8,6 +8,8 @@ use std::sync::Mutex;
 
 #[cfg(not(target_family = "wasm"))]
 use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(not(target_family = "wasm"))]
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(not(target_family = "wasm"))]
 use fs2::FileExt;
@@ -39,8 +41,12 @@ pub trait Store: Send + Sync {
 pub struct FileStore {
     file: Mutex<std::fs::File>,
     lock: std::fs::File,
+    path: std::path::PathBuf,
     snapshot: std::path::PathBuf,
 }
+
+#[cfg(not(target_family = "wasm"))]
+static SNAPSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(not(target_family = "wasm"))]
 impl FileStore {
@@ -67,7 +73,12 @@ impl FileStore {
             .truncate(false)
             .open(path)
             .map_err(|error| refused("the log", error))?;
-        Ok(FileStore { file: Mutex::new(file), lock, snapshot: path.with_extension("snapshot") })
+        Ok(FileStore {
+            file: Mutex::new(file),
+            lock,
+            path: path.to_path_buf(),
+            snapshot: path.with_extension("snapshot"),
+        })
     }
 }
 
@@ -89,8 +100,21 @@ impl Store for FileStore {
 
     fn append(&self, bytes: &[u8]) -> Result<(), LedgerError> {
         let mut file = self.file.lock().map_err(|_| LedgerError::Storage("the log is poisoned".into()))?;
-        file.seek(SeekFrom::End(0)).map_err(|error| refused("seeking the log's end", error))?;
-        file.write_all(bytes).map_err(|error| refused("appending to the log", error))
+        let end = file.seek(SeekFrom::End(0)).map_err(|error| refused("seeking the log's end", error))?;
+        if let Err(error) = file.write_all(bytes) {
+            // A short write leaves a partial frame. Every later append would follow it and be discarded when the
+            // log is reopened, so the partial bytes are cut away; if even that fails the log is past use.
+            let rolled_back = file
+                .set_len(end)
+                .and_then(|()| file.seek(SeekFrom::Start(end)).map(|_| ()));
+            return Err(match rolled_back {
+                Ok(()) => refused("appending to the log", error),
+                Err(rollback) => LedgerError::Storage(format!(
+                    "appending to the log left a partial frame: {error}; the rollback failed too: {rollback}"
+                )),
+            });
+        }
+        Ok(())
     }
 
     fn sync(&self) -> Result<(), LedgerError> {
@@ -105,9 +129,31 @@ impl Store for FileStore {
 
     fn rewrite(&self, bytes: &[u8]) -> Result<(), LedgerError> {
         let mut file = self.file.lock().map_err(|_| LedgerError::Storage("the log is poisoned".into()))?;
-        file.set_len(0).map_err(|error| refused("emptying the log for its rewrite", error))?;
-        file.seek(SeekFrom::Start(0)).map_err(|error| refused("seeking the log for its rewrite", error))?;
-        file.write_all(bytes).map_err(|error| refused("rewriting the log", error))?;
+        // The replacement is written and synced beside the log, then renamed over it: an interrupted rewrite leaves
+        // the committed log intact instead of an empty file. The held handle is reopened afterwards, because the
+        // old one would otherwise keep appending to the replaced file.
+        let temporary = self.path.with_extension(format!(
+            "log.{}.{}.tmp",
+            std::process::id(),
+            SNAPSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let written = (|| {
+            let mut replacement =
+                std::fs::File::create(&temporary).map_err(|error| refused("creating the log's replacement", error))?;
+            replacement.write_all(bytes).map_err(|error| refused("writing the log's replacement", error))?;
+            replacement.sync_all().map_err(|error| refused("syncing the log's replacement", error))?;
+            std::fs::rename(&temporary, &self.path).map_err(|error| refused("installing the log's replacement", error))
+        })();
+        if written.is_err() {
+            let _ = std::fs::remove_file(&temporary);
+            return written;
+        }
+        let reopened = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.path)
+            .map_err(|error| refused("reopening the rewritten log", error))?;
+        *file = reopened;
         file.sync_all().map_err(|error| refused("syncing the rewritten log", error))
     }
 
@@ -121,7 +167,12 @@ impl Store for FileStore {
 
     /// Written beside the log and renamed over the old one: a reader sees the old snapshot or the new, never a torn one.
     fn save_snapshot(&self, bytes: &[u8]) -> Result<(), LedgerError> {
-        let temporary = self.snapshot.with_extension("snapshot.tmp");
+        // A name of its own per call: two concurrent saves must not truncate each other's replacement.
+        let temporary = self.snapshot.with_extension(format!(
+            "snapshot.{}.{}.tmp",
+            std::process::id(),
+            SNAPSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
         {
             let mut file =
                 std::fs::File::create(&temporary).map_err(|error| refused("creating the snapshot", error))?;

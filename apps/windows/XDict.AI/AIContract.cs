@@ -75,7 +75,8 @@ public sealed record AISense(uint Id, ulong Start, ulong Len, string Text, strin
         byte[] bytes = Encoding.UTF8.GetBytes(entryText);
         if (Start > int.MaxValue || Len > int.MaxValue) return false;
         int start = (int)Start, length = (int)Len;
-        if (start + length > bytes.Length) return false;
+        // Compare without adding: an int sum of two legal values can overflow and pass the bound negative.
+        if (start > bytes.Length || length > bytes.Length - start) return false;
         if (start < bytes.Length && (bytes[start] & 0xC0) == 0x80) return false;
         if (start + length < bytes.Length && (bytes[start + length] & 0xC0) == 0x80) return false;
         byte[] slice = bytes.AsSpan(start, length).ToArray();
@@ -109,14 +110,16 @@ public static class AIMarker
     public static string Mark(string sentence, JsonElement? range, bool translating = false)
     {
         if (range is null || range.Value.ValueKind != JsonValueKind.Object) return sentence;
-        if (!TryNumber(range.Value.GetProperty("start"), out ulong start) ||
-            !TryNumber(range.Value.GetProperty("length"), out ulong length)) return sentence;
+        if (!range.Value.TryGetProperty("start", out JsonElement startElement) ||
+            !range.Value.TryGetProperty("length", out JsonElement lengthElement)) return sentence;
+        if (!TryNumber(startElement, out ulong start) || !TryNumber(lengthElement, out ulong length)) return sentence;
         return Mark(sentence, start, length, translating);
     }
 
     public static bool TryNumber(JsonElement value, out ulong number)
     {
         number = 0;
+        if (value.ValueKind is not (JsonValueKind.Number or JsonValueKind.String)) return false;
         if (value.ValueKind == JsonValueKind.String)
             return ulong.TryParse(value.GetString(), System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture, out number);

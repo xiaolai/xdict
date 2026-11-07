@@ -82,7 +82,9 @@ public sealed class AIHttpSource(HttpClient? client = null)
 {
     private const int ResponseCap = 1 << 20;
     private const int ErrorCap = 64 << 10;
-    private readonly HttpClient owned = client ?? new HttpClient(new SocketsHttpHandler
+    /// <summary>One client for the process unless a test injects its own: a client per source (one per window)
+    /// would strand a connection pool each time.</summary>
+    private static readonly HttpClient Shared = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
         ConnectTimeout = TimeSpan.FromSeconds(10),
@@ -91,12 +93,30 @@ public sealed class AIHttpSource(HttpClient? client = null)
         Timeout = TimeSpan.FromSeconds(90),
     };
 
+    /// <summary>The whole ask, headers and body: HttpClient's timeout stops at the headers once the body is read
+    /// separately, so a stalled body needs a deadline of its own.</summary>
+    private static readonly TimeSpan OverallDeadline = TimeSpan.FromSeconds(120);
+
+    private readonly HttpClient owned = client ?? Shared;
+
     public async Task<string> AskAsync(AIHttpConfig config, string composed, CancellationToken cancellation = default)
     {
         if (string.IsNullOrWhiteSpace(config.Model)) throw new AIProviderException(AIProviderError.NotConfigured);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        deadline.CancelAfter(OverallDeadline);
+        CancellationToken token = deadline.Token;
         Uri endpoint = Endpoint(config.Endpoint);
-        (HttpResponseMessage response, string firstBody) = await SendAsync(config, composed, endpoint,
-            config.TokenField, cancellation).ConfigureAwait(false);
+        HttpResponseMessage response;
+        string firstBody;
+        try
+        {
+            (response, firstBody) = await SendAsync(config, composed, endpoint, config.TokenField, token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
+            throw new AIProviderException(AIProviderError.Timeout);
+        }
         try
         {
             if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity &&
@@ -108,17 +128,21 @@ public sealed class AIHttpSource(HttpClient? client = null)
                 AITokenField other = config.TokenField == AITokenField.MaxTokens
                     ? AITokenField.MaxCompletionTokens
                     : AITokenField.MaxTokens;
-                (HttpResponseMessage retry, string retryBody) = await SendAsync(config, composed, endpoint, other,
-                    cancellation).ConfigureAwait(false);
+                (HttpResponseMessage retry, string retryBody) = await SendAsync(config, composed, endpoint, other, token)
+                    .ConfigureAwait(false);
                 using (retry)
                 {
-                    if (retry.IsSuccessStatusCode) return await AnswerAsync(retry, retryBody, config, cancellation)
+                    if (retry.IsSuccessStatusCode) return await AnswerAsync(retry, retryBody, config, token)
                         .ConfigureAwait(false);
                     throw Server(response.StatusCode, negotiated, config.ApiKey);
                 }
             }
             if (!response.IsSuccessStatusCode) throw Failure(response.StatusCode, firstBody, config.ApiKey);
-            return await AnswerAsync(response, firstBody, config, cancellation).ConfigureAwait(false);
+            return await AnswerAsync(response, firstBody, config, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
+            throw new AIProviderException(AIProviderError.Timeout);
         }
         finally
         {
@@ -129,6 +153,9 @@ public sealed class AIHttpSource(HttpClient? client = null)
     private async Task<(HttpResponseMessage Response, string Body)> SendAsync(AIHttpConfig config, string composed,
         Uri endpoint, AITokenField tokenField, CancellationToken cancellation)
     {
+        // The key and the reader's sentence must not travel in clear text. HTTPS is required, with the one deliberate
+        // exception the custom profile exists for: a model server on this machine, reached over loopback.
+        RequireSecureTransport(endpoint);
         for (int redirect = 0; ; redirect++)
         {
             var body = new Dictionary<string, object>
@@ -173,8 +200,18 @@ public sealed class AIHttpSource(HttpClient? client = null)
                 endpoint = location;
                 continue;
             }
-            string text = await ReadAsync(response, response.IsSuccessStatusCode ? ResponseCap : ErrorCap,
-                cancellation).ConfigureAwait(false);
+            string text;
+            try
+            {
+                text = await ReadAsync(response, response.IsSuccessStatusCode ? ResponseCap : ErrorCap, cancellation)
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                // A failed body read never returns the response to AskAsync's disposal block.
+                response.Dispose();
+                throw;
+            }
             return (response, text);
         }
     }
@@ -194,7 +231,7 @@ public sealed class AIHttpSource(HttpClient? client = null)
             JsonElement message = choice.GetProperty("message");
             if (message.TryGetProperty("refusal", out JsonElement refusal) &&
                 refusal.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(refusal.GetString()))
-                throw new AIProviderException(AIProviderError.Refused, refusal.GetString());
+                throw new AIProviderException(AIProviderError.Refused, Redact(refusal.GetString(), config.ApiKey));
             string finish = choice.TryGetProperty("finish_reason", out JsonElement reason) &&
                             reason.ValueKind == JsonValueKind.String ? reason.GetString() ?? "" : "";
             if (finish == "length") throw new AIProviderException(AIProviderError.Truncated);
@@ -228,18 +265,26 @@ public sealed class AIHttpSource(HttpClient? client = null)
         {
             using JsonDocument document = JsonDocument.Parse(body);
             JsonElement root = document.RootElement;
-            if (root.TryGetProperty("error", out JsonElement error))
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out JsonElement error))
                 message = error.ValueKind == JsonValueKind.String
                     ? error.GetString() ?? ""
-                    : error.TryGetProperty("message", out JsonElement text) && text.ValueKind == JsonValueKind.String
+                    : error.ValueKind == JsonValueKind.Object &&
+                      error.TryGetProperty("message", out JsonElement text) && text.ValueKind == JsonValueKind.String
                         ? text.GetString() ?? ""
                         : "";
         }
-        catch (JsonException) { }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException) { }
+        // Redaction first: truncating before it can cut a credential in half and leave its prefix in the message.
+        message = Redact(message, key);
         message = string.Join(' ', message.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (message.Length > 300) message = message[..300];
-        if (!string.IsNullOrEmpty(key)) message = message.Replace(key, "[key]", StringComparison.Ordinal);
         return new AIProviderException(AIProviderError.Server, $"{(int)status} {message}".Trim());
+    }
+
+    private static string Redact(string? text, string? key)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return string.IsNullOrEmpty(key) ? text : text.Replace(key, "[key]", StringComparison.Ordinal);
     }
 
     private static async Task<string> ReadAsync(HttpResponseMessage response, int cap, CancellationToken cancellation)
@@ -259,10 +304,27 @@ public sealed class AIHttpSource(HttpClient? client = null)
 
     private static Uri Endpoint(Uri baseAddress)
     {
-        string text = baseAddress.ToString().TrimEnd('/');
-        return text.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase)
-            ? baseAddress
-            : new Uri(text + "/chat/completions");
+        if (baseAddress.AbsolutePath.TrimEnd('/').EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            return baseAddress;
+        var builder = new UriBuilder(baseAddress);
+        builder.Path = builder.Path.TrimEnd('/') + "/chat/completions";
+        return builder.Uri;
+    }
+
+    /// <summary>HTTPS everywhere except a loopback server, which is what the custom profile is for.</summary>
+    public static bool SecureEndpoint(Uri endpoint)
+    {
+        if (endpoint.Scheme == Uri.UriSchemeHttps) return true;
+        return endpoint.Scheme == Uri.UriSchemeHttp &&
+            (endpoint.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+             (IPAddress.TryParse(endpoint.Host, out IPAddress? address) && IPAddress.IsLoopback(address)));
+    }
+
+    private static void RequireSecureTransport(Uri endpoint)
+    {
+        if (!SecureEndpoint(endpoint))
+            throw new AIProviderException(AIProviderError.NotConfigured,
+                "the endpoint must be https (plain http is allowed only on this machine)");
     }
 
     private static bool SameOrigin(Uri left, Uri right) =>

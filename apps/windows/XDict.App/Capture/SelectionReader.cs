@@ -53,11 +53,16 @@ public sealed class SelectionReader : IDisposable
     /// <summary>The caller stopped waiting: the worker is wedged, so the next ask gets a fresh thread.</summary>
     public void Abandon()
     {
+        Worker? wedged;
         lock (gate)
         {
             stuck++;
+            wedged = worker;
             worker = null;
         }
+        // Completing the queue lets the thread leave once the provider returns; dropping the reference alone left it
+        // blocked on GetConsumingEnumerable for the life of the process.
+        wedged?.Dispose();
     }
 
     public void Dispose()

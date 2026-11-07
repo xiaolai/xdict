@@ -22,7 +22,7 @@ $stages = @(
     @{ Name = 'tabs'; Script = 'tabs.ps1'; Args = @() },
     @{ Name = 'all'; Script = 'all-uia.ps1'; Args = @() },
     @{ Name = 'explore'; Script = 'explore.ps1'; Args = @() },
-    @{ Name = 'hover'; Script = 'hover.ps1'; Args = @() },
+    @{ Name = 'hover'; Script = 'hover.ps1'; Args = @(if ($SkipElevated) { '-SkipElevated' }) },
     @{ Name = 'sound'; Script = 'sound-lab.ps1'; Args = @() },
     @{ Name = 'sound-links'; Script = 'sound-link-lab.ps1'; Args = @() },
     @{ Name = 'review'; Script = 'review-uia.ps1'; Args = @() },

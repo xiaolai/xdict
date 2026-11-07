@@ -10,6 +10,7 @@ namespace XDict.App;
 internal sealed class PaneLease
 {
     private string? folder;
+    private int generation;
 
     public EntryPane? Pane { get; private set; }
     public DictionaryEntrySource? Source { get; private set; }
@@ -28,7 +29,16 @@ internal sealed class PaneLease
     {
         if (Matches(edition, handle)) return (Pane!, Source!, false);
         Reset();
+        int mine = generation;
         PaneFactory.Built built = await PaneFactory.CreateAsync(client, edition, handle, host, reading);
+        if (mine != generation)
+        {
+            // The tab was closed (or the lease replaced) while the pane was being built: nothing may publish a
+            // surface into a tab that no longer exists, or the pane and its WebView2 folder leak.
+            built.Pane.Dispose();
+            PaneFactory.Cleanup(built.Folder);
+            throw new OperationCanceledException("the pane's lease was reset while it was being built");
+        }
         Pane = built.Pane;
         Source = built.Source;
         Edition = edition;
@@ -40,6 +50,7 @@ internal sealed class PaneLease
     /// <summary>Drops the pane, its binding and its private folder; a later EnsureAsync builds a fresh one.</summary>
     public void Reset()
     {
+        generation++;
         Pane?.Dispose();
         Pane = null;
         Source = null;

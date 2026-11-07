@@ -103,4 +103,25 @@ public class AICliSourceTests
             Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
         }
     }
+
+    /// <summary>The dictionary is not the proof: the child process must not see the reader's credentials even
+    /// though the parent's environment holds them (the overlay alone would leave them in place).</summary>
+    [Fact]
+    public async Task TheOsChildDoesNotInheritTheReadersAuthenticationOverrides()
+    {
+        Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "sentinel-reader-secret");
+        try
+        {
+            using var process = new AIProcess("cmd.exe", ["/d", "/c", "set"], Path.GetTempPath(),
+                AICliEnvironment.For("CODEX_HOME", "C:\\xdict\\codex"));
+            string output = await process.RunAsync("", TimeSpan.FromSeconds(30));
+            Assert.DoesNotContain("ANTHROPIC_API_KEY", output);
+            Assert.DoesNotContain("sentinel-reader-secret", output);
+            Assert.Contains("CODEX_HOME=C:\\xdict\\codex", output);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
+        }
+    }
 }

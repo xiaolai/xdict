@@ -112,8 +112,20 @@ public sealed partial class LookupView : UserControl
                 HoverPolicy.SettleChoices.Length - 1)],
             ExcludedApps = excluded.ToArray(),
         };
-        capture.SetHover(policy);
-        ShowHoverState();
+        try
+        {
+            capture.SetHover(policy);
+            ShowHoverState();
+        }
+        catch (Exception error)
+        {
+            // The write failed, so the previous choice is still the one in force: put the controls back to it and
+            // say why, instead of leaving the pane showing a policy that was never saved.
+            loadingHover = true;
+            try { LoadHover(); }
+            finally { loadingHover = false; }
+            HoverStatus.Text = Strings.Format("hover.saveFailed", error.Message);
+        }
     }
 
     private void RenderExcluded()

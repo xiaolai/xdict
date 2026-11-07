@@ -163,7 +163,26 @@ function New-XDictUiaLibrary {
 # Ends the windows a lab opened, never the reader's own: only processes started after the run began are killed. A
 # cleanup by process name alone closed whatever Word, Edge or Notepad the host's owner had open.
 function Stop-XDictLabProcesses {
-    param([string[]]$Name = @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome'), [datetime]$Since = [datetime]::MinValue)
+    param([string[]]$Name = @('XDict', 'XDictService', 'notepad', 'msedge', 'chrome'), [datetime]$Since = [datetime]::MinValue,
+        [string]$Marker = '')
+    if ($Marker) {
+        # A marker names this run's own artefacts (its unique lab folder) in the command line. That is an identity,
+        # unlike a process name and start time, which can match a process the person opened during the run.
+        # Windows 11's packaged Notepad carries the document path base64-encoded in /SESSION:, so it is decoded first.
+        $wanted = @($Name | ForEach-Object { $_ -replace '\.exe$', '' })
+        foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                Where-Object { $wanted -contains ($_.Name -replace '\.exe$', '') })) {
+            $line = $process.CommandLine
+            if ($line -and $line -match '/SESSION:([A-Za-z0-9+/=]+)') {
+                try { $line = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($Matches[1])) }
+                catch { }
+            }
+            if ($line -and $line.IndexOf($Marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+        }
+        return
+    }
     foreach ($process in @(Get-Process -Name $Name -ErrorAction SilentlyContinue)) {
         try {
             if ($null -ne $process.StartTime -and $process.StartTime -lt $Since) { continue }

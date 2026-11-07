@@ -314,7 +314,18 @@ internal static partial class Win32
     public static extern IntPtr GetDesktopWindow();
 
     public static readonly IntPtr DPI_AWARENESS_CONTEXT_UNAWARE = new(-1);
+    public static readonly IntPtr DPI_AWARENESS_CONTEXT_SYSTEM_AWARE = new(-2);
     public static readonly IntPtr DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED = new(-5);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForSystem();
+
+    /// <summary>The system DPI (the reference a system-aware window draws at), 96 where it cannot be read.</summary>
+    public static uint SystemDpi()
+    {
+        uint dpi = GetDpiForSystem();
+        return dpi == 0 ? 96 : dpi;
+    }
 
     [DllImport("user32.dll")]
     public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
@@ -503,17 +514,22 @@ internal static partial class Win32
     }
 }
 
-/// <summary>A message-only window with its own WndProc: the hotkey and the tray talk to it.</summary>
+/// <summary>A window with its own WndProc: the hotkey and the tray talk to it. Message-only by default; the tray asks
+/// for a hidden top-level window instead, because a broadcast (TaskbarCreated) never reaches a message-only one, and
+/// the icon would not return after Explorer restarts.</summary>
 internal sealed class MessageWindow : IDisposable
 {
     private readonly Win32.WndProc procedure; // held: the native side points at it
     public IntPtr Handle { get; }
 
-    public MessageWindow(Win32.WndProc procedure)
+    public MessageWindow(Win32.WndProc procedure, bool receivesBroadcasts = false)
     {
         this.procedure = procedure;
-        Handle = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        if (Handle == IntPtr.Zero) throw new InvalidOperationException("the message-only window was refused");
+        Handle = receivesBroadcasts
+            ? Win32.CreateWindowExW(Win32.WS_EX_TOOLWINDOW, "STATIC", "", 0x80000000 /* WS_POPUP */,
+                0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero)
+            : Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (Handle == IntPtr.Zero) throw new InvalidOperationException("the message window was refused");
         Win32.SetWindowLongPtrW(Handle, -4, Marshal.GetFunctionPointerForDelegate(this.procedure));
     }
 

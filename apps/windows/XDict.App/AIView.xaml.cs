@@ -134,7 +134,14 @@ public sealed partial class AIView : UserControl
     private void OnEndpointLostFocus(object sender, RoutedEventArgs e)
     {
         if (loading) return;
-        settings = settings with { Endpoint = Endpoint.Text.Trim() };
+        string text = Endpoint.Text.Trim();
+        if (!Uri.TryCreate(text, UriKind.Absolute, out Uri? endpoint) || !AIHttpSource.SecureEndpoint(endpoint))
+        {
+            Status.Text = Strings.Get("ai.endpointInsecure");
+            Endpoint.Text = settings.Endpoint;
+            return;
+        }
+        settings = settings with { Endpoint = text };
         Save();
     }
 

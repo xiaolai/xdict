@@ -72,7 +72,8 @@ public sealed class AIHost(IAISource source)
                 ["id"] = sense.Id, ["start"] = sense.Start, ["len"] = sense.Len, ["text"] = sense.Text,
                 ["label"] = sense.Label, ["section"] = sense.Section, ["whole"] = sense.Whole,
             };
-        AIComposeResult composed = AIComposer.Compose(JsonDocument.Parse(input.ToJsonString()).RootElement);
+        using JsonDocument document = JsonDocument.Parse(input.ToJsonString());
+        AIComposeResult composed = AIComposer.Compose(document.RootElement);
         if (composed.Status != "ok" || composed.Text is null)
             throw new AIQuestionException(composed.Code ?? "question.invalid");
         return new AIComposition(mode, composed.Text, input.ToJsonString(),

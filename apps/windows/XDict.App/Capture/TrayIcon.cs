@@ -25,7 +25,7 @@ internal sealed class TrayIcon : IDisposable
     public TrayIcon()
     {
         procedure = OnMessage;
-        window = new MessageWindow(procedure);
+        window = new MessageWindow(procedure, receivesBroadcasts: true);
     }
 
     /// <summary>Puts the icon in the notification area; false where the shell refused it.</summary>

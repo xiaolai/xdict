@@ -291,11 +291,26 @@ internal static class Native
             };
             string root = Path.Combine(container.Folder, storage);
             var commandLine = new StringBuilder($"\"{executable}\" --data \"{Path.Combine(root, "data")}\" --cache \"{Path.Combine(root, "cache")}\" {arguments}");
-            if (!CreateProcessW(
-                    executable, commandLine, IntPtr.Zero, IntPtr.Zero, inheritHandles: true,
-                    ExtendedStartupInfoPresent | CreateNoWindow | CreateUnicodeEnvironment,
-                    IntPtr.Zero, container.Folder, ref startup, out process))
-                throw Failure("CreateProcessW");
+            // A null environment block copies this process's whole environment into the sandbox. The service gets
+            // only what it needs to start: the system root (its DLL and system paths), the temp folders and PATH.
+            IntPtr environment = EnvironmentBlock([
+                "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMW6432", "COMPUTERNAME", "COMSPEC",
+                "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATH", "PATHEXT",
+                "PROCESSOR_ARCHITECTURE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PUBLIC",
+                "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR",
+            ]);
+            try
+            {
+                if (!CreateProcessW(
+                        executable, commandLine, IntPtr.Zero, IntPtr.Zero, inheritHandles: true,
+                        ExtendedStartupInfoPresent | CreateNoWindow | CreateUnicodeEnvironment,
+                        environment, container.Folder, ref startup, out process))
+                    throw Failure("CreateProcessW");
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(environment);
+            }
 
             CloseHandle(process.Thread);
             process.Thread = IntPtr.Zero;
@@ -365,6 +380,30 @@ internal static class Native
     {
         int error = Marshal.GetLastWin32Error();
         return new Win32Exception(error, call + " failed (Win32 " + error + ")");
+    }
+
+    /// <summary>A sorted, double-null-terminated environment block holding only the named variables that exist.
+    /// Passing it to CreateProcessW is the difference between a sandbox that can find its own system files and one
+    /// that also carries every credential the app's environment happens to hold.</summary>
+    private static IntPtr EnvironmentBlock(IEnumerable<string> names)
+    {
+        // A block must be sorted. The hidden per-drive current-directory variables ("=C:=C:\...") are part of it,
+        // the standard OS variables are allowed by name, and XDict's own variables (a lab's storage or fault hook)
+        // pass through: what is withheld is the rest of the parent's environment, where credentials live.
+        var values = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            string key = (string)entry.Key;
+            if (entry.Value is string value && value.Length > 0 &&
+                (key.StartsWith('=') || key.StartsWith("XDICT_", StringComparison.OrdinalIgnoreCase)))
+                values[key] = value;
+        }
+        foreach (string name in names)
+            if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } value) values[name] = value;
+        var text = new StringBuilder();
+        foreach ((string key, string value) in values) text.Append(key).Append('=').Append(value).Append('\0');
+        text.Append('\0');
+        return Marshal.StringToHGlobalUni(text.ToString());
     }
 }
 

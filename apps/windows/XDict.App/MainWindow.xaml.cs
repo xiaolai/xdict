@@ -41,8 +41,11 @@ public sealed partial class MainWindow : Window
     private Capture.CaptureController? capture;
     private ReviewReminders? reminders;
     private bool quitting;
+#if DEBUG
     // The review UIA lab: erase the learning store, write one note so a card is due, and open the review window.
+    // Debug only: the flag erases the reader's learning data, and a release binary must not carry that path.
     private readonly bool reviewLab = Environment.GetCommandLineArgs().Contains("--review-lab");
+#endif
 
     /// <summary>One tab's entry: its own WebView2, pane lease and the entry it shows. Switching tabs touches none of
     /// another tab's state; the window's current entry fields follow the selected tab.</summary>
@@ -125,6 +128,11 @@ public sealed partial class MainWindow : Window
                 // A lab may need longer than the reader's deadlines: large imports and opening 24 dictionaries at once.
                 var options = new ServiceClientOptions();
 #if DEBUG
+                // A lab may ask for its own service storage, so an erase or a seeded note never touches the
+                // reader's learning data. The name is validated by the service launcher (ASCII letters, digits, -).
+                int storageFlag = Array.IndexOf(Environment.GetCommandLineArgs(), "--lab-storage");
+                if (storageFlag >= 0 && storageFlag + 1 < Environment.GetCommandLineArgs().Length)
+                    options = options with { Storage = Environment.GetCommandLineArgs()[storageFlag + 1] };
                 int deadlineFlag = Array.IndexOf(Environment.GetCommandLineArgs(), "--client-deadline");
                 if (deadlineFlag >= 0 && deadlineFlag + 1 < Environment.GetCommandLineArgs().Length &&
                     double.TryParse(Environment.GetCommandLineArgs()[deadlineFlag + 1],
@@ -147,8 +155,11 @@ public sealed partial class MainWindow : Window
             }
 #endif
             await SetupSearchAsync(started);
+#if DEBUG
             if (reviewLab) await PrepareReviewLabAsync();
-            else if (probe is null) await FirstRunDisclosureAsync();
+            else
+#endif
+            if (probe is null) await FirstRunDisclosureAsync();
         }
         catch (LibraryUnreadableException error)
         {
@@ -740,7 +751,13 @@ public sealed partial class MainWindow : Window
             target.Headword = entry.TryGetProperty("key", out JsonElement key) ? key.GetString() : query;
             target.Item.Header = target.Headword ?? query;
             AutomationProperties.SetAutomationId(target.Item, "Tab_" + (target.Headword ?? "entry"));
-            ActivateTab(target);
+            // The reader may have selected another tab while this entry loaded; the window's state follows the tab
+            // that is selected now, and switching back here activates this one through the selection handler.
+            if (ReferenceEquals(Tabs.SelectedItem, target.Item)) ActivateTab(target);
+        }
+        catch (OperationCanceledException)
+        {
+            // The tab was closed while its pane was being built; there is nothing left to show.
         }
         finally
         {
@@ -1132,6 +1149,7 @@ public sealed partial class MainWindow : Window
         settingsWindow.Activate();
     }
 
+#if DEBUG
     /// <summary>The review UIA lab's setup: a clean learning store and one note, so the queue has a card to grade.</summary>
     private async Task PrepareReviewLabAsync()
     {
@@ -1160,6 +1178,7 @@ public sealed partial class MainWindow : Window
                 error is ServiceFailureException failure ? ServiceMessages.For(failure.ErrorType) : error.Message);
         }
     }
+#endif
 
     /// <summary>The tray's History item: one history window over the live service.</summary>
     private void OpenHistory()
@@ -1248,22 +1267,35 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Quit, from the tray or the launch harness: settle the tray, the panes, the service and every window.</summary>
-    public void Quit()
+    public async void Quit()
     {
         if (quitting) return;
         quitting = true;
-        try { capture?.Dispose(); } catch (Exception) { }
-        capture = null;
-        reminders?.Dispose();
-        reminders = null;
-        CloseAllTabs();
-        reviewWindow?.CloseForQuit();
-        reviewWindow = null;
-        try { settingsWindow?.Close(); } catch (Exception) { }
-        settingsWindow = null;
-        client?.Dispose();
-        client = null;
-        Application.Current.Exit();
+        try
+        {
+            // The review window writes its note before the teardown begins; a failed write keeps the application
+            // open (nothing else has been disposed yet), so the reader can retry rather than lose the words.
+            if (reviewWindow is not null)
+            {
+                if (!await reviewWindow.CloseForQuitAsync()) { quitting = false; return; }
+                reviewWindow = null;
+            }
+            try { capture?.Dispose(); } catch (Exception) { }
+            capture = null;
+            reminders?.Dispose();
+            reminders = null;
+            CloseAllTabs();
+            try { settingsWindow?.Close(); } catch (Exception) { }
+            settingsWindow = null;
+            client?.Dispose();
+            client = null;
+            Application.Current.Exit();
+        }
+        catch (Exception error)
+        {
+            quitting = false;
+            TraceFailure(error.GetType().Name + ": " + error.Message);
+        }
     }
 
     /// <summary>The tray's Review item: one review window over the live service and the open dictionaries.</summary>

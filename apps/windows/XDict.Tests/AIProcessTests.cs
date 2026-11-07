@@ -14,7 +14,12 @@ public class AIProcessTests
     private static AIProcess Start(params string[] arguments)
     {
         Directory.CreateDirectory(Work);
-        return new AIProcess(Command, arguments, Work, new Dictionary<string, string>());
+        // The child gets exactly this environment: a command interpreter needs the system paths to find a built-in
+        // tool, so an empty dictionary is not a valid test child.
+        var environment = new Dictionary<string, string>();
+        foreach (string name in new[] { "PATH", "SystemRoot", "ComSpec", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } value) environment[name] = value;
+        return new AIProcess(Command, arguments, Work, environment);
     }
 
     [Fact]

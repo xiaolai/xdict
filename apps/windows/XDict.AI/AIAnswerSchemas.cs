@@ -7,6 +7,10 @@ public static class AIAnswerSchemas
     public const string Meaning =
         "{\"type\":\"object\",\"properties\":{\"outcome\":{\"type\":\"string\",\"enum\":[\"matched\",\"ambiguous\",\"noMatchingSense\",\"insufficientContext\",\"incompleteInput\",\"explanationOnly\",\"refused\",\"guardrail\"]},\"quotes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"maxItems\":3},\"explanation\":{\"type\":\"string\"}},\"required\":[\"outcome\",\"quotes\",\"explanation\"],\"additionalProperties\":false}";
 
+    /// <summary>One chosen sense explained: its own outcomes, never the meaning shape's matched/ambiguous pair.</summary>
+    public const string ExplainSense =
+        "{\"type\":\"object\",\"properties\":{\"outcome\":{\"type\":\"string\",\"enum\":[\"explained\",\"doesNotFit\",\"insufficientContext\",\"incompleteInput\",\"refused\",\"guardrail\"]},\"quotes\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"maxItems\":3},\"explanation\":{\"type\":\"string\"}},\"required\":[\"outcome\",\"quotes\",\"explanation\"],\"additionalProperties\":false}";
+
     public const string Translation =
         "{\"type\":\"object\",\"properties\":{\"outcome\":{\"type\":\"string\",\"enum\":[\"translated\",\"refused\",\"guardrail\"]},\"translation\":{\"type\":\"string\"},\"explanation\":{\"type\":\"string\"}},\"required\":[\"outcome\",\"translation\",\"explanation\"],\"additionalProperties\":false}";
 
@@ -15,6 +19,7 @@ public static class AIAnswerSchemas
 
     public static string For(AIMode mode) => mode switch
     {
+        AIMode.ExplainSense => ExplainSense,
         AIMode.Translate => Translation,
         AIMode.ExplainGrammar => Grammar,
         _ => Meaning,

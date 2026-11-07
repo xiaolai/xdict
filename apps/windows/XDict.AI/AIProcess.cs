@@ -51,6 +51,9 @@ public sealed class AIProcess : IDisposable
             RedirectStandardError = true,
         };
         foreach (string argument in arguments) info.ArgumentList.Add(argument);
+        // ProcessStartInfo begins with this process's whole environment. Overlaying the filtered dictionary would
+        // leave every key it removed — the authentication overrides the allowlist exists to withhold — in place.
+        info.Environment.Clear();
         foreach ((string key, string value) in environment) info.Environment[key] = value;
         try
         {
@@ -73,38 +76,55 @@ public sealed class AIProcess : IDisposable
     public async Task<string> RunAsync(string stdio, TimeSpan timeout, CancellationToken cancellation = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        // One deadline covers the write, the wait and both drains: a child that stops reading stdin, or that leaves
+        // a descendant holding stdout after it exits, would otherwise hang here forever.
+        using var clock = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        clock.CancelAfter(timeout);
         try
         {
-            Task<string> stdout = Process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-            Task<string> stderr = Process.StandardError.ReadToEndAsync(CancellationToken.None);
-            await Process.StandardInput.WriteAsync(stdio).ConfigureAwait(false);
+            Task<string> stdout = ReadCappedAsync(Process.StandardOutput, OutputCap, clock.Token);
+            Task<string> stderr = ReadCappedAsync(Process.StandardError, OutputCap, clock.Token);
+            await Process.StandardInput.WriteAsync(stdio.AsMemory(), clock.Token).ConfigureAwait(false);
             Process.StandardInput.Close();
-            using var clock = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-            clock.CancelAfter(timeout);
-            try
-            {
-                await Process.WaitForExitAsync(clock.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
-            {
-                Kill();
-                throw new AIProviderException(AIProviderError.Timeout);
-            }
-            catch (OperationCanceledException)
-            {
-                Kill();
-                throw;
-            }
+            await Process.WaitForExitAsync(clock.Token).ConfigureAwait(false);
             string output = await stdout.ConfigureAwait(false);
             string errors = await stderr.ConfigureAwait(false);
             if (Process.ExitCode != 0)
                 throw new AIProviderException(AIProviderError.CliFailed, Collapse(errors + "\n" + output));
             return output;
         }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
+            Kill();
+            throw new AIProviderException(AIProviderError.Timeout);
+        }
+        catch (OperationCanceledException)
+        {
+            Kill();
+            throw;
+        }
         finally
         {
             // The job is closed here on every path: kill-on-close leaves no orphan if the parent dies after this.
             Kill();
+        }
+    }
+
+    private const int OutputCap = 1 << 20;
+
+    /// <summary>Reads a redirected stream with a fixed ceiling; the error message is truncated later, but the
+    /// allocation is what a runaway CLI would grow without bound.</summary>
+    private static async Task<string> ReadCappedAsync(StreamReader reader, int cap, CancellationToken cancellation)
+    {
+        var buffer = new char[16 * 1024];
+        var text = new System.Text.StringBuilder();
+        while (true)
+        {
+            int read = await reader.ReadAsync(buffer.AsMemory(), cancellation).ConfigureAwait(false);
+            if (read == 0) return text.ToString();
+            if (text.Length + read > cap)
+                throw new AIProviderException(AIProviderError.CliFailed, "the CLI wrote more output than a reader can use");
+            text.Append(buffer, 0, read);
         }
     }
 

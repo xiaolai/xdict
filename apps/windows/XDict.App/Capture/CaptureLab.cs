@@ -405,6 +405,8 @@ internal static class CaptureLab
             report["specialPoint"] = new[] { x, y };
             // The overlay the read must skip, named before the read: a pass asserts it was there and still lost.
             report["cloakedAtPoint"] = CloakedAtPoint(x, y);
+            // Only an overlay **above** the target exercises the skip: one below it would never have won the read.
+            report["cloakedAbove"] = CloakedAbove(targetWindow, x, y);
             report["pointWindow"] = DescribeWindow(HoverReader.TopWindowAt(x, y));
             if (pixels is not null)
             {
@@ -460,11 +462,16 @@ internal static class CaptureLab
             report["specialLastEvent"] = controller.HoverLastEvent;
             report["specialSettleChecks"] = controller.HoverSettleChecks;
             report["specialHookMicroseconds"] = controller.HoverHookMicroseconds;
+            long ackDeadline = Environment.TickCount64 + 5000;
+            while (controller.Panel is { Shown: true } && controller.LastAcknowledgement is null &&
+                   Environment.TickCount64 < ackDeadline) await Task.Delay(20);
             report["specialAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+            report["specialRequest"] = controller.LastAcknowledgement?.Request;
             if (!external) Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
             await Task.Delay(150);
             Key(0x1B);
             await Task.Delay(500);
+            report["specialDismissed"] = controller.Panel is not { Shown: true };
 #if DEBUG
             if (mode == "hover-stall-uia" || mode == "hover-stall-ocr")
             {
@@ -485,6 +492,9 @@ internal static class CaptureLab
                 report["recoveryTerm"] = controller.Panel?.Term;
                 report["recoveryReadMs"] = controller.HoverLastReadMs;
                 report["recoveryAck"] = controller.LastAcknowledgement?.Outcome.ToString();
+                report["recoveryRequest"] = controller.LastAcknowledgement?.Request;
+                report["recoveryAcquisition"] = controller.HoverLastWord?.Acquisition;
+                report["recoveryOutcome"] = controller.HoverLastOutcome;
                 report["recoveryHookMicroseconds"] = controller.HoverHookMicroseconds;
                 Win32.keybd_event(0x11, 0, 2, UIntPtr.Zero);
                 await Task.Delay(150);
@@ -604,11 +614,22 @@ internal static class CaptureLab
             try { target?.Kill(); } catch (Exception) { }
             // Windows 11's Notepad may host the window in a process other than the one started; end the window's own
             // process too, or a failed pass leaves a Notepad the next stage refuses to run beside.
-            if (notepadTarget && targetWindow != IntPtr.Zero)
+            if (notepadTarget && targetWindow != IntPtr.Zero && target is not null)
             {
                 Win32.GetWindowThreadProcessId(targetWindow, out uint owner);
-                if (owner != 0 && owner != (uint)Environment.ProcessId && owner != (uint)(target?.Id ?? 0))
-                    try { Process.GetProcessById((int)owner).Kill(); } catch (Exception) { }
+                if (owner != 0 && owner != (uint)Environment.ProcessId && owner != (uint)target.Id)
+                {
+                    try
+                    {
+                        using Process windowOwner = Process.GetProcessById((int)owner);
+                        // Windows 11's Notepad hosts the window in a second process started with the launcher. A
+                        // Notepad that predates this run is the person's and is never killed.
+                        bool ours = windowOwner.ProcessName.Equals("notepad", StringComparison.OrdinalIgnoreCase) &&
+                            windowOwner.StartTime >= target.StartTime.AddSeconds(-2);
+                        if (ours) windowOwner.Kill();
+                    }
+                    catch (Exception) { }
+                }
             }
             pixels?.Dispose();
             pdfServer?.Dispose();
@@ -830,6 +851,29 @@ internal static class CaptureLab
         return found;
     }
 
+    /// <summary>The first visible, cloaked window **above** the target that covers the point. A cloaked window below
+    /// the target never competed for the read, so only this one proves the skip rule was exercised.</summary>
+    private static string? CloakedAbove(IntPtr target, int x, int y)
+    {
+        string? found = null;
+        Win32.EnumWindows((window, _) =>
+        {
+            if (window == target) return false;
+            if (!Win32.IsWindowVisible(window) || Win32.IsIconic(window)) return true;
+            if (!Win32.IsCloaked(window)) return true;
+            long style = (long)Win32.GetWindowLongPtrW(window, Win32.GWL_EXSTYLE);
+            if ((style & Win32.WS_EX_TRANSPARENT) != 0) return true;
+            if (!Win32.GetWindowRect(window, out Win32.RECT rect)) return true;
+            if (x < rect.Left || x >= rect.Right || y < rect.Top || y >= rect.Bottom) return true;
+            Win32.GetWindowThreadProcessId(window, out uint pid);
+            var name = new char[128];
+            int length = Win32.GetClassNameW(window, name, name.Length);
+            found = Win32.ProcessName(pid) + "/" + new string(name, 0, length) + "/" + window.ToInt64();
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+
     /// <summary>A window as one line: its process, class and handle.</summary>
     private static string? DescribeWindow(IntPtr window)
     {
@@ -1000,7 +1044,8 @@ internal static class CaptureLab
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        thread.Join(2500);
+        if (!thread.Join(2500))
+            throw new TimeoutException("the UI Automation read did not finish; later steps would overlap it");
         if (failure is not null) throw new InvalidOperationException("the UI Automation read failed: " + failure.Message, failure);
         return result;
     }
@@ -1065,7 +1110,7 @@ internal static class CaptureLab
         public const int Width = 1200;
         public const int Height = 400;
         private const uint WsPopup = 0x80000000, WsVisible = 0x10000000;
-        private const uint WsExTopmost = 0x00000008, WsExToolWindow = 0x00000080;
+        private const uint WsExToolWindow = 0x00000080;
         private const uint WmPaint = 0x000F, WmPrintClient = 0x0318, WmClose = 0x0010, WmDestroy = 0x0002;
         private const string ClassName = "XDictCaptureLabPixels";
         private readonly string word;
@@ -1108,9 +1153,11 @@ internal static class CaptureLab
                 lpszClassName = ClassName,
             };
             Win32.RegisterClassExW(ref windowClass);
-            handle = Win32.CreateWindowExW(WsExTopmost | WsExToolWindow, ClassName, "", WsPopup | WsVisible,
+            handle = Win32.CreateWindowExW(WsExToolWindow, ClassName, "", WsPopup | WsVisible,
                 240, 240, Width, Height, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
-            Win32.SetWindowPos(handle, Win32.HWND_TOPMOST, 240, 240, Width, Height,
+            // Top of the ordinary windows, not topmost: a topmost overlay (the cloaked one the pass needs) must stay
+            // above it, or the skip rule would never be exercised by the read.
+            Win32.SetWindowPos(handle, IntPtr.Zero, 240, 240, Width, Height,
                 Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW);
             ready.Set();
             while (Win32.GetMessageW(out Win32.MSG message, IntPtr.Zero, 0, 0) > 0)

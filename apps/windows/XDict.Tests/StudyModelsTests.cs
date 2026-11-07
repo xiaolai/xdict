@@ -81,7 +81,7 @@ public class StudyModelsTests
             Assert.True(draft.IsDirty);
             string? evidence = await draft.EvidenceAsync(client, dict);
             Assert.False(string.IsNullOrWhiteSpace(evidence));
-            StudyNote saved = (await draft.SaveAsync(client, "Tiny", dict, now: () => At, device: () => "device-a"))!;
+            StudyNote saved = (await draft.SaveAsync(client, "Tiny", now: () => At, device: () => "device-a"))!;
             Assert.Equal("second note", saved.Text);
             Assert.Equal(evidence, saved.Target.DefinitionHash);
             Assert.False(draft.IsDirty);

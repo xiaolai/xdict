@@ -10,7 +10,7 @@ namespace XDict.App.Capture;
 
 public sealed class HoverWatcher : IDisposable
 {
-    private readonly HoverReader reader = new();
+    private readonly HoverReader reader;
     private readonly Func<HoverPolicy> policy;
     private readonly CaptureRequests book;
     private readonly Func<int, int, CaptureRequest> begin;
@@ -32,7 +32,7 @@ public sealed class HoverWatcher : IDisposable
     private long lastMoveAt;
     private int lastX = int.MinValue, lastY = int.MinValue;
     private bool modifierHeld, tapped;
-    private string? lastWordKey;
+    private CapturedWord? lastShown;
     private readonly Dictionary<int, CapturedWord> waiting = new();
     private readonly HoverGestureRecognizer recogniser = new();
     private long maxHookTicks;
@@ -43,10 +43,13 @@ public sealed class HoverWatcher : IDisposable
 
     private readonly record struct HoverEvent(HoverEventKind Kind, int X, int Y, bool Held, long At);
 
-    public HoverWatcher(Func<HoverPolicy> policy, CaptureRequests book, Func<int, int, CaptureRequest> begin,
-        Action<HoverWord, CaptureRequest, int, int> present, Action<string> notice, Action? escape = null,
-        Action<int, int>? button = null)
+    /// <summary>The reader is the controller's: one capture lane, shared by every watcher lifetime, so restarting
+    /// the gesture can never start a second capture beside one the old watcher abandoned.</summary>
+    public HoverWatcher(HoverReader reader, Func<HoverPolicy> policy, CaptureRequests book,
+        Func<int, int, CaptureRequest> begin, Action<HoverWord, CaptureRequest, int, int> present, Action<string> notice,
+        Action? escape = null, Action<int, int>? button = null)
     {
+        this.reader = reader;
         this.policy = policy;
         this.book = book;
         this.begin = begin;
@@ -268,7 +271,7 @@ public sealed class HoverWatcher : IDisposable
                 // when the press did not complete the tap.
                 if (policy().Gesture == HoverGesture.DoubleTap && tapped) break;
                 // The hover is over: the next one may look the same word up again.
-                lastWordKey = null;
+                lastShown = null;
                 armed = false;
                 CancelRead();
                 break;
@@ -308,7 +311,7 @@ public sealed class HoverWatcher : IDisposable
         (_, uint pid, string process) = HoverReader.WindowAt(lastX, lastY);
         LastStillMs = still;
         LastSettleMs = current.SettleMs;
-        HoverVerdict verdict = current.Decide(modifierHeld, tapped, still, process, null, lastWordKey,
+        HoverVerdict verdict = current.Decide(modifierHeld, tapped, still, process, null, lastShown?.Key,
             reader.CaptureInFlight);
         if (!verdict.Look)
         {
@@ -355,19 +358,28 @@ public sealed class HoverWatcher : IDisposable
             return;
         }
         HoverWord word = read.Word!;
-        // The same word under the same pointer is not a second request: the first one's panel is still the answer.
-        if (lastWordKey is { } key && word.Key == key && SamePlace(word))
+        // The same word under the **same pointer** is not a second request: the first one's panel is still the
+        // answer. The place is the shown word's own box — comparing the new read's box would suppress a second
+        // occurrence of the same term wherever it appeared, because that box always holds the pointer.
+        if (lastShown is { } shown && word.Key == shown.Key && Inside(shown.Box, x, y))
         {
             book.Cancel(request);
             return;
         }
         lock (waiting) waiting[request.Number] = new CapturedWord(word.Key, word.Box);
+        // Cancellation can land between the check above and this insertion; if the request ended meanwhile, the
+        // entry would never be removed by Ended. The book's state is asked again after the entry exists.
+        if (token.IsCancellationRequested || !book.IsOpen(request))
+        {
+            lock (waiting) waiting.Remove(request.Number);
+            book.Cancel(request);
+            return;
+        }
         present(word, request, x, y);
     }
 
-    private bool SamePlace(HoverWord word) =>
-        word.Box is { } box && lastX >= box.X && lastX <= box.X + box.Width && lastY >= box.Y &&
-        lastY <= box.Y + box.Height;
+    private static bool Inside(SelectionBox? box, int x, int y) =>
+        box is { } area && x >= area.X && x <= area.X + area.Width && y >= area.Y && y <= area.Y + area.Height;
 
     private void CancelRead()
     {
@@ -388,11 +400,11 @@ public sealed class HoverWatcher : IDisposable
         }
         if (ending.Outcome == CaptureOutcome.Shown)
         {
-            lastWordKey = word!.Key;
+            lastShown = word;
         }
-        else if (lastWordKey == word!.Key)
+        else if (lastShown?.Key == word!.Key)
         {
-            lastWordKey = null;
+            lastShown = null;
         }
     }
 
@@ -406,6 +418,5 @@ public sealed class HoverWatcher : IDisposable
         try { if (hookThread.IsAlive) hookThread.Join(1000); } catch (Exception) { }
         try { if (watchThread.IsAlive) watchThread.Join(1000); } catch (Exception) { }
         mouse = keyboard = IntPtr.Zero;
-        reader.Dispose();
     }
 }
