@@ -61,7 +61,11 @@ pub const FORMAT: u32 = 1;
 /// definition's translation beside a multi-sentence run; and the builder rejects an expansion whose initials spell the
 /// key. (5's sentence-count rule was withdrawn before it shipped: it rejected three of every five of cobuild's pairs.)
 pub const EXTRACTOR: u32 = 12;
-pub const NORMALIZER: u32 = 1;
+/// The normaliser's version: part of what a store means, so a change rebuilds every store.
+///
+/// 2 (2026-11-05, audit L7): the Traditional-Simplified table no longer chains — it mapped 苎 and 苧 to each other and 薴
+/// to 苧 — so 苧, 薴 and 苎 all normalise to 苎, and normalising twice is normalising once.
+pub const NORMALIZER: u32 = 2;
 
 /// The most pairs one query collects before it stops scanning. A one-character query matches tens of thousands of
 /// pairs; the panel shows a page, and the total is reported as capped past this (ADR-0031 d.9).
@@ -1113,6 +1117,22 @@ mod tests {
                 assert!(a.0 < b.0, "the table is sorted: {a:?}, {b:?}");
             }
         }
+    }
+
+    /// **The table is idempotent** (audit 2026-11-05, L7): ICU's transform maps 苎 to 苧 and 苧 back to 苎, so a stored
+    /// text normalised once and a query normalised from the other form could disagree. No simplified form is itself a
+    /// traditional one, so normalising twice is normalising once and no mapping can cycle.
+    #[test]
+    fn normalisation_is_idempotent() {
+        for &(traditional, simplified) in t2s::T2S {
+            assert!(
+                t2s::T2S.binary_search_by_key(&simplified, |&(source, _)| source).is_err(),
+                "{traditional} maps to {simplified}, which the table maps again"
+            );
+            let once = normalize(&traditional.to_string());
+            assert_eq!(normalize(&once), once, "{traditional}");
+        }
+        assert_eq!(normalize("苧薴苎"), "苎苎苎");
     }
 
     fn built(pairs: &[(&str, &str, bool)], edition: [u8; 32]) -> Vec<u8> {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::frame::next_frame;
 use crate::{
     Card, CardConflict, ConflictCandidate, Day, DayLabel, Event, Frontier, GradeRecord, History, LedgerError,
-    MAX_CARDS, MAX_DAYS, Note, Reading, ReviewSummary, StudyCard, StudyTarget,
+    MAX_CARDS, MAX_DAYS, Note, Reading, ReviewSummary, StudyCard, StudyTarget, ZoneOffset,
 };
 
 /// The projection's own version: a change to what is projected discards every snapshot built before it. 3 adds the
@@ -422,12 +422,11 @@ pub(crate) fn is_due(card: &StudyCard, now: f64) -> bool {
 
 /// **The days the drawer shows.** Newest card first within a day; days newest first, at most [`MAX_DAYS`] back and
 /// [`MAX_CARDS`] cards in all. A day is a calendar day in the reader's zone, not a 24-hour window.
-pub(crate) fn history(readings: &[IdentifiedReading], now: f64, utc_offset_seconds: i32) -> History {
+pub(crate) fn history(readings: &[IdentifiedReading], now: f64, zone: &[ZoneOffset]) -> History {
     if !now.is_finite() {
         return History { days: Vec::new() };
     }
-    let offset = f64::from(utc_offset_seconds);
-    let today = local_day(now + offset);
+    let today = local_day(now + offset_at(zone, now));
     let mut days: BTreeMap<i64, Vec<IdentifiedReading>> = BTreeMap::new();
     let mut cards = 0usize;
     let mut counted: HashSet<String> = HashSet::new();
@@ -436,7 +435,7 @@ pub(crate) fn history(readings: &[IdentifiedReading], now: f64, utc_offset_secon
         if !held.reading.at.is_finite() {
             continue;
         }
-        let day = local_day(held.reading.at + offset);
+        let day = local_day(held.reading.at + offset_at(zone, held.reading.at));
         if today - day >= MAX_DAYS {
             continue;
         }
@@ -455,7 +454,7 @@ pub(crate) fn history(readings: &[IdentifiedReading], now: f64, utc_offset_secon
         .rev()
         .map(|(day, list)| Day {
             id: day_identifier(day),
-            start: day as f64 * SECONDS_PER_DAY - offset,
+            start: day_start(zone, day),
             label: day_label(day, today),
             cards: collapse(list),
         })
@@ -478,9 +477,8 @@ fn newest_first(readings: &[IdentifiedReading]) -> Vec<usize> {
 }
 
 /// The event ids the reader's history keeps under the same rule: what compaction may keep and what it may drop.
-pub(crate) fn kept(readings: &[IdentifiedReading], now: f64, utc_offset_seconds: i32) -> HashSet<String> {
-    let offset = f64::from(utc_offset_seconds);
-    let today = local_day(now + offset);
+pub(crate) fn kept(readings: &[IdentifiedReading], now: f64, zone: &[ZoneOffset]) -> HashSet<String> {
+    let today = local_day(now + offset_at(zone, now));
     let mut cards = 0usize;
     let mut counted: HashSet<String> = HashSet::new();
     let mut kept = HashSet::new();
@@ -489,7 +487,7 @@ pub(crate) fn kept(readings: &[IdentifiedReading], now: f64, utc_offset_seconds:
         if !held.reading.at.is_finite() {
             continue;
         }
-        let day = local_day(held.reading.at + offset);
+        let day = local_day(held.reading.at + offset_at(zone, held.reading.at));
         if today - day >= MAX_DAYS {
             continue;
         }
@@ -573,6 +571,21 @@ pub(crate) fn card_key(reading: &Reading) -> String {
         "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
         reading.surface, reading.sentence, reading.edition, reading.entry_key, reading.occurrence
     )
+}
+
+/// The offset in force at `at`: the last entry whose `from` is not after it, else the first, which also covers every
+/// earlier instant; none at all is UTC.
+fn offset_at(zone: &[ZoneOffset], at: f64) -> f64 {
+    let after = zone.partition_point(|entry| entry.from <= at);
+    let entry = after.checked_sub(1).and_then(|index| zone.get(index)).or_else(|| zone.first());
+    entry.map_or(0.0, |entry| f64::from(entry.seconds))
+}
+
+/// The instant local midnight of `day` begins, by the offset in force then: the offset is looked up at the wall time
+/// read as UTC, then at the instant that gives, so a change of offset during the day before does not move it.
+fn day_start(zone: &[ZoneOffset], day: i64) -> f64 {
+    let local = day as f64 * SECONDS_PER_DAY;
+    local - offset_at(zone, local - offset_at(zone, local))
 }
 
 /// The local calendar day as a whole number of days since the epoch: floor((t + offset) / 86400).

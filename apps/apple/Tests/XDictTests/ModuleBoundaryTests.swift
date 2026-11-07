@@ -150,7 +150,10 @@ struct ModuleBoundaryTests {
         "XDictBaseTests": ["Foundation", "Testing"],
         "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
         // AppKit and SwiftUI: the search field's AppKit coordinator and the menu's key equivalents, tested as they are.
-        "XDictUITests": ["AppKit", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "SwiftUI", "Testing"],
+        // `Observation`: an observable source for `Observed.follow`'s test; `Security`: the Keychain statuses the key
+        // store's save step is decided by (L14, L4).
+        "XDictUITests": ["AppKit", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "Security", "SwiftUI",
+                         "Testing"],
         // WebKit's preferences and rule-list store, never a web view; JavaScriptCore for the shell's scripts.
         "XDictEntryViewTests": ["AppKit", "Foundation", "JavaScriptCore", "Testing", "WebKit"],
         "XDictServiceTests": ["Foundation", "Synchronization", "Testing"],

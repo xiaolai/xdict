@@ -10,7 +10,7 @@
 //! shell's to ensure (ADR-0007 decision 14, corrected 2026-10-14).
 
 use crate::Exceeded;
-use crate::normalize::{Blocks, Norm, Normalized, finish};
+use crate::normalize::{Blocks, Closed, Norm, Normalized, finish};
 use crate::url::{
     BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, encoded_len, is_oxford_lookup, is_remote_scheme,
     names_a_host, preprocess, scheme, tts,
@@ -386,7 +386,7 @@ fn html_out<'s>(
             rest = if starts_tag(from, "title") {
                 let e = end_tag(after, "title");
                 let closing = after.get(e..).unwrap_or("");
-                closing.get(closing.find('>').map_or(closing.len(), |g| g + 1)..).unwrap_or("")
+                closing.get(crate::tag::source_len(closing)..).unwrap_or("")
             } else {
                 after
             };
@@ -399,7 +399,7 @@ fn html_out<'s>(
             && starts_tag(from, "script")
         {
             let source = tag_source(from);
-            let has_src = crate::phon::attribute_of(source, "src").is_some_and(|s| !s.trim().is_empty());
+            let has_src = crate::tag::value_of(source, "src").is_some_and(|s| !s.trim().is_empty());
             if !has_src {
                 let after = from.get(source.len()..).unwrap_or("");
                 let e = end_tag(after, "script");
@@ -420,7 +420,7 @@ fn html_out<'s>(
                             _ => norm.counts.strip.scripts_other += 1,
                         }
                         let closing = after.get(e..).unwrap_or("");
-                        rest = closing.get(closing.find('>').map_or(closing.len(), |g| g + 1)..).unwrap_or("");
+                        rest = closing.get(crate::tag::source_len(closing)..).unwrap_or("");
                         continue;
                     }
                 }
@@ -435,21 +435,21 @@ fn html_out<'s>(
             let source = tag_source(from);
             let speaker = ["data-mp3", "data-src-mp3", "data-file", "data-src", "data-audio"]
                 .iter()
-                .any(|a| crate::phon::attribute_of(source, a).is_some_and(crate::strip::recording))
+                .any(|a| crate::tag::value_of(source, a).is_some_and(crate::strip::recording))
                 || crate::roles::keyed_handler(source);
             // S13: an image the package does not hold is dropped; its `alt` stays as text. A speaker's image stays: the
             // speaker is drawn by XDict, the image hidden.
             if let Some(has) = out.resource
                 && !speaker
                 && !norm.strip_off_for_tests
-                && let Some(src) = crate::phon::attribute_of(source, "src")
+                && let Some(src) = crate::tag::value_of(source, "src")
                 && let Link::Resource { path } = crate::url::classify(&unescape(src), base, dir)
                 && !has(&path)
             {
                 norm.counts.strip.missing_images += 1;
                 // Inside XDict's speaker the image's words name the button XDict draws (OED's `alt="sound"`): none.
                 let in_speaker = out.controls.as_ref().is_some_and(|c| c.inside(text.len() - from.len()));
-                let alt = if in_speaker { "" } else { crate::phon::attribute_of(source, "alt").unwrap_or("").trim() };
+                let alt = if in_speaker { "" } else { crate::tag::value_of(source, "alt").unwrap_or("").trim() };
                 out.text.push_str(&alt.replace('<', "&lt;"));
                 if let Some(roles) = &mut out.roles {
                     roles.text(alt, None);
@@ -466,7 +466,7 @@ fn html_out<'s>(
                     continue;
                 }
                 (false, crate::images::Image::Undecided) => {
-                    let src = crate::phon::attribute_of(source, "src").unwrap_or("").to_owned();
+                    let src = crate::tag::value_of(source, "src").unwrap_or("").to_owned();
                     if norm.counts.images_undecided.len() < 64 {
                         norm.counts.images_undecided.insert(src);
                     }
@@ -598,15 +598,15 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
     // The strip list's repairs too (S4, S14): off with the rest in the hostile battery's lab.
     let stripping = normalizing && out.norm.as_ref().is_some_and(|n| !n.strip_off_for_tests);
     let mut absorbed = if normalizing { presentational(&name, from, out) } else { None };
-    let has_style = absorbed.is_some() && crate::phon::attribute_of(tag_source(from), "style").is_some();
+    let has_style = absorbed.is_some() && crate::tag::value_of(tag_source(from), "style").is_some();
     // S14: an image whose data is in another attribute, with an empty `src`, takes it as its `src`.
     let carrier = if stripping && name.eq_ignore_ascii_case("img") {
         let source = tag_source(from);
-        let empty = crate::phon::attribute_of(source, "src").is_none_or(|v| v.trim().is_empty());
+        let empty = crate::tag::value_of(source, "src").is_none_or(|v| v.trim().is_empty());
         ["base64", "data-src", "data-original"]
             .into_iter()
             .find(|a| {
-                crate::phon::attribute_of(source, a)
+                crate::tag::value_of(source, a)
                     .is_some_and(|v| v.trim_start().get(..11).is_some_and(|p| p.eq_ignore_ascii_case("data:image/")))
             })
             .filter(|_| empty)
@@ -658,23 +658,25 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
             rest = after;
             continue;
         }
-        let attr_len =
-            rest.find(|c: char| c.is_ascii_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
-        let attr = rest.get(..attr_len)?;
-        rest = rest.get(attr_len..)?;
+        let (found, after) = crate::tag::attribute(rest);
+        let attr = found.name;
         // In a normalized entry no `<` is written inside a tag (`unmarked`): an attribute named with one goes.
-        let unnamed = out.norm.is_some() && attr.contains('<');
-        let before_eq = rest.len() - rest.trim_ascii_start().len();
-        let Some(after_eq) = rest.trim_ascii_start().strip_prefix('=') else {
+        // **XDict's own marks are never believed from a dictionary** (audit 2026-11-05, M3): every `data-xdict-*` goes
+        // here, on every path through the rewrite, start and end tags, either style; the roles pass, the phonetic
+        // marker, the tables and the controls write theirs after it, so what the projection, the shells and the
+        // reading style read as XDict's is XDict's.
+        let unnamed = (out.norm.is_some() && attr.contains('<'))
+            || attr.get(..XDICT_MARK.len()).is_some_and(|p| p.eq_ignore_ascii_case(XDICT_MARK));
+        let Some(value) = found.value else {
             if unnamed || (normalizing && skips(&name, attr, None, out)) {
                 out.text.text.truncate(spaced);
             } else {
                 out.text.push_str(attr);
             }
+            rest = after;
             continue;
         };
-        let value_from = after_eq.trim_ascii_start();
-        let (quote, value, after) = attribute_value(value_from)?;
+        let (quote, value) = (value.quote, value.text);
         let lower_attr = attr.to_ascii_lowercase();
         if normalizing {
             let link = name.eq_ignore_ascii_case("a") || name.eq_ignore_ascii_case("area");
@@ -720,9 +722,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
             continue;
         }
         out.text.push_str(attr);
-        out.text.push_str(rest.get(..before_eq)?);
-        out.text.push('=');
-        out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
+        out.text.push_str(found.eq);
         let prefixed;
         // An `<hr>`'s gap goes after its own style is normalized, which drops what would draw a line (Q9).
         let mut gap = None;
@@ -772,10 +772,13 @@ fn page_tag(from: &str) -> bool {
     })
 }
 
-/// A start tag's source up to its first `>`, for reading its attributes ahead.
+/// A start tag's source through its `>` as HTML finds it ([`crate::tag`]), for reading its attributes ahead.
 fn tag_source(from: &str) -> &str {
-    from.get(..from.find('>').map_or(from.len(), |e| e + 1)).unwrap_or(from)
+    crate::tag::source(from)
 }
+
+/// The prefix of the attributes only XDict writes.
+const XDICT_MARK: &str = "data-xdict-";
 
 /// The attributes R22 reads into a style.
 const PRESENTATIONAL: [&str; 5] = ["bgcolor", "color", "size", "face", "align"];
@@ -787,7 +790,7 @@ fn presentational(element: &str, from: &str, out: &Out<'_>) -> Option<String> {
     let decls: Vec<String> = PRESENTATIONAL
         .iter()
         .filter_map(|n| {
-            crate::phon::attribute_of(source, n).and_then(|v| crate::normalize::presentational(element, n, v, style))
+            crate::tag::value_of(source, n).and_then(|v| crate::normalize::presentational(element, n, v, style))
         })
         .filter(|d| !d.is_empty())
         .collect();
@@ -802,31 +805,17 @@ fn presentational(element: &str, from: &str, out: &Out<'_>) -> Option<String> {
 
 /// Whether a start tag's attribute is not written: dropped (R10, R11, R22), or read into its style.
 fn skips(element: &str, attr: &str, value: Option<&str>, out: &Out<'_>) -> bool {
-    if out.norm.as_ref().is_some_and(|n| n.original) {
-        return false;
-    }
+    let original = out.norm.as_ref().is_some_and(|n| n.original);
     let lower = attr.to_ascii_lowercase();
-    if crate::normalize::dropped_attribute(element, &lower) {
+    if crate::normalize::dropped_attribute(element, &lower, original) {
         return true;
+    }
+    if original {
+        return false;
     }
     let (Some(norm), Some(value)) = (out.norm.as_ref(), value) else { return false };
     PRESENTATIONAL.contains(&lower.as_str())
         && crate::normalize::presentational(element, &lower, &unescape(value), norm.style).is_some()
-}
-
-/// An attribute's value as HTML delimits it: its quote, the value as written, and what follows it.
-fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
-    match from.chars().next() {
-        Some(q @ ('"' | '\'')) => {
-            let body = from.get(1..)?;
-            let end = body.find(q).unwrap_or(body.len());
-            Some((Some(q), body.get(..end)?, body.get(end + 1..).unwrap_or("")))
-        }
-        _ => {
-            let end = from.find(|c: char| c.is_ascii_whitespace() || c == '>').unwrap_or(from.len());
-            Some((None, from.get(..end)?, from.get(end..)?))
-        }
-    }
 }
 
 /// An attribute's value, rewritten if it holds URLs. The value is written back as it was unless it changes; a
@@ -1248,8 +1237,8 @@ fn css_out<'s>(
     }
     css.out.text.push_str(text.get(css.copied..).unwrap_or(""));
     css.copied = text.len();
-    while let Some(frame) = css.blocks.as_mut().and_then(Blocks::rest) {
-        css.finish(frame);
+    while let Some(closed) = css.blocks.as_mut().and_then(Blocks::rest) {
+        css.closed(closed);
     }
     css.out
 }
@@ -1287,14 +1276,31 @@ impl Css<'_, '_> {
             }
             b';' => blocks.separator(at, written),
             _ => {
-                if let Some(frame) = blocks.close(at) {
-                    self.finish(frame);
+                if let Some(closed) = blocks.close(at) {
+                    self.closed(closed);
                 }
             }
         }
     }
 
-    /// A block closed (or left open at the end), its body normalized in place.
+    /// A block closed (or left open at the end): its body normalized in place, or dropped when it was nested past
+    /// what is followed, and its end recorded in the block around it.
+    fn closed(&mut self, closed: Closed) {
+        match closed {
+            Closed::Block(frame) => self.finish(frame),
+            Closed::TooDeep { start } => {
+                if !self.out.text.exceeded && self.out.text.text.is_char_boundary(start) {
+                    self.out.text.text.truncate(start);
+                }
+            }
+        }
+        let written = self.out.text.as_str().len();
+        if let Some(blocks) = &mut self.blocks {
+            blocks.nested_end(written);
+        }
+    }
+
+    /// A block's body normalized in place.
     fn finish(&mut self, frame: crate::normalize::Frame) {
         if self.out.text.exceeded {
             return;
@@ -1302,7 +1308,8 @@ impl Css<'_, '_> {
         let (Some(blocks), Some(norm)) = (&self.blocks, &mut self.out.norm) else { return };
         let Some(body) = self.out.text.text.get(frame.start..) else { return };
         let text = self.text;
-        if let Some(new) = finish(body, &frame, || blocks.selector(text, &frame), norm) {
+        let prelude = text.get(frame.prelude.0..frame.prelude.1).unwrap_or("");
+        if let Some(new) = finish(body, &frame, prelude, || blocks.selector(text, &frame), norm) {
             self.out.text.text.truncate(frame.start);
             self.out.text.push_str(&new);
         }
@@ -1488,7 +1495,7 @@ fn css_newline(c: char) -> bool {
 
 /// CSS's escapes decoded: `\` and one to six hex digits (and one space after them, a CRLF being one) is that
 /// code point, `\` before a newline (LF, CR, CRLF or FF) is nothing, `\` before anything else is that character.
-fn css_unescape(written: &str) -> String {
+pub(crate) fn css_unescape(written: &str) -> String {
     if !written.contains('\\') {
         return written.to_owned();
     }

@@ -44,16 +44,18 @@ counts_honest() { # part label (air|build host)
     [ -n "$said" ] && [ "$said" = "$done" ]
 }
 
-# ---- The Air: a repository whose main checkout is on the integration branch ----
+# ---- The Air: a repository whose main checkout is on the integration branch, main: the script's default --into, so
+# the runs below that pass no --into prove the default names a branch that exists (it named a deleted one until
+# 2026-11-05) ----
 repo=$scratch/repo
-git init -q -b capture-port "$repo"
+git init -q -b main "$repo"
 g() { git -C "$repo" -c user.name=t -c user.email=t@t "$@"; }
 printf '.build/\n/dev-docs\n' >"$repo/.gitignore"
 echo base >"$repo/a.txt"
 g add -A && g commit -qm base
 wts=$repo/.claude/worktrees
 add_wt() { # name branch: a worktree on a new branch with one commit of its own
-    g worktree add -q -b "$2" "$wts/$1" capture-port
+    g worktree add -q -b "$2" "$wts/$1" main
     echo "$1" >"$wts/$1/f.txt"
     git -C "$wts/$1" -c user.name=t -c user.email=t@t add -A
     git -C "$wts/$1" -c user.name=t -c user.email=t@t commit -qm "$1"
@@ -66,14 +68,14 @@ for w in merged named unmerged dirty fresh busy precious cmdbusy 'a+b' lockedwt 
     add_wt "$w" "$b"
     [ "$w" = unmerged ] || merge "$b"
 done
-g worktree add -q -b worktree-agent-outside "$scratch/outside-wt" capture-port
+g worktree add -q -b worktree-agent-outside "$scratch/outside-wt" main
 nl=$'nl\nname'
-g worktree add -q -b worktree-agent-nl "$wts/$nl" capture-port 2>/dev/null || bad "could not make a worktree with a line break"
+g worktree add -q -b worktree-agent-nl "$wts/$nl" main 2>/dev/null || bad "could not make a worktree with a line break"
 echo untracked >"$wts/dirty/new-file.txt"
 # A commit reset away lives only in the worktree's reflog: removing the worktree would leave it dangling.
 add_wt reset worktree-agent-reset && merge worktree-agent-reset
 git -C "$wts/reset" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "unique work"
-git -C "$wts/reset" reset -q --hard capture-port
+git -C "$wts/reset" reset -q --hard main
 # A build product, ignored, does not keep a worktree; an ignored file of any other kind does (item 1).
 mkdir -p "$wts/merged/.build" && echo product >"$wts/merged/.build/x"
 mkdir -p "$wts/precious/dev-docs" && echo "an ADR draft, nowhere else" >"$wts/precious/dev-docs/adr.md"
@@ -141,7 +143,7 @@ run --air --apply --repo "$repo"
 [ "$rc" = 0 ] && ! grep -q '^removed' "$scratch/out" && ok "a second apply is idempotent" \
     || bad "second apply: exit $rc: $(cat "$scratch/out")"
 
-# The integration branch is an argument: unmerged into capture-port, merged into another. Its branch is not merged into
+# The integration branch is an argument: unmerged into main, merged into another. Its branch is not merged into
 # the main checkout's HEAD, so `git branch -d` refuses it, and it stays.
 g branch -q other worktree-agent-unmerged
 run --air --apply --repo "$repo" --into other
@@ -183,7 +185,7 @@ echo b >"$root/fresh.bundle"; echo r >"$root/fresh.out"; echo p >"$root/loose.py
 echo garbage >"$root/junk.bundle"
 # Git data (item 4): a clone of the Air's repository is known; a repository with its own commit is not.
 git clone -q "$repo" "$root/old-git"
-git -C "$repo" bundle create -q "$root/old.bundle" capture-port 2>/dev/null
+git -C "$repo" bundle create -q "$root/old.bundle" main 2>/dev/null
 unknown=$scratch/unknown-repo
 git init -q -b main "$unknown" && echo u >"$unknown/u" && git -C "$unknown" add -A \
     && git -C "$unknown" -c user.name=t -c user.email=t@t commit -qm "exists only on the build host"
@@ -329,6 +331,8 @@ XDICT_CLEAN_DEV_LOCAL_MK=$scratch/local-dash.mk run --build-host --repo "$repo"
     || bad "dash host: exit $rc: $(cat "$scratch/out")"
 help=$(bash "$script" --help)
 grep -q -- '--build-host' <<<"$help" && ok "the flag is --build-host, named for its role" || bad "--help has no --build-host"
+grep -q 'move the clock forward instead' <<<"$help" && ok "--help prints the header to its last line" \
+    || bad "--help cuts the header (a fixed line range drifts when the header grows)"
 
 # Arguments are checked before anything runs.
 run --min-age-hours abc

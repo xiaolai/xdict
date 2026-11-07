@@ -243,16 +243,38 @@ pub fn build(options: &BuildOptions, progress: &mut dyn FnMut(Event<'_>) -> Cont
         source_ids: builder.sources().iter().map(|source| source.id().to_string()).collect(),
     };
     report.report_text = report.to_json();
-    let staged_pack = stage(&options.output, pack_bytes.as_bytes())?;
-    let staged_notices = stage(&sidecar, notice_bytes)?;
-    let staged_report = stage(&report_path, report.report_text.as_bytes())?;
+    // **A cancel is honoured between every step, and nothing staged outlives the build** (audit 2026-11-05, L11):
+    // `Staged` removes on any return what it still holds, so a cancel or a failed write or rename leaves no temporary.
+    let mut staged = Staged(Vec::new());
+    let order = [(&sidecar, notice_bytes), (&report_path, report.report_text.as_bytes())];
+    for (path, bytes) in order.into_iter().chain([(&options.output, pack_bytes.as_bytes())]) {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(cancelled());
+        }
+        staged.0.push((stage(path, bytes)?, path.clone()));
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(cancelled());
+    }
     // **Published only now**, each file a rename of one already written whole.
     // **The pack is published last**: a failure part-way leaves the pack already on disk untouched rather than a new
     // pack standing beside yesterday's notices.
-    publish(&staged_notices, &sidecar)?;
-    publish(&staged_report, &report_path)?;
-    publish(&staged_pack, &options.output)?;
+    while !staged.0.is_empty() {
+        let (temporary, path) = staged.0.remove(0);
+        publish(&temporary, &path)?;
+    }
     Ok(report)
+}
+
+/// Staged files not yet published, each with where it goes: removed when dropped, so no return leaves one behind.
+struct Staged(Vec<(PathBuf, PathBuf)>);
+
+impl Drop for Staged {
+    fn drop(&mut self) {
+        for (temporary, _) in &self.0 {
+            let _ = std::fs::remove_file(temporary);
+        }
+    }
 }
 
 fn cancelled() -> PackError {
@@ -411,4 +433,82 @@ pub fn refuse_inside_repository(output: &Path, start: &Path) -> PackResult<()> {
         directory = current.parent();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+    use crate::limits::{MANIFEST_FORMAT, MANIFEST_VERSION};
+
+    /// A one-source build in a scratch directory: a two-word CMUdict, its manifest, and the pack's path.
+    fn fixture(name: &str) -> (PathBuf, BuildOptions) {
+        let dir = std::env::temp_dir().join(format!("xdict-pack-build-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let raw = dir.join("raw");
+        std::fs::create_dir_all(&raw).unwrap();
+        std::fs::write(raw.join("cmudict.dict"), "hello HH AH0 L OW1\nworld W ER1 L D\n").unwrap();
+        let (sha256, bytes) = crate::manifest::sha256_file(&raw.join("cmudict.dict")).unwrap();
+        let manifest = serde_json::json!({
+            "format": MANIFEST_FORMAT,
+            "version": MANIFEST_VERSION,
+            "sources": [{
+                "id": "cmu", "provider": "cmudict", "name": "CMUdict", "url": "https://example.org/cmudict",
+                "version": "1", "sha256": sha256, "file": "cmudict.dict", "bytes": bytes,
+                "licence": "BSD-2-Clause", "attribution": "Carnegie Mellon University", "notice": "A test notice.",
+            }],
+        });
+        std::fs::write(dir.join("sources.json"), manifest.to_string()).unwrap();
+        let options = BuildOptions::new(&raw, dir.join("out").join(PACK_NAME), dir.join("sources.json"));
+        (dir, options)
+    }
+
+    fn written(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir.join("out"))
+            .map(|entries| entries.map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect())
+            .unwrap_or_default();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn the_fixture_builds() {
+        let (dir, options) = fixture("builds");
+        build(&options, &mut |_| Control::Continue).unwrap();
+        assert_eq!(written(&dir), ["xdict-words-en.jsonl", "xdict-words-en.notices.md", "xdict-words-en.report.json"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// **A cancel raised once writing has begun still writes nothing** (audit 2026-11-05, L11): the flag is read
+    /// between the steps that prepare and publish the three files, not only while records are parsed.
+    #[test]
+    fn a_cancel_while_writing_writes_nothing() {
+        let (dir, mut options) = fixture("cancel");
+        let flag = std::sync::Arc::new(AtomicBool::new(false));
+        options.cancel = Some(flag.clone());
+        let got = build(&options, &mut |event| {
+            if matches!(event, Event::Writing) {
+                flag.store(true, Ordering::Relaxed);
+            }
+            Control::Continue
+        });
+        assert_eq!(got.err().map(|error| error.kind()), Some(PackErrorKind::Cancelled));
+        assert!(written(&dir).is_empty(), "{:?}", written(&dir));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// **A publish that fails leaves no staged file behind** (audit 2026-11-05, L11): the pack's and the report's
+    /// temporaries were left beside the output when an earlier rename failed.
+    #[test]
+    fn a_failed_publish_leaves_no_temporary() {
+        let (dir, options) = fixture("leak");
+        // A directory where the report goes: its rename fails, after the notices' and before the pack's.
+        std::fs::create_dir_all(dir.join("out").join("xdict-words-en.report.json").join("held")).unwrap();
+        assert!(build(&options, &mut |_| Control::Continue).is_err());
+        let left: Vec<String> = written(&dir).into_iter().filter(|name| name.starts_with('.')).collect();
+        assert!(left.is_empty(), "staged files left behind: {left:?}");
+        assert!(!dir.join("out").join(PACK_NAME).exists(), "the pack is published last, so not at all");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

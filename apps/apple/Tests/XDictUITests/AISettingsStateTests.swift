@@ -177,6 +177,23 @@ struct AISettingsStateTests {
         #expect(model.keyState == .absent, "the old failure stayed beside the new configuration")
     }
 
+    /// **A pasted key is saved without its spaces and line breaks** (L14): the newline a copy carries went into every
+    /// request's header; a draft of only whitespace saves nothing.
+    @Test func aPastedKeyIsSavedTrimmed() throws {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.ai-state")
+        held.fixture = fixture
+        let keys = MemoryKeyStore()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: keys)
+        preferences.choose(.http, cloud: true)
+        let model = AISettingsModel(preferences: preferences)
+        model.draftKey = " \n"
+        model.saveKey()
+        #expect(keys.key() == nil, "whitespace is no key")
+        model.draftKey = "  sk-new\n"
+        model.saveKey()
+        #expect(keys.key() == "sk-new")
+    }
+
     /// **Replace clears the last verdict** (audit finding, 2026-10-25): the failure described the key being replaced.
     @Test func replacingTheKeyClearsItsFailure() throws {
         let fixture = try TestDefaults(prefix: "ai.xdict.tests.ai-state")

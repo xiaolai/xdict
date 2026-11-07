@@ -11,28 +11,18 @@
 #   e2e-run.sh pending    one line, running nothing: `E2E suggested: <sub-stages> — <changed paths>` or
 #                         `E2E: nothing pending` (`make e2e-pending`, and the end of `make land`)
 #   e2e-run.sh run <sub-stage...>
-#                         runs them with Tools/e2e.sh: split over E2E_HOST_MACOS and E2E_HOST_MACOS_2 in parallel when
-#                         both are set and E2E_SPLIT is not 0, else on E2E_HOST alone. Tools/e2e.sh files every row,
-#                         pass and fail, in the ledger
+#                         runs them with Tools/e2e.sh on E2E_HOST (E2E_HOST_MACOS, local.mk), once no other project's
+#                         XCTest holds that Mac's front; Tools/e2e.sh files every row, pass and fail, in the ledger
 #
-# **The split.** Sub-stages that post keys or pointer events, or read another app's window, need Accessibility and the
-# front: on the first host only (the second has no Accessibility for XDict.app; AGENTS.md). The rest are balanced by
-# the seconds each last took (the ledger; 60 where none is recorded), a group's one launch kept together.
-# The second host starts once the first has finished its setup (the kit, the sample, the editions are made on this Mac
-# once, and two setups at once would write them twice). Each host has its own run lock (Tools/e2e.sh).
+# **One E2E Mac** (AGENTS.md, "Where builds and tests run": the macOS E2E runs on one Mac; the second E2E Mac's line was
+# dropped on 2026-10-17). The split over two Macs that this script once made was removed on 2026-11-05 (the audit's G8
+# and L16): no second host has existed since, and its wait for the first host's setup could spin for ever.
 #
-# **Split evidence is release evidence too** where both Macs run one macOS build: the key holds the build, so a row of
-# the other build is simply not this key's.
-#
-# Environment (make sets them): XDICT_E2E_HOST, XDICT_E2E_HOST_2, XDICT_E2E_SPLIT, XDICT_E2E_STAGES, XDICT_E2E_FULL,
-# XDICT_E2E_CORPUS, and those Tools/e2e.sh reads.
+# Environment (make sets them): XDICT_E2E_HOST, XDICT_E2E_STAGES, XDICT_E2E_FULL, XDICT_E2E_CORPUS, and those
+# Tools/e2e.sh reads; XDICT_HOST_LOCK_WAIT (seconds, 3600 by default), how long a run waits for another XCTest.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "e2e-run: $*" >&2; exit 1; }
-# Post keys or pointer events, or read a window by Accessibility: the first host only.
-readonly FRONT_GROUPS=" lookup sound anywhere "
-readonly FRONT_SUBSTAGES=" reader library.generated "
-
 # read_facts: the key's facts for a run of the bundle `make e2e` would test on XDICT_E2E_HOST, into the array `facts`.
 facts=()
 read_facts() {
@@ -74,108 +64,31 @@ select_stages() {
     done <<<"$rows"
 }
 
-# The seconds each sub-stage last took, `sub<TAB>seconds`.
-weights() { python3 -I Tools/e2e-ledger.py seconds 2>/dev/null || true; }
-
-# split <sub...>: two lines, the first host's sub-stages and the second's.
-split() {
-    local table
-    table=$(bash Tools/e2e-plan.sh table)
-    python3 -I - "$FRONT_GROUPS" "$FRONT_SUBSTAGES" "$(weights)" "$table" "$@" <<'PY'
-import sys
-front_groups, front_subs, weights, table = sys.argv[1].split(), sys.argv[2].split(), sys.argv[3], sys.argv[4]
-subs = sys.argv[5:]
-seconds = {}
-for line in weights.splitlines():
-    name, s = line.split("\t")
-    seconds[name] = int(s)
-group = {}
-for row in table.splitlines():
-    sub, _, _, g, _ = row.split("\t")
-    group[sub] = g
-units = {}
-for sub in subs:
-    g = group.get(sub, "-")
-    units.setdefault(sub if g == "-" else "group:" + g, []).append(sub)
-def weight(members):
-    # A group runs one launch: its members each record the launch's time, so it counts once.
-    if len(members) > 1:
-        return max(seconds.get(m, 60) for m in members)
-    return seconds.get(members[0], 60)
-hosts, load = [[], []], [0, 0]
-rest = []
-for unit, members in units.items():
-    if (unit.startswith("group:") and unit[6:] in front_groups) or any(m in front_subs for m in members):
-        hosts[0] += members
-        load[0] += weight(members)
-    else:
-        rest.append((weight(members), members))
-for w, members in sorted(rest, key=lambda r: -r[0]):
-    i = 0 if load[0] <= load[1] else 1
-    hosts[i] += members
-    load[i] += w
-order = {s: i for i, s in enumerate(subs)}
-for i in (0, 1):
-    print(" ".join(sorted(hosts[i], key=order.get)) + f"\t{load[i]}")
-PY
-}
-
-# wait_idle <host>: another project's XCTest takes the front (AGENTS.md); wait for it, up to 10 minutes.
+# wait_idle <host>: another project's XCTest takes the front (AGENTS.md); wait for it, as long as a run waits for the
+# host's lock (XDICT_HOST_LOCK_WAIT, Tools/host-lock.sh), then refuse: a GUI run beside another's XCTest fails on clicks
+# that were never the product's (2026-11-05; it went ahead after 10 minutes before).
 wait_idle() {
-    local host=$1 i busy
-    for i in $(seq 1 20); do
+    local host=$1 limit=${XDICT_HOST_LOCK_WAIT:-3600} waited=0 busy
+    [[ "$limit" =~ ^[0-9]+$ ]] || fail "XDICT_HOST_LOCK_WAIT is not a number of seconds: $limit"
+    while :; do
         busy=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -- "$host" "pgrep -fl xctest || true") || fail "cannot reach $host"
         [ -n "$busy" ] || { echo "e2e-run: $host: no xctest running"; return 0; }
-        echo "e2e-run: $host is running XCTest ($busy); waiting ($i/20)"
+        [ "$waited" -lt "$limit" ] \
+            || fail "$host still runs XCTest after $waited s ($busy): nothing was run; wait for it, or raise XDICT_HOST_LOCK_WAIT"
+        echo "e2e-run: $host is running XCTest ($busy); waiting ($waited of $limit s)"
         sleep 30
+        waited=$((waited + 30))
     done
-    echo "e2e-run: $host still runs XCTest after 10 min; going ahead, a GUI failure there may be the host's" >&2
 }
 
 run_stages() {
     [ $# -gt 0 ] || { echo "e2e-run: nothing to run"; return 0; }
-    local host=${XDICT_E2E_HOST:-} host2=${XDICT_E2E_HOST_2:-} started status=0 started_s
+    local host=${XDICT_E2E_HOST:-} started status=0 started_s
     [ -n "$host" ] || fail "E2E_HOST_MACOS is not set (local.mk)"
     started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     started_s=$(date +%s)
-    if [ -z "$host2" ] || [ "$host2" = "$host" ] || [ "${XDICT_E2E_SPLIT:-1}" = 0 ]; then
-        wait_idle "$host"
-        Tools/e2e.sh "$host" "$@" || status=$?
-    else
-        local plan one two logs
-        plan=$(split "$@")
-        one=$(sed -n 1p <<<"$plan" | cut -f1); two=$(sed -n 2p <<<"$plan" | cut -f1)
-        echo "e2e-run: split: $host [$(sed -n 1p <<<"$plan" | cut -f2) s]: $one"
-        echo "e2e-run: split: $host2 [$(sed -n 2p <<<"$plan" | cut -f2) s]: ${two:-nothing}"
-        wait_idle "$host"
-        [ -z "$two" ] || wait_idle "$host2"
-        logs=$(mktemp -d)
-        local s1=0 s2=0 p1 p2=""
-        # shellcheck disable=SC2086 # names, split on purpose
-        { Tools/e2e.sh "$host" $one >"$logs/1" 2>&1; echo $? >"$logs/1.status"; } &
-        p1=$!
-        if [ -n "$two" ]; then
-            # The second starts once the first has done this Mac's setup.
-            until grep -q '^== run:' "$logs/1" 2>/dev/null || [ -s "$logs/1.status" ]; do sleep 2; done
-            # shellcheck disable=SC2086
-            { Tools/e2e.sh "$host2" $two >"$logs/2" 2>&1; echo $? >"$logs/2.status"; } &
-            p2=$!
-        fi
-        tail -n +1 -f "$logs/1" 2>/dev/null | sed -u "s/^/[1] /" &
-        local t1=$!
-        if [ -n "$p2" ]; then { sleep 1; tail -n +1 -f "$logs/2" 2>/dev/null | sed -u "s/^/[2] /"; } & fi
-        local t2=$!
-        wait "$p1" || true
-        [ -z "$p2" ] || wait "$p2" || true
-        sleep 1
-        kill "$t1" "$t2" 2>/dev/null || true
-        s1=$(cat "$logs/1.status" 2>/dev/null || echo 1)
-        [ -z "$p2" ] || s2=$(cat "$logs/2.status" 2>/dev/null || echo 1)
-        echo
-        echo "e2e-run: $host exited $s1; ${two:+$host2 exited $s2}"
-        [ "$s1" = 0 ] && [ "$s2" = 0 ] || status=1
-        rm -rf "$logs"
-    fi
+    wait_idle "$host"
+    Tools/e2e.sh "$host" "$@" || status=$?
     echo "e2e-run: wall-clock $(( $(date +%s) - started_s )) s"
     if [ "$status" != 0 ]; then
         local failed
@@ -209,6 +122,5 @@ case ${1:-} in
     select) select_stages ;;
     pending) pending ;;
     run) shift; run_stages "$@" ;;
-    split) shift; split "$@" ;;
-    *) fail "usage: e2e-run.sh select | pending | run <sub-stage...> | split <sub-stage...>" ;;
+    *) fail "usage: e2e-run.sh select | pending | run <sub-stage...>" ;;
 esac

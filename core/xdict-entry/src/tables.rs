@@ -53,8 +53,8 @@ impl Tables {
                     self.deep += 1;
                     return;
                 }
-                let role = crate::phon::attribute_of(tag, "role");
-                let summary = crate::phon::attribute_of(tag, "summary").is_some();
+                let role = crate::tag::value_of(tag, "role");
+                let summary = crate::tag::value_of(tag, "summary").is_some();
                 self.open.push(Table {
                     start: at,
                     attribute,

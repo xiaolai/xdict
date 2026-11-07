@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import Testing
 import XDictAnywhere
@@ -301,6 +302,51 @@ struct SetupBoardTests {
         #expect(SetupWindowReading.nodes(fromKeysAX: Data("keys: no access".utf8)) == nil)
         #expect(SetupWindowReading.nodes(fromKeysAX: Data(#"{"nodes": [], "why": "no main window"}"#.utf8))?.isEmpty
             == true)
+    }
+
+    /// **A row's button opens the pane that holds its control** (audit 2026-11-05, M9): hover's switch and key are in
+    /// Settings ▸ Lookup, and General has neither. The board's table is Settings search's, and the hover sentence names
+    /// the same pane the button opens.
+    @Test func eachRowOpensThePaneThatHoldsItsControl() {
+        #expect(SetupBoard.Step.hover.settingsPane == .lookup)
+        #expect(SetupBoard.Step.shortcut.settingsPane == .lookup)
+        #expect(SetupBoard.Step.ai.settingsPane == .ai)
+        #expect(SetupBoard.Step.dictionaries.settingsPane == .dictionaries)
+        for step in SetupBoard.Step.allCases where step.settingsPane != nil {
+            #expect(step.settingsPane != .general, "\(step) names General, which holds no setup control")
+        }
+        let lookup = String(localized: SettingsTab.lookup.title)
+        for doubleTap in [false, true] {
+            let board = SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: true, hoverOn: true,
+                                   hoverDoubleTap: doubleTap)
+            let sentence = String(localized: board.detail(.hover))
+            #expect(sentence.contains(lookup), "the hover row names the pane its button opens: \(sentence)")
+            #expect(!sentence.contains(String(localized: SettingsTab.general.title)), "\(sentence)")
+        }
+    }
+
+    /// **Each shortcut problem has its own sentence** (audit 2026-11-05, L14): the row said "in use by another app"
+    /// for every failure, including XDict's own hold and a system refusal. On the main actor, as in the app: the
+    /// sentence names the key through the keyboard layout, and HIToolbox aborts on two threads asking at once.
+    @MainActor @Test func eachShortcutProblemIsSaidAsItIs() {
+        let shortcut = Shortcut(keyCode: UInt32(kVK_ANSI_D), modifiers: UInt32(controlKey | optionKey))
+        let problems: [ShortcutProblem] = [
+            .unavailable(shortcut, .takenByAnotherApp),
+            .unavailable(shortcut, .heldByXDict),
+            .unavailable(shortcut, .unreleasedByXDict),
+            .unavailable(shortcut, .status(-9_878)),
+        ]
+        let sentences = problems.map { problem in
+            String(localized: SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: false, shortcutProblem: problem)
+                .detail(.shortcut))
+        }
+        #expect(Set(sentences).count == problems.count, "two problems read alike: \(sentences)")
+        for (problem, sentence) in zip(problems, sentences) {
+            #expect(sentence == String(localized: AnywhereSentences.problem(problem)))
+        }
+        let unknown = SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: false)
+        #expect(!sentences.contains(String(localized: unknown.detail(.shortcut))),
+                "no problem known is not a problem claimed")
     }
 
     /// **`setup.chineseOnly` reads something before it passes**: an empty Accessibility tree has no English in it, and

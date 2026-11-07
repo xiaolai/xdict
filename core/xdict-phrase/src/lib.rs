@@ -20,5 +20,5 @@ mod template;
 
 pub use forms::forms;
 pub use matcher::{Match, Matcher};
-pub use store::{EXTRACTOR, FORMAT, Inventory, Versions};
+pub use store::{EXTRACTOR, FORMAT, Inventory, Refused, Versions};
 pub use template::{DEFAULT_WIDEST_GAP, DEFAULT_WIDEST_INFERRED_GAP, Separation, Slots, Template};

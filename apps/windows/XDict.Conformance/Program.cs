@@ -1,6 +1,7 @@
 // The IPC conformance gate: the real service, started by the production client over the production pipes, answers the
-// contract's handshake and its typed refusals. `plan-windows-v1` WI-3; WI-4 adds conformance/'s fixtures through the
-// service's dictionary operations.
+// contract's handshake and its typed refusals (`plan-windows-v1` WI-3), then conformance/'s fixtures through the
+// service's dictionary operations (WI-4): every suite the other bindings run that an operation reaches. Both fixture
+// folders are required; a run without them would prove the handshake alone and still say pass.
 using XDict.Client;
 using XDict.Contract;
 using System.Runtime.InteropServices;
@@ -31,17 +32,19 @@ public static class Program
             else if (args[i] == "--generated") generated = args[i + 1];
             else if (args[i] == "--expected") expected = args[i + 1];
         }
+        var missing = new List<string>();
+        if (generated is null) missing.Add("--generated <the folder conformance-fixtures wrote>");
+        if (expected is null) missing.Add("--expected <conformance/fixtures>");
+        if (missing.Count > 0)
+        {
+            Console.Error.WriteLine("conformance: " + string.Join(" and ", missing) +
+                " must be given: without the fixtures the run checks the handshake alone, not the suites every binding runs");
+            return 2;
+        }
         service ??= Environment.GetEnvironmentVariable("XDICT_SERVICE");
         if (service is null || !File.Exists(service))
         {
             Console.Error.WriteLine("--service or XDICT_SERVICE must name the built xdict-service.exe");
-            return 2;
-        }
-        // Half a fixture request used to skip every dictionary check while still printing "pass". A caller that
-        // named one folder meant to name both, so it is a usage error, never a quiet handshake-only run.
-        if ((generated is null) != (expected is null))
-        {
-            Console.Error.WriteLine("--generated and --expected must be given together");
             return 2;
         }
 
@@ -97,28 +100,27 @@ public static class Program
             return null;
         });
 
-        if (generated is not null)
+        var fixtures = new Fixtures(service, generated!, expected!);
+        Check("the tiny scenario runs to its end", () =>
         {
-            Check("the tiny fixture answers as expected", () =>
-            {
-                Fixtures.Tiny(client, generated, expected!);
-                return null;
-            });
-            Check("every matrix variant answers as expected", () =>
-            {
-                Fixtures.Matrix(client, generated, expected!);
-                return null;
-            });
-        }
-        else
+            fixtures.Tiny(client);
+            return null;
+        });
+        Check("every matrix variant runs to its end", () =>
         {
-            Console.WriteLine("dictionary fixtures: skipped (handshake only; give --generated and --expected)");
+            fixtures.Matrix(client);
+            return null;
+        });
+        foreach (string failure in fixtures.Failures)
+        {
+            failures++;
+            Console.WriteLine("FAIL " + failure);
         }
+        foreach ((string suite, int count) in fixtures.Counts) Console.WriteLine($"suite {suite}: {count} case(s)");
+        Console.WriteLine($"suites: {fixtures.Counts.Count}, cases: {fixtures.Counts.Values.Sum()}, failed: {fixtures.Failures.Count}");
+        foreach ((string step, string why) in Fixtures.NotRun) Console.WriteLine($"not run through the service: {step} ({why})");
 
-        string verdict = failures == 0
-            ? generated is null ? "conformance: pass (handshake only)" : "conformance: pass"
-            : $"conformance: {failures} failed";
-        Console.WriteLine(verdict);
+        Console.WriteLine(failures == 0 ? "conformance: pass" : $"conformance: {failures} failed");
         return failures == 0 ? 0 : 1;
     }
 

@@ -23,6 +23,12 @@ public struct ReviewView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.l) {
             header
+            if let failure = model.failure {
+                Text(Self.describe(failure))
+                    .font(Tokens.TextRole.caption.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                    .accessibilityIdentifier("review.failure")
+            }
             switch model.state {
             case .idle, .loading:
                 VStack {
@@ -85,6 +91,12 @@ public struct ReviewView: View {
                     .font(Tokens.TextRole.caption.font)
                     .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
             }
+            // **Undo takes back the grade just made, not the card in front** (audit 2026-11-05, H2): drawn with the
+            // card, it voided the next card's earlier grade. Here it stays when the last card leaves the queue, and is
+            // disabled until this session has graded something.
+            Button("Undo") { Task { await model.undo() } }
+                .disabled(!model.canUndo)
+                .accessibilityIdentifier("review.undo")
         }
     }
 
@@ -113,9 +125,18 @@ public struct ReviewView: View {
         .padding(.bottom, Tokens.Space.m)
     }
 
-    static func describe(_ candidate: ConflictCandidate) -> String {
+    static func describe(_ candidate: ConflictCandidate, thisDevice: String = DeviceIdentity.current()) -> String {
         let when = Date(timeIntervalSince1970: candidate.at).formatted(date: .abbreviated, time: .shortened)
-        return "\(title(candidate.grade)) · \(when) · \(candidate.device)"
+        return "\(title(candidate.grade)) · \(when) · \(deviceName(candidate.device, thisDevice: thisDevice))"
+    }
+
+    /// **A device as a reader can tell it apart** (L14): the ledger keeps no device names, only the UUID each Mac
+    /// minted, and a row that showed all 36 characters asked the reader to compare them. This Mac is named; another
+    /// device is its UUID's first four characters, enough to tell two apart.
+    nonisolated static func deviceName(_ device: String, thisDevice: String) -> String {
+        if device == thisDevice { return String(localized: "This Mac") }
+        let short = String(device.filter { $0.isLetter || $0.isNumber }.prefix(4)).uppercased()
+        return String(localized: "Another device (\(short))")
     }
 
     @ViewBuilder private func cardView(_ card: StudyCard) -> some View {
@@ -129,9 +150,6 @@ public struct ReviewView: View {
                         .accessibilityIdentifier("review.openEntry")
                 }
                 Button("Note…") { editing = true }
-                if !card.head.isEmpty {
-                    Button("Undo") { Task { await model.undo(card) } }
-                }
             }
             if let unopened, unopened.entry == EntryRef(target: card.target) {
                 EntryLinkFallback(why: unopened.why, key: card.target.entryKey, links: model.entryLinks) {
@@ -224,6 +242,13 @@ public struct ReviewView: View {
         case .hard: String(localized: "Hard")
         case .good: String(localized: "Good")
         case .easy: String(localized: "Easy")
+        }
+    }
+
+    static func describe(_ failure: StudyModel.Failure) -> LocalizedStringResource {
+        switch failure {
+        case .grade: "The grade was not recorded. Try again."
+        case .undo: "The grade could not be undone. Try again."
         }
     }
 

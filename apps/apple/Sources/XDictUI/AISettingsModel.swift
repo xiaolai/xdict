@@ -340,9 +340,15 @@ public final class AISettingsModel {
 
     // MARK: - The key
 
+    /// **The key as it is saved: without the spaces and line breaks a paste carries** (L14). Saved as typed, a copied
+    /// key's trailing newline went into every request's Authorization header and the endpoint refused it.
+    public var draftKeyToSave: String { draftKey.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     public func saveKey() {
+        let key = draftKeyToSave
+        guard !key.isEmpty else { return }
         do {
-            try preferences.setKey(draftKey)
+            try preferences.setKey(key)
             // A test still running was about the key this replaces: its result must not speak for the new one.
             keyGeneration += 1
             draftKey = ""

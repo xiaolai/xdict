@@ -30,6 +30,22 @@ public final class StudyModel {
     public var policy: StudyPolicy
     /// The most recent grade or undo, so the view can say what happened rather than guess.
     public private(set) var lastOutcome: StudyOutcome?
+    /// **The grade Undo takes back** (audit 2026-11-05, H2): the card as the grade the reader made last in this session
+    /// left it, its head that grade's own event. Undo used to read the card in front, which after a grade is the *next*
+    /// card: it voided that card's earlier grade and left the one just made. Nil when there is nothing to take back.
+    public private(set) var lastGraded: StudyCard?
+    /// **What the reader asked for and did not get** (audit 2026-11-05, M6): a grade or an undo the service did not
+    /// answer. The card stays where it was, so the answer can be given again; the next answer that arrives clears it.
+    public private(set) var failure: Failure?
+
+    /// A grade or an undo that got no answer.
+    public enum Failure: Equatable, Sendable {
+        case grade
+        case undo
+    }
+
+    /// Whether Undo has a grade of this session to take back.
+    public var canUndo: Bool { lastGraded != nil }
     /// The reader's notes, loaded on demand: an editor revises what is there rather than starting over.
     public private(set) var notes: [StudyNote] = []
     /// **The cards two devices left conflicted** (ADR-0027): they are not in the queue, and the reader settles each.
@@ -41,7 +57,8 @@ public final class StudyModel {
     /// reader is told where a note went and where one could not follow. Nil until a join happens.
     public private(set) var lastReanchor: ReanchorSummary?
 
-    /// A join's two editions, and what the core found for each note.
+    /// A join's two editions, and what the core found for each note: every call's outcomes, and in `report.next`
+    /// where the sweep stopped when it did not reach the end.
     public struct ReanchorSummary: Equatable, Sendable {
         public let from: Edition
         public let to: Edition
@@ -52,7 +69,20 @@ public final class StudyModel {
             self.to = to
             self.report = report
         }
+
+        /// Notes the core could not classify (audit 2026-11-05, M5): they stay on the old edition.
+        public var failed: Int {
+            report.outcomes.count { if case .failed = $0.result { true } else { false } }
+        }
+
+        /// The sweep stopped before the last note: a call failed, or the ceiling on calls was reached.
+        public var unfinished: Bool { report.next != nil }
     }
+
+    /// **The most calls one join's re-anchor makes** (audit 2026-11-05, M5): each call does a bounded amount and names
+    /// where the next starts, so the sweep is a loop; the ceiling keeps a core that never finishes from looping forever.
+    /// At the core's 128 renders a call, it covers thousands of notes.
+    public static let reanchorCallLimit = 64
 
     /// Called after every load of the summary, so the shell can plan its reminder (§5.4) without the view knowing it.
     @ObservationIgnored public var summaryChanged: (@MainActor (ReviewSummary?) -> Void)?
@@ -137,12 +167,20 @@ public final class StudyModel {
     }
 
     /// **Grades the card in front** (plan §5.3): the revision is the card's head, so a grade of a card that moved is
-    /// answered `ineligible` and nothing is written.
+    /// answered `ineligible` and nothing is written. **Only an answer the service gave moves the card** (audit
+    /// 2026-11-05, M6): a call that failed, timed out or was superseded leaves it in front and says so, where it used to
+    /// drop it as if graded until the next refresh.
     @discardableResult
     public func grade(_ card: StudyCard, _ grade: StudyGrade) async -> StudyOutcome? {
-        let outcome = await graded(card, grade)
+        guard let outcome = await graded(card, grade) else {
+            failure = .grade
+            return nil
+        }
+        failure = nil
         lastOutcome = outcome
-        if outcome?.outcome == .ineligible {
+        // The event the grade wrote is the head of the card it reports; a grade that wrote nothing has none to void.
+        lastGraded = Self.wrote(outcome) ? outcome.card : nil
+        if outcome.outcome == .ineligible {
             await refresh()
         } else {
             queue.removeAll { $0.target.key == card.target.key }
@@ -150,18 +188,36 @@ public final class StudyModel {
         return outcome
     }
 
-    /// Voids the card's latest grade, while the card is still in the state that grade produced.
+    /// **Voids the grade made last in this session** (H2): that card and that grade's event, whatever card is in front
+    /// now. The card returns to the front of the queue, to be answered again.
     @discardableResult
-    public func undo(_ card: StudyCard) async -> StudyOutcome? {
-        guard !card.head.isEmpty else { return nil }
+    public func undo() async -> StudyOutcome? {
+        guard let card = lastGraded else { return nil }
         let result = await service.call(.reviewUndo(target: card.target.key, gradeEvent: card.head,
                                                     stamp: stamp, operation: UUID().uuidString))
         guard case .success(let delivered) = result, case .reviewOutcome(let outcome) = delivered.answer else {
+            failure = .undo
             return nil
         }
+        failure = nil
         lastOutcome = outcome
+        // Answered either way: undone, or refused because the card moved since, which no retry changes.
+        lastGraded = nil
         await refresh()
+        if Self.wrote(outcome) {
+            queue.removeAll { $0.target.key == outcome.card.target.key }
+            queue.insert(outcome.card, at: 0)
+        }
         return outcome
+    }
+
+    /// Whether the ledger holds the event an answer reports: written now, earlier (a retried operation), or written
+    /// and not yet flushed.
+    private static func wrote(_ outcome: StudyOutcome) -> Bool {
+        switch outcome.outcome {
+        case .recorded, .duplicate, .uncertain: !outcome.card.head.isEmpty
+        case .skippedLanguage, .ineligible: false
+        }
     }
 
     /// **What saving a note did** (audit rounds 1–4, 2026-10-26): whether it was written, needed the reader's answer
@@ -214,16 +270,32 @@ public final class StudyModel {
 
     /// **Moves the notes of an edition to the one the reader joined it to** (plan §5.1): the core matches key and
     /// definition hash and leaves a note where it is when the definition changed, moved or is gone — never binding
-    /// another record silently.
+    /// another record silently. **Until no note remains** (audit 2026-11-05, M5): a call does a bounded amount, so the
+    /// sweep calls again from the cursor each report names, up to `reanchorCallLimit` calls; a cursor that does not
+    /// advance, or a call that fails after the first, ends it with `unfinished` set.
     @discardableResult
     public func reanchor(from old: Edition, to new: Edition) async -> ReanchorSummary? {
-        let result = await service.call(.studyReanchor(oldEdition: old, newEdition: new, stamp: stamp,
-                                                       operationPrefix: UUID().uuidString))
-        guard case .success(let delivered) = result, case .reanchored(let report) = delivered.answer else {
-            lastReanchor = nil
-            return nil
+        let prefix = UUID().uuidString
+        var outcomes: [ReanchorOutcome] = []
+        var after: String?
+        var remaining: String?
+        for call in 0..<Self.reanchorCallLimit {
+            let result = await service.call(.studyReanchor(oldEdition: old, newEdition: new, stamp: stamp,
+                                                           operationPrefix: prefix, after: after))
+            guard case .success(let delivered) = result, case .reanchored(let report) = delivered.answer else {
+                guard call > 0 else {
+                    lastReanchor = nil
+                    return nil
+                }
+                remaining = after
+                break
+            }
+            outcomes += report.outcomes
+            remaining = report.next
+            guard let next = report.next, next != after else { break }
+            after = next
         }
-        let summary = ReanchorSummary(from: old, to: new, report: report)
+        let summary = ReanchorSummary(from: old, to: new, report: ReanchorReport(outcomes: outcomes, next: remaining))
         lastReanchor = summary
         await loadNotes()
         await refresh()
@@ -245,6 +317,7 @@ public final class StudyModel {
         let result = await service.call(.eraseData(stamp: stamp, operation: UUID().uuidString))
         guard case .success(let delivered) = result, case .erased(let report) = delivered.answer else { return nil }
         notes = []
+        lastGraded = nil
         onErased?()
         await refresh()
         return report

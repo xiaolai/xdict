@@ -20,7 +20,8 @@ The gallery's and the UI tour's counterpart of the gates' cache and the E2E sele
 **Since when** (2026-10-18: a merged change whose renders were declined must not vanish): with no --base, --range or
 --paths, the change is everything since the last commit whose every selected picture and route had passed
 (`clean.tsv`, filed by `record` and `record-routes` once nothing is left), else since ANCHOR, the last tree
-whose changes were seen (40c913c), said as such. A start that is not in this history, or no history at all (a gate's copy), is
+whose changes were seen (9e010c4; 40c913c before the 2026-10-30 history rewrite), said as such. A start that is not in
+this history, or no history at all (a gate's copy), is
 `Render: cannot compute: …`, exit 2, never "nothing pending".
 
 **What a path selects** is `render-affected.map` (beside this file; the owner's rule of 2026-10-18 is written there):
@@ -71,9 +72,12 @@ CLEAN = os.path.join(CACHE, "clean.tsv")
 ROUTE_PASSES = os.path.join(CACHE, "routes.tsv")
 # Until a commit is fully rendered, pending counts from where this selection landed (render-affected's merge, e1e382d,
 # first parent): everything since is unseen.
-# The last tree whose changes were seen (40c913c, 2026-10-18): parity-rest, d47 and popover-stack merged after it and
-# their renders were declined by the owner, so they stay pending until rendered or a clean pass moves the start.
-ANCHOR = os.environ.get("XDICT_RENDER_ANCHOR") or "40c913c51212133c5e5e64c1572f3cb97fe9e84c"
+# The last tree whose changes were seen (2026-10-18, "Mark the parity rows XDict keeps as its own"): parity-rest, d47 and
+# popover-stack merged after it and their renders were declined by the owner, so they stay pending until rendered or a
+# clean pass moves the start. It was 40c913c until the 2026-10-30 history rewrite (every commit gained the licence), which
+# gave the same commit a new id; re-pointed 2026-11-05, when `pending` had been "cannot compute" since. After another
+# rewrite, find the counterpart by subject and author date (`git log --format='%H %ad %s' --date=iso main | grep ...`).
+ANCHOR = os.environ.get("XDICT_RENDER_ANCHOR") or "9e010c487ce9a30563d0e446778ead2de602ed76"
 PROFILES = "core/xdict-entry/src/roles/profiles.rs"
 LEDGER = "apps/apple/Tools/gallery/style-ledger.tsv"
 STYLE_DIR = "apps/apple/Sources/XDictEntryView/Style/"
@@ -523,7 +527,10 @@ def start():
         if ancestor(commit):
             return commit, f"since {short(commit)}, the last fully rendered commit"
     if not ancestor(ANCHOR):
-        raise CannotCompute(f"the start commit {short(ANCHOR)} is not in the history at {REPO}")
+        raise CannotCompute(
+            f"the start commit {short(ANCHOR)} is not in the history at {REPO}; after a history rewrite, re-point ANCHOR"
+            " in render_affected.py to the commit with the same subject and author date"
+        )
     why = "no render has passed yet" if not clean else "no fully rendered commit is in this history"
     return ANCHOR, f"since {short(ANCHOR)}, the last tree whose changes were seen ({why})"
 

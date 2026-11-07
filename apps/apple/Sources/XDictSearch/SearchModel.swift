@@ -342,8 +342,11 @@ public final class SearchModel {
               lookup.query == listing.typed, !isSearching,
               !sections.contains(where: { if case .results = $0.status { true } else { false } }) else { return }
         chosenHeadword = first
-        let scope = lookup.scope
+        let scope = lookup.scope, decided = lookup.serial
         navigate { model in
+            // **The jump is about the lookup it was decided for** (audit 2026-11-05, M10): a step queued ahead of it —
+            // more typing, Back, a link — began another lookup, and the jump would rename that place and supersede it.
+            guard model.lookup?.serial == decided else { return }
             model.trail.updateCurrent {
                 $0.query = first
                 $0.result = nil
@@ -650,16 +653,19 @@ public final class SearchModel {
     private func paged(_ id: UUID, handle: DictId, serial: Int, offset: Int, _ outcome: Result<Page, ClientFailure>) {
         guard lookup?.serial == serial, case .answered(handle, var results)? = asked[id], results.hits.count == offset
         else { return }
+        // **Every answer ends the page's wait** (audit 2026-11-05, M10): a superseded page used to return with
+        // `loadingMore` still stored, and `loadMore` never asked that dictionary for another page in this lookup.
         results.loadingMore = false
+        defer { asked[id] = .answered(handle, results) }
         switch outcome {
         case .success(let page):
             results.hits += page.hits
             results.total = page.total
         case .failure(let failure):
+            // Superseded: nothing was answered, so nothing is said; the page can be asked for again.
             guard let why = LookupFailure(failure) else { return }
             results.moreFailed = why
         }
-        asked[id] = .answered(handle, results)
     }
 
     /// Chooses the first result of the first dictionary, in order, that has one, once every dictionary before it has

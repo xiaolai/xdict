@@ -213,6 +213,9 @@ public final class HoverWatcher {
     private func ask(_ intent: HoverIntent) {
         guard let height = primaryHeight() else {
             log.error("hover: no display to measure from")
+            // **An origin already numbered ends here** (audit 2026-11-05 G9): a tap reserves its request before it is
+            // asked, and an outcome that neither presents nor owes it left that request open for ever.
+            finishOrigin(intent.origin)
             queued.append(.readEnded(serial: intent.serial, .nothing, pointer: intent.point, held: intent.held))
             return
         }

@@ -66,7 +66,7 @@
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
 .PHONY: app remote-build test test-swift test-tools icons core lint strings e2e e2e-quick e2e-affected e2e-pending land render-pending render-affected affected-graph affected-graph-update e2e-status e2e-evidence \
-	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean clean-dev
+	e2e-evidence-bootstrap e2e-ledger release-plan release-number release release-bootstrap clean clean-dev
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO := $(abspath $(APPLE)/../..)
@@ -106,7 +106,9 @@ export XDICT_REMOTE_PRODUCTS := $(APPLE)/.build/remote-products
 endif
 
 # BUILD_HOST (local.mk): the lint, tests and release build run there (Tools/remote-build.sh); this Mac assembles and
-# signs what comes back. Unset: everything here, as before.
+# signs what comes back. Unset: everything here, as before. Either way the same gates: XDICT_REMOTE_GATES tells
+# remote-build.sh to run `lint test-swift` for `app`, as here (2026-11-05); `release` sets `test` below.
+app: export XDICT_REMOTE_GATES = lint test-swift
 app: $(if $(BUILD_HOST),remote-build,lint test-swift)
 	@Tools/build-bundle.sh build
 
@@ -152,13 +154,10 @@ strings: core
 # lint, tests and build ran when it was made.
 # **Only what changed since its last pass runs** (Tools/e2e-run.sh select, by Tools/gate-cache.py): nothing at all, and
 # no bundle built, when nothing did. STAGES=<names> forces those; FULL=1 every default sub-stage; RELEASE_NEEDED=1 what a
-# release cannot carry from the ledger. The run is split over both E2E Macs (E2E_HOST_MACOS, E2E_HOST_MACOS_2) unless
-# E2E_SPLIT=0 or E2E_HOST is given. **Its rows are keyed with what the bundle names itself** (Provenance.txt, written by
-# its build: its tree and toolchain; Tools/build-bundle.sh).
-E2E_SPLIT ?= $(if $(filter command line,$(origin E2E_HOST)),0,1)
+# release cannot carry from the ledger. The run is on the one E2E Mac, E2E_HOST (E2E_HOST_MACOS); the split over a
+# second one was removed on 2026-11-05, that Mac having been gone since 2026-10-17. **Its rows are keyed with what the
+# bundle names itself** (Provenance.txt, written by its build: its tree and toolchain; Tools/build-bundle.sh).
 FULL ?=
-export XDICT_E2E_HOST_2 := $(E2E_HOST_MACOS_2)
-export XDICT_E2E_SPLIT := $(E2E_SPLIT)
 export XDICT_E2E_STAGES := $(STAGES)
 export XDICT_E2E_FULL := $(FULL)
 RELEASE_NEEDED ?=
@@ -229,6 +228,10 @@ test-tools:
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/lab-test.sh
 	@Tools/tests/development-lab-test.sh
+	@Tools/tests/core-symbols-test.sh
+	@Tools/tests/memory-budgets-test.sh
+	@Tools/tests/release-tag-test.sh
+	@Tools/tests/release-publish-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-ledger-test.sh
@@ -281,12 +284,21 @@ e2e-evidence-bootstrap:
 	@Tools/e2e-status.sh require-fresh --bootstrap
 
 # **Built where `app` builds** (BUILD_HOST: Tools/remote-build.sh, whose products Tools/build-bundle.sh requires to be of
-# this very tree), never compiled on this Mac when a build host is set; without one, here, with the notices check too.
+# this very tree), never compiled on this Mac when a build host is set; without one, here. Either way `make test` runs
+# first, the tool tests and the notices check included: XDICT_REMOTE_GATES=test has remote-build.sh run `make test` on
+# the host, in a git snapshot with this Mac's commits (2026-11-05), where `app` runs only `lint test-swift`.
+# **A release without its number is refused before anything builds** (the 2026-11-05 audit, G8): release.sh refused
+# it too, but only after the whole build had run. `release-number` is the first prerequisite, and .NOTPARALLEL keeps
+# the order.
 RELEASE_BUILD := $(if $(BUILD_HOST),remote-build,lint test-tools test-swift)
-release: $(RELEASE_BUILD)
+release release-bootstrap: export XDICT_REMOTE_GATES = test
+release-number:
+	@[ -n "$(BUILD_NUMBER)" ] || { echo "release: no BUILD_NUMBER: a release needs a number from the release counter (make release BUILD_NUMBER=<n>); nothing was built" >&2; exit 1; }
+
+release: release-number $(RELEASE_BUILD)
 	@Tools/release.sh
 
-release-bootstrap: $(RELEASE_BUILD)
+release-bootstrap: release-number $(RELEASE_BUILD)
 	@Tools/release.sh --bootstrap
 
 clean:

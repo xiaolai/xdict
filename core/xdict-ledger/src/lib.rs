@@ -33,6 +33,24 @@ use projection::{Entry, Projection, StoredEvent};
 pub const MAX_DAYS: i64 = 14;
 pub const MAX_CARDS: usize = 400;
 
+/// **The reader's zone as its offsets over a range** (audit 2026-11-05, L5d): from `from` (epoch seconds) on, the zone
+/// is `seconds` east of UTC, until the next entry's `from`. The first entry also covers every instant before it, so one
+/// entry is a zone with one offset. Entries are in ascending `from`; the shell lists the transitions of the range it
+/// asks about, and the core never guesses a zone's rules.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZoneOffset {
+    pub from: f64,
+    pub seconds: i32,
+}
+
+impl ZoneOffset {
+    /// A zone that is `seconds` east of UTC at every instant.
+    pub fn fixed(seconds: i32) -> Self {
+        Self { from: 0.0, seconds }
+    }
+}
+
 /// A range of the sentence, in UTF-16 code units — the unit the capture contract uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -335,7 +353,7 @@ pub struct ReviewOutcome {
 }
 
 /// What a re-anchor attempt found for one note (plan §5.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ReanchorResult {
     /// The same occurrence in the new edition holds the same definition: the note moved.
@@ -346,6 +364,9 @@ pub enum ReanchorResult {
     Changed,
     /// The new edition has no record under this key: the note is left where it is.
     Missing,
+    /// **The note could not be classified** (audit 2026-11-05, M5): a record of the new edition would not render, or
+    /// the move would not record. The note is left where it is; `detail` is the error, for logs only.
+    Failed { detail: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -359,6 +380,9 @@ pub struct ReanchorOutcome {
 #[serde(rename_all = "camelCase")]
 pub struct ReanchorReport {
     pub outcomes: Vec<ReanchorOutcome>,
+    /// **Where the next call starts** (audit 2026-11-05, M5): the last note this call classified, when the work budget
+    /// stopped it before the rest; `None` when every note of the old edition was classified.
+    pub next: Option<String>,
 }
 
 /// **A grade a device made from a revision another device also graded** (ADR-0027): both stay in the log, and the
@@ -404,8 +428,16 @@ pub struct MergeReport {
     pub skipped: u64,
 }
 
+/// **A peer log a sync pass left out** (audit 2026-11-05, M16): the file's name in the folder, and why, for logs only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRefusal {
+    pub file: String,
+    pub detail: String,
+}
+
 /// What one sync pass did with the reader's folder (plan §2.6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncReport {
     /// This device's log file's size, as written for the other devices.
@@ -416,6 +448,8 @@ pub struct SyncReport {
     pub added: u64,
     /// The events both already had.
     pub skipped: u64,
+    /// The peer logs that could not be read or merged, by name; the others merged and this log was still written.
+    pub refused: Vec<SyncRefusal>,
 }
 
 /// The SHA-256 of an entry's definition text, in hex: the evidence a note keeps instead of the text.
@@ -566,6 +600,8 @@ pub struct Ledger {
     ids: HashSet<String>,
     /// Every operation id in the log: the caller's retry key, which answers `Duplicate` before eligibility is read.
     operations: HashSet<String>,
+    /// The log's length in bytes as this ledger last wrote or read it: where a failed write is cut back to.
+    length: u64,
     projection: Projection,
 }
 
@@ -606,7 +642,7 @@ impl Ledger {
         let projection = snapshot.unwrap_or_else(|| projection::project(&entries));
         let ids = file_ids.iter().cloned().collect();
         let operations = entries.iter().map(|entry| entry.stored.operation_id.clone()).collect();
-        Ok(Ledger { store, entries, file_ids, ids, operations, projection })
+        Ok(Ledger { store, entries, file_ids, ids, operations, length: offset as u64, projection })
     }
 
     /// **Records a reading.** The language filter is applied **before** anything is written: a reading outside the
@@ -805,10 +841,10 @@ impl Ledger {
 
     /// The days the drawer shows, newest first: at most [`MAX_DAYS`] back, at most [`MAX_CARDS`] cards.
     ///
-    /// `utc_offset_seconds` is the reader's zone at the moment of the query; a day is a calendar day there, never a
-    /// 24-hour window, so a lookup at 23:59 and one at 00:01 are two days.
-    pub fn history(&self, now: f64, utc_offset_seconds: i32) -> History {
-        projection::history(&self.projection.readings, now, utc_offset_seconds)
+    /// `zone` is the reader's zone over the range ([`ZoneOffset`]); a day is a calendar day there, never a 24-hour
+    /// window, so a lookup at 23:59 and one at 00:01 are two days, and each instant takes the offset in force at it.
+    pub fn history(&self, now: f64, zone: &[ZoneOffset]) -> History {
+        projection::history(&self.projection.readings, now, zone)
     }
 
     /// The lineage the ledger associates with an edition, as its last join or split left it (ADR-0025).
@@ -873,13 +909,15 @@ impl Ledger {
             batch.extend_from_slice(&frame_bytes(payload));
         }
         let added = fresh.len() as u64;
-        self.store.append(&batch)?;
-        self.store.sync()?;
+        // **A merge that is not durable is not made** (audit 2026-11-05, L5b): the batch is cut back off the log, so
+        // memory and disk agree and a retry appends it once rather than again behind the first copy.
+        if let Err(error) = self.store.append(&batch).and_then(|()| self.store.sync()) {
+            return Err(self.cut_back(error));
+        }
+        self.length += batch.len() as u64;
         for (id, stored, _) in fresh {
             self.ids.insert(id.clone());
-            if !stored.operation_id.is_empty() {
-                self.operations.insert(stored.operation_id.clone());
-            }
+            self.operations.insert(stored.operation_id.clone());
             self.file_ids.push(id);
         }
         self.entries = entries;
@@ -892,8 +930,11 @@ impl Ledger {
     /// a query. Dictionary associations, erase receipts and the tombstones of kept readings stay; a tombstone whose
     /// targets all went goes with them. The kept events are re-framed from the same stored values, so their ids do not
     /// change, and a snapshot is written for the next open.
-    pub fn compact(&mut self, now: f64, utc_offset_seconds: i32) -> Result<Compaction, LedgerError> {
-        let kept_readings = projection::kept(&self.projection.readings, now, utc_offset_seconds);
+    ///
+    /// A reading removed before compaction is no longer kept, so it leaves the log with the rest and its tombstone
+    /// cannot be restored afterwards (audit 2026-11-05, L5c).
+    pub fn compact(&mut self, now: f64, zone: &[ZoneOffset]) -> Result<Compaction, LedgerError> {
+        let kept_readings = projection::kept(&self.projection.readings, now, zone);
         let mut kept: Vec<Entry> = Vec::new();
         let mut removed = 0u64;
         for entry in &self.entries {
@@ -980,6 +1021,11 @@ impl Ledger {
         event: Event,
         accept: bool,
     ) -> Result<RecordOutcome, LedgerError> {
+        // **An operation id is never empty** (audit 2026-11-05, L5a): it is the retry key, and a second empty id would
+        // answer `Duplicate` for an event never written.
+        if operation_id.is_empty() {
+            return Err(LedgerError::InvalidEvent);
+        }
         if self.operations.contains(operation_id) {
             return Ok(RecordOutcome::Duplicate);
         }
@@ -992,7 +1038,13 @@ impl Ledger {
         if self.ids.contains(&id) {
             return Ok(RecordOutcome::Duplicate);
         }
-        self.store.append(&frame_bytes(&payload))?;
+        let frame = frame_bytes(&payload);
+        // A write that stopped part-way is cut back: a torn frame left mid-log would end the log there at the next
+        // open, and every event written after it with it (audit 2026-11-05, L5b).
+        if let Err(error) = self.store.append(&frame) {
+            return Err(self.cut_back(error));
+        }
+        self.length += frame.len() as u64;
         let durable = self.store.sync().is_ok();
         self.ids.insert(id.clone());
         self.operations.insert(operation_id.to_string());
@@ -1003,6 +1055,13 @@ impl Ledger {
         Ok(if durable { RecordOutcome::Recorded } else { RecordOutcome::Uncertain })
     }
 
+    /// Cuts the log back to what this ledger holds after a failed write, and answers the write's error. The write's
+    /// error is the one reported; a cut that fails as well leaves the log as the failed write left it.
+    fn cut_back(&self, error: LedgerError) -> LedgerError {
+        let _ = self.store.truncate(self.length);
+        error
+    }
+
     fn rewrite(&mut self, entries: Vec<Entry>) -> Result<(), LedgerError> {
         let mut bytes = Vec::new();
         for entry in &entries {
@@ -1010,6 +1069,7 @@ impl Ledger {
             bytes.extend_from_slice(&frame_bytes(&payload));
         }
         self.store.rewrite(&bytes)?;
+        self.length = bytes.len() as u64;
         self.file_ids = entries.iter().map(|entry| entry.id.clone()).collect();
         self.ids = self.file_ids.iter().cloned().collect();
         self.operations = entries.iter().map(|entry| entry.stored.operation_id.clone()).collect();

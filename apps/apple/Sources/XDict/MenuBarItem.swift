@@ -53,9 +53,13 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         // **Up, not down**: `performClick` runs a menu tracking loop, and starting one from inside a mouse-down leaves the
         // button waiting for an up the loop has already taken.
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        // **The tooltip follows the shortcut** (L14): set once here, it kept the shortcut of launch — or "none
+        // registered", when registration came later — through every change the reader made in Settings.
         let registrar = LookupAnywhere.shared.registrar
-        item.button?.toolTip = Self.tooltip(shortcut: registrar.isRegistered
-                                            ? registrar.current.label(keyName: Shortcut.currentLayoutName) : nil)
+        Observed.follow({
+            Self.tooltip(shortcut: registrar.isRegistered
+                         ? registrar.current.label(keyName: Shortcut.currentLayoutName) : nil)
+        }, apply: { [weak self] text in self?.statusItem?.button?.toolTip = text })
         offerBothSurfacesToAssistiveTechnology(on: item.button)
         // **The menu, findable from the drawer** (UI42): a primary click stays the history, and the drawer's own Show Menu
         // button opens this menu a turn later, as VoiceOver's action does, since the menu's tracking loop holds the caller.

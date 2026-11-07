@@ -132,6 +132,8 @@ fn write_str(text: &str, ascii_only: bool, out: &mut String) {
             ch if (ch as u32) < 0x20 => {
                 let _ = write!(out, "\\u{:04x}", ch as u32);
             }
+            // `json.dumps(ensure_ascii=True)` escapes DELETE too: it keeps only space through `~` (L11).
+            '\u{7f}' if ascii_only => out.push_str("\\u007f"),
             ch if ascii_only && !ch.is_ascii() => {
                 let code = ch as u32;
                 if code > 0xFFFF {
@@ -202,6 +204,15 @@ mod tests {
             "}\n",
         );
         assert_eq!(report(&value), expected);
+    }
+
+    /// **DEL is escaped where Python's `ensure_ascii` escapes it** (audit 2026-11-05, L11): `json.dumps` escapes every
+    /// character outside space to tilde when `ensure_ascii` is on, U+007F included, and leaves it raw when it is off.
+    #[test]
+    fn delete_is_escaped_only_in_the_ascii_report() {
+        let value = Value::obj(vec![("a", Value::str("x\u{7f}y"))]);
+        assert_eq!(report(&value), "{\n  \"a\": \"x\\u007fy\"\n}\n");
+        assert_eq!(canonical(&value), "{\"a\":\"x\u{7f}y\"}");
     }
 
     #[test]

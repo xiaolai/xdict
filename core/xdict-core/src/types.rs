@@ -7,7 +7,7 @@ pub use xdict_ledger::{
     EraseReceipt, EraseReport, Event, Frontier, GradeRecord, History, MergeReport, Note, Reading, ReadingSpan,
     ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal,
     ResolutionRecord, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp, StudyCard, StudyGrade,
-    StudyPhase, StudyTarget, SyncReport, TargetKind, UndoRecord, definition_hash,
+    StudyPhase, StudyTarget, SyncRefusal, SyncReport, TargetKind, UndoRecord, ZoneOffset, definition_hash,
 };
 
 pub use xdict_identity::FileIdentity;
@@ -212,7 +212,7 @@ record! {
         pub fallback: u64,
         /// Entries read (none when the sample found no Chinese).
         pub entries: u64,
-        /// Entries passed over: a render over its ceiling, or a text the projection cut.
+        /// Records passed over: a render over its ceiling, a text the projection cut, or a record in a damaged block.
         pub failed: u64,
         /// The edition has no Chinese in an evenly spaced sample: its empty store is kept and the pass skipped.
         pub no_chinese: bool,

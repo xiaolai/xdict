@@ -51,7 +51,22 @@ public enum PointerWindow {
     /// it — an ordinary window (0) or a floating palette (3) — is one the reader sees and can click, so it names its app;
     /// above it sit the desktop's overlays: the Dock at 20, Notification Center at 21, the menu bar at 24 (measured
     /// 2026-10-24, macOS 27.0.1).
-    private static let panelLevelMaximum = 8
+    public static let panelLevelMaximum = 8
+
+    /// **Whether a window's level names its app**, the one rule for both questions (audit 2026-11-05 L15): which app is
+    /// in front of ours (`ownership`) and which is behind ours (`behind`). The two disagreed — layer 0 behind, up to 8 in
+    /// front — so a floating palette over ours covered it, yet behind one of our panels it was passed over for the
+    /// document beneath. Below 0 are the desktop's own windows, which name no app the reader is reading.
+    public static func namesItsApp(_ window: ListedWindow) -> Bool {
+        (0...panelLevelMaximum).contains(window.layer)
+    }
+
+    /// **The first window of another app at the point** — the app the reader would see were XDict's window not there. A
+    /// window above panel level is not that app's content at the point: Notification Center lists a full-screen layer-21
+    /// window on macOS 27.0.1 whose own hit test answers with its menu bar at any point (measured 2026-10-24).
+    public static func behind(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> ListedWindow? {
+        windows.first { $0.pid != ours && $0.alpha > 0 && namesItsApp($0) && $0.bounds.contains(point) }
+    }
 
     public static func ownership(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> PointerOwnership {
         let here = windows.filter { $0.bounds.contains(point) }
@@ -68,7 +83,7 @@ public enum PointerWindow {
         let front = here.first { window in
             if window.pid == ours { return true }
             guard window.alpha > 0 else { return false }
-            if window.layer <= Self.panelLevelMaximum { return true }
+            if Self.namesItsApp(window) { return true }
             return here.contains { other in
                 other.pid == window.pid && other.layer == 0 && other.alpha > 0
             }

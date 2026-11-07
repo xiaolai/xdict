@@ -308,3 +308,38 @@ fn a_longer_contiguous_phrase_is_never_inferred_apart() {
             .is_empty()
     );
 }
+
+/// **A placement counts only where the pointer is on one of its words** (audit 2026-11-05, M1; XiaolaiDict's `covers`):
+/// "pick up" placed at 0 and 2 is a phrase of the first "up", not of the second, which "get up" holds.
+#[test]
+fn a_placement_away_from_the_word_is_not_its_phrase() {
+    let spans = Matcher::new(["pick up".to_string(), "get up".to_string()], Slots::english());
+    let words = sentence("pick it up and get up");
+    let found = spans.matches(&words, 5, DEFAULT_WIDEST_GAP, DEFAULT_WIDEST_INFERRED_GAP);
+    let spans_found: Vec<(&str, usize, usize)> = found.iter().map(|m| (m.phrase.as_str(), m.first, m.last)).collect();
+    assert_eq!(spans_found, [("get up", 4, 5)], "the second \"up\" answered {spans_found:?}");
+    let first = spans.matches(&words, 2, DEFAULT_WIDEST_GAP, DEFAULT_WIDEST_INFERRED_GAP);
+    let first: Vec<(&str, usize, usize)> = first.iter().map(|m| (m.phrase.as_str(), m.first, m.last)).collect();
+    assert_eq!(first, [("pick up", 0, 2)], "the first \"up\" is still the one \"pick\" was split from");
+}
+
+/// A word between two placed runs of a slotted phrase is the slot's filling, not the phrase, even when it spells one of
+/// the phrase's words; a word on a placed run is covered; a word past the phrase is not.
+#[test]
+fn coverage_is_by_placed_words_at_every_level() {
+    let spans = Matcher::new(["take something into account".to_string()], Slots::english());
+    let between = sentence("take the take into account");
+    assert_eq!(phrase_of_in(&spans, &between, 2), None, "the second \"take\" fills the slot");
+    assert_eq!(phrase_of_in(&spans, &between, 3).as_deref(), Some("take something into account"), "\"into\" is placed");
+    let outside = sentence("take the plan into account and take a break");
+    assert_eq!(phrase_of_in(&spans, &outside, 6), None, "a \"take\" after the phrase is not in it");
+    assert_eq!(phrase_of_in(&spans, &outside, 0).as_deref(), Some("take something into account"));
+}
+
+fn phrase_of_in(spans: &Matcher, words: &[Vec<String>], word: usize) -> Option<String> {
+    let found = spans.matches(words, word, DEFAULT_WIDEST_GAP, DEFAULT_WIDEST_INFERRED_GAP);
+    for hit in &found {
+        assert!(hit.first <= word && word <= hit.last, "{} spans {}..={}, not {word}", hit.phrase, hit.first, hit.last);
+    }
+    leading(&found).map(|found| found.phrase.clone())
+}

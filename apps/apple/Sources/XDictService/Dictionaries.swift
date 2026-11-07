@@ -14,6 +14,18 @@ final class Dictionaries: Sendable {
         let indexes: URL
         /// `Config.data_dir`: the registry, durable study data (ADR-0002 decision 4), which only this service reads.
         let registry: URL
+        /// **The service's own folders, which no path a request names may lead into** (`PathConfinement`, audit
+        /// 2026-11-05 L1): the whole sandbox container in the shipped service, the two above at least.
+        let own: [URL]
+
+        init(indexes: URL, registry: URL, own: [URL] = []) {
+            self.indexes = indexes
+            self.registry = registry
+            self.own = [indexes, registry] + own
+        }
+
+        /// What admission confines a request's paths with.
+        var confinement: PathConfinement { PathConfinement(forbidden: own) }
     }
 
     private struct State {
@@ -35,8 +47,11 @@ final class Dictionaries: Sendable {
 
     private let core: Result<Core, CoreError>
     private let state = Mutex(State())
+    /// The folders no request's path may lead into (`Storage.own`).
+    let confinement: PathConfinement
 
     init(storage: Storage) {
+        confinement = storage.confinement
         core = Result {
             for directory in [storage.indexes, storage.registry] {
                 do {
@@ -192,8 +207,10 @@ final class Dictionaries: Sendable {
                 let outcome = try core.ledgerRecord(reading: XDictCore.Reading(reading), operation: operation,
                                                     targetLanguages: targetLanguages)
                 return (.answer(.ledgerRecord(XDictContract.LedgerRecordOutcome(outcome))), nil)
-            case .ledgerHistory(let now, let utcOffsetSeconds):
-                let history = try core.ledgerHistory(now: now, utcOffsetSeconds: utcOffsetSeconds)
+            case .ledgerHistory(let now, let zone):
+                let history = try core.ledgerHistory(now: now, zone: zone.map {
+                    XDictCore.ZoneOffset(from: $0.from, seconds: $0.seconds)
+                })
                 return (.answer(.ledgerHistory(XDictContract.LedgerHistory(history))), nil)
             // Plan-history-and-learning §5: the study calls; the core owns identity, eligibility and scheduling.
             case .studyNote(let dict, let entry, let text, let name, let stamp, let operation):
@@ -220,10 +237,10 @@ final class Dictionaries: Sendable {
             case .definitionHash(let dict, let entry):
                 let hash = try core.definitionHashOf(dict: dict.rawValue, entry: XDictCore.EntryRef(entry))
                 return (.answer(.definitionHash(hash)), nil)
-            case .studyReanchor(let oldEdition, let newEdition, let stamp, let operationPrefix):
+            case .studyReanchor(let oldEdition, let newEdition, let stamp, let operationPrefix, let after):
                 let report = try core.studyReanchor(oldEdition: oldEdition.rawValue, newEdition: newEdition.rawValue,
                                                     stamp: XDictCore.Stamp(stamp),
-                                                    operationPrefix: operationPrefix)
+                                                    operationPrefix: operationPrefix, after: after)
                 return (.answer(.reanchored(XDictContract.ReanchorReport(report))), nil)
             case .studyNoteAt(let entry, let text, let name, let stamp, let operation):
                 let note = try core.studyNoteAt(entry: XDictCore.EntryRef(entry), text: text, name: name,

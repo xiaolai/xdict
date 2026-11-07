@@ -179,19 +179,24 @@ public struct AccessibilityRequests: Sendable {
     /// `AXEnhancedUserInterface`, which Chrome does honour — answering "not implemented" while it builds the tree anyway,
     /// about two seconds later.
     public var enhance: @Sendable (AXUIElement) -> AXError
+    /// `AXUIElementCopyAttributeNames`: what an element advertises. A test's seam that scripts none has no list, which
+    /// a read takes as "unknown" (`AccessibilityReading.attributeNames`).
+    public var attributeNames: @Sendable (AXUIElement) -> (AXError, [String]?)
 
     public init(
         attribute: @escaping @Sendable (AXUIElement, String) -> (AXError, CFTypeRef?),
         parameterized: @escaping @Sendable (AXUIElement, String, CFTypeRef) -> (AXError, CFTypeRef?),
         elementAt: @escaping @Sendable (AXUIElement, CGPoint) -> (AXError, AXUIElement?) = { _, _ in (.noValue, nil) },
         wake: @escaping @Sendable (AXUIElement) -> AXError = { _ in .success },
-        enhance: @escaping @Sendable (AXUIElement) -> AXError = { _ in .success }
+        enhance: @escaping @Sendable (AXUIElement) -> AXError = { _ in .success },
+        attributeNames: @escaping @Sendable (AXUIElement) -> (AXError, [String]?) = { _ in (.noValue, nil) }
     ) {
         self.attribute = attribute
         self.parameterized = parameterized
         self.elementAt = elementAt
         self.wake = wake
         self.enhance = enhance
+        self.attributeNames = attributeNames
     }
 
     public static let system = AccessibilityRequests(
@@ -211,7 +216,12 @@ public struct AccessibilityRequests: Sendable {
             return (status, found)
         },
         wake: { AXUIElementSetAttributeValue($0, "AXManualAccessibility" as CFString, kCFBooleanTrue) },
-        enhance: { AXUIElementSetAttributeValue($0, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue) })
+        enhance: { AXUIElementSetAttributeValue($0, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue) },
+        attributeNames: { element in
+            var names: CFArray?
+            let status = AXUIElementCopyAttributeNames(element, &names)
+            return (status, names as? [String])
+        })
 }
 
 /// **One read of another app's Accessibility tree, against a deadline**: every request — the hit test included —
@@ -264,12 +274,12 @@ public struct AccessibilitySession: AccessibilityReading {
     }
 
     /// **The element's own attribute list**, inside the budget and classified like any request: it answers what the
-    /// element advertises, and an element that has no list is simply absent.
+    /// element advertises, and an element that has no list is simply absent. Through the seam like every other request
+    /// (audit 2026-11-05 G9), so a test can answer, stall or fail it.
     public func attributeNames(_ element: AXUIElement) throws(CaptureError) -> [String]? {
         try checkStillWanted()
-        var names: CFArray?
-        let status = AXUIElementCopyAttributeNames(element, &names)
-        return try settle(status, "attributes", ofApplication: false) ? (names as? [String] ?? []) : nil
+        let (status, names) = requests.attributeNames(element)
+        return try settle(status, "attributes", ofApplication: false) ? (names ?? []) : nil
     }
 
     public func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {

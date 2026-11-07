@@ -150,8 +150,8 @@ public struct StudyOutcome: Codable, Hashable, Sendable {
     }
 }
 
-/// What a re-anchor attempt found for one note (plan §5.1).
-public enum ReanchorResult: String, Codable, Hashable, Sendable {
+/// What a re-anchor attempt found for one note (plan §5.1). On the wire a word, or `{"failed": {"detail": …}}`.
+public enum ReanchorResult: Codable, Hashable, Sendable {
     /// The same occurrence in the new edition holds the same definition: the note moved.
     case reanchored
     /// The same definition moved to another occurrence: the note is left where it is.
@@ -160,6 +160,35 @@ public enum ReanchorResult: String, Codable, Hashable, Sendable {
     case changed
     /// The new edition has no record under this key: the note is left where it is.
     case missing
+    /// **The note could not be classified** (audit 2026-11-05, M5): the note is left where it is; `detail` is for logs.
+    case failed(detail: String)
+
+    private enum Word: String, Codable { case reanchored, reordered, changed, missing }
+    private struct Failure: Codable { let failed: Detail }
+    private struct Detail: Codable { let detail: String }
+
+    public init(from decoder: Decoder) throws {
+        if let word = try? Word(from: decoder) {
+            switch word {
+            case .reanchored: self = .reanchored
+            case .reordered: self = .reordered
+            case .changed: self = .changed
+            case .missing: self = .missing
+            }
+        } else {
+            self = .failed(detail: try Failure(from: decoder).failed.detail)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .reanchored: try Word.reanchored.encode(to: encoder)
+        case .reordered: try Word.reordered.encode(to: encoder)
+        case .changed: try Word.changed.encode(to: encoder)
+        case .missing: try Word.missing.encode(to: encoder)
+        case .failed(let detail): try Failure(failed: Detail(detail: detail)).encode(to: encoder)
+        }
+    }
 }
 
 public struct ReanchorOutcome: Codable, Hashable, Sendable {
@@ -174,9 +203,13 @@ public struct ReanchorOutcome: Codable, Hashable, Sendable {
 
 public struct ReanchorReport: Codable, Hashable, Sendable {
     public let outcomes: [ReanchorOutcome]
+    /// **Where the next call starts** (audit 2026-11-05, M5): set when the call's work budget stopped it before the
+    /// rest of the notes; `nil` when every note was classified.
+    public let next: String?
 
-    public init(outcomes: [ReanchorOutcome]) {
+    public init(outcomes: [ReanchorOutcome], next: String? = nil) {
         self.outcomes = outcomes
+        self.next = next
     }
 }
 

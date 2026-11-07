@@ -240,7 +240,7 @@ fn scan(
             rest = comment.find("-->").and_then(|e| comment.get(e + 3..)).unwrap_or("");
             continue;
         }
-        let close = from.find('>').map_or(from.len(), |e| e + 1);
+        let close = crate::tag::source_len(from);
         let tag = from.get(..close).unwrap_or(from);
         rest = from.get(close..).unwrap_or("");
         let (end, inner) = match tag.strip_prefix("</") {
@@ -312,10 +312,10 @@ fn element(
     applied: &mut Applied,
     budget: &mut u64,
 ) -> Open {
-    let classes: Vec<String> = crate::phon::attribute_of(tag, "class")
+    let classes: Vec<String> = crate::tag::value_of(tag, "class")
         .map(|c| c.split_ascii_whitespace().take(ELEMENT_CLASSES).map(str::to_ascii_lowercase).collect())
         .unwrap_or_default();
-    let id = crate::phon::attribute_of(tag, "id").map(str::to_ascii_lowercase);
+    let id = crate::tag::value_of(tag, "id").map(str::to_ascii_lowercase);
     let element = Element { tag: name, classes, id };
     let (parent_px, parent_at_page, parent_hidden) =
         stack.last().map_or((page_px, true, false), |o| (o.px, o.at_page, o.hidden));
@@ -357,7 +357,7 @@ fn element(
             Size::Unset => {}
         }
     }
-    if let Some(style) = crate::phon::attribute_of(tag, "style") {
+    if let Some(style) = crate::tag::value_of(tag, "style") {
         for decl in style.split(';') {
             let Some((n, v)) = decl.split_once(':') else { continue };
             let n = n.trim().to_ascii_lowercase();
@@ -403,7 +403,7 @@ pub fn linked_sheets(entry: &str) -> Vec<String> {
         rest = from.get(end..).unwrap_or("");
         let is_link = tag.get(..4).is_some_and(|n| n.eq_ignore_ascii_case("link"))
             && tag.as_bytes().get(4).is_none_or(u8::is_ascii_whitespace);
-        if is_link && let Some(href) = crate::phon::attribute_of(tag, "href") {
+        if is_link && let Some(href) = crate::tag::value_of(tag, "href") {
             out.push(file_name(href));
         }
     }

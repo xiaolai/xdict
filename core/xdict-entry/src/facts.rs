@@ -103,12 +103,22 @@ pub(crate) struct Facts {
     /// Symbols a rule's `::before`/`::after` draws, by its subject's first class, or element when it has none.
     glyphs: BTreeMap<String, Vec<Glyph>>,
     glyph_count: usize,
+    /// Subjects filed in `by_class`.
+    subject_count: usize,
 }
 
 /// The most glyph rules read from an edition, and the most of one subject an element is checked against (the last
 /// ones: a later rule wins).
 const MAX_GLYPHS: usize = 8192;
 const GLYPHS_PER_SUBJECT: usize = 16;
+/// The bound on an element's own rules (audit 2026-11-05, M4a), in the spirit of the glyphs': a sheet may file a
+/// million rules under one class, and every element of it once walked them all. An element's rules are looked up by
+/// its first [`ELEMENT_CLASSES`] distinct classes (the roles pass reads 16; a subject needing another never matches),
+/// the last [`PROPS_PER_CLASS`] subjects filed under each are compared (a later rule wins), and at most
+/// [`MAX_SUBJECTS`] are filed from an edition (the first ones). A selector repeated rule after rule is one subject.
+const ELEMENT_CLASSES: usize = 16;
+const PROPS_PER_CLASS: usize = 32;
+const MAX_SUBJECTS: usize = 65_536;
 /// The most compounds of a selector read, and how far up an element's ancestors one is looked for.
 const MAX_COMPOUNDS: usize = 8;
 pub(crate) const ANCESTOR_DEPTH: usize = 32;
@@ -243,11 +253,20 @@ impl Facts {
                     continue;
                 }
                 if let Some(c) = r.classes.first() {
-                    facts.by_class.entry(c.clone()).or_default().push(Subject {
-                        tag: r.tag.clone(),
-                        classes: r.classes.clone(),
-                        props,
-                    });
+                    let subject = Subject { tag: r.tag.clone(), classes: r.classes.clone(), props };
+                    let repeated = facts
+                        .by_class
+                        .get(c)
+                        .and_then(|v| v.last())
+                        .is_some_and(|last| last.tag == subject.tag && last.classes == subject.classes);
+                    if repeated {
+                        if let Some(last) = facts.by_class.get_mut(c).and_then(|v| v.last_mut()) {
+                            last.props.over(&subject.props);
+                        }
+                    } else if facts.subject_count < MAX_SUBJECTS {
+                        facts.by_class.entry(c.clone()).or_default().push(subject);
+                        facts.subject_count += 1;
+                    }
                 } else if let Some(t) = r.tag.filter(|t| t != "*") {
                     facts.by_tag.entry(t).or_default().over(&props);
                 }
@@ -261,12 +280,24 @@ impl Facts {
         self.by_class.contains_key(class)
     }
 
-    /// The properties an element's own rules set: its element's, then its classes'.
+    /// The properties an element's own rules set: its element's, then its classes', within the bound
+    /// [`ELEMENT_CLASSES`] states. One subject compared is one unit of work.
     pub(crate) fn props(&self, tag: &str, classes: &[String]) -> Props {
         let mut out = self.by_tag.get(tag).copied().unwrap_or_default();
+        let mut keys: Vec<&String> = Vec::with_capacity(ELEMENT_CLASSES);
         for c in classes {
-            for s in self.by_class.get(c).map(Vec::as_slice).unwrap_or(&[]) {
-                if s.tag.as_deref().is_none_or(|t| t == tag) && s.classes.iter().all(|x| classes.contains(x)) {
+            if keys.len() >= ELEMENT_CLASSES {
+                break;
+            }
+            if !keys.contains(&c) {
+                keys.push(c);
+            }
+        }
+        for c in &keys {
+            let filed = self.by_class.get(*c).map(Vec::as_slice).unwrap_or(&[]);
+            for s in filed.get(filed.len().saturating_sub(PROPS_PER_CLASS)..).unwrap_or(&[]) {
+                crate::work::scanned(1);
+                if s.tag.as_deref().is_none_or(|t| t == tag) && s.classes.iter().all(|x| keys.contains(&x)) {
                     out.over(&s.props);
                 }
             }
@@ -524,7 +555,7 @@ fn first_element(text: &str) -> Option<Vec<String>> {
     let mut rest = text;
     while let Some(at) = rest.find('<') {
         let from = rest.get(at + 1..)?;
-        let end = from.find('>')?;
+        let end = crate::tag::end(from)?;
         let tag = from.get(..end)?;
         rest = from.get(end + 1..)?;
         if tag.starts_with(['/', '!', '?']) {
@@ -536,7 +567,7 @@ fn first_element(text: &str) -> Option<Vec<String>> {
             continue;
         }
         let mut out = vec![name];
-        if let Some(classes) = crate::phon::attribute_of(tag, "class") {
+        if let Some(classes) = crate::tag::value_of(tag, "class") {
             out.extend(classes.split_ascii_whitespace().map(|c| format!(".{}", c.to_ascii_lowercase())));
         }
         return Some(out);
@@ -547,6 +578,13 @@ fn first_element(text: &str) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_first_element_is_read_as_html_reads_it() {
+        let first = |t: &str| first_element(t).unwrap_or_default();
+        assert_eq!(first(r#"<div title="a>b" class="entry">x</div>"#), ["div", ".entry"]);
+        assert_eq!(first(r#"<div title="x class=forged">x</div>"#), ["div"]);
+    }
 
     fn rule(selector: &str, decls: &[(&str, &str)]) -> Rule {
         Rule {
@@ -611,5 +649,34 @@ mod tests {
         let mut g = Facts::of_rules(&[rule("w", &[("color", "red")])]);
         g.find_wrapper(["<w>a</w>"]);
         assert!(!g.reveals("w"), "not hidden: nothing to reveal");
+    }
+
+    /// **An element's rules are read within a bound** (audit 2026-11-05, M4a): a sheet may file a million rules under
+    /// one class, and every element of that class once walked them all, about 10¹¹ comparisons a render. Counted, not
+    /// timed: one subject compared is one.
+    #[test]
+    fn an_elements_rules_are_read_within_a_bound() {
+        let rules: Vec<Rule> =
+            (0..50_000).map(|i| rule(&format!(".a.b{}", i % 2), &[("font-weight", "bold")])).collect();
+        let f = Facts::of_rules(&rules);
+        let classes: Vec<String> = std::iter::repeat_n("a".to_owned(), 15).chain(["b1".to_owned()]).collect();
+        let (props, read) =
+            crate::work::counting(|| (0..1000).fold(Props::default(), |_, _| f.props("span", &classes)));
+        assert_eq!(props.bold, Some(true), "the rules still hold");
+        assert!(read <= 1000 * (ELEMENT_CLASSES * PROPS_PER_CLASS) as u64, "{read} subjects compared");
+        // The last rule filed under a class wins, as the cascade has it.
+        let f = Facts::of_rules(
+            &(0..1000)
+                .map(|i| rule(".a", &[("font-weight", if i == 999 { "normal" } else { "bold" })]))
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(f.props("span", &["a".into()]).bold, Some(false));
+        // An edition files the first rules up to the total, and no more.
+        let rules: Vec<Rule> =
+            (0..MAX_SUBJECTS + 100).map(|i| rule(&format!(".c{i}"), &[("font-weight", "bold")])).collect();
+        let f = Facts::of_rules(&rules);
+        assert_eq!(f.subject_count, MAX_SUBJECTS);
+        assert_eq!(f.props("span", &["c0".into()]).bold, Some(true));
+        assert_eq!(f.props("span", &[format!("c{}", MAX_SUBJECTS + 1)]).bold, None);
     }
 }

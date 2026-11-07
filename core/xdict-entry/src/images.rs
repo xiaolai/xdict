@@ -22,7 +22,7 @@ const CONTENT_PX: u32 = 100;
 
 /// The judgement on one start tag's source.
 pub(crate) fn judge(tag: &str) -> Image {
-    let attr = |n| crate::phon::attribute_of(tag, n);
+    let attr = |n| crate::tag::value_of(tag, n);
     let px = |n| attr(n).and_then(|v| v.trim().trim_end_matches("px").parse::<u32>().ok());
     let (w, h) = (px("width"), px("height"));
     let name = attr("src").unwrap_or("").to_ascii_lowercase();
@@ -60,5 +60,8 @@ mod tests {
         assert_eq!(judge("<img src=\"pics/skate.jpg\">"), Image::Content);
         assert_eq!(judge("<img src=\"fig_12.png\">"), Image::Content);
         assert_eq!(judge("<img src=x.png>"), Image::Undecided);
+        // A value is not an attribute: a `class=` or a `>` quoted in one is text.
+        assert_eq!(judge(r#"<img alt="x class=bullet" src="fig_12.png">"#), Image::Content);
+        assert_eq!(judge(r#"<img alt="a>b" src="img/icon_uk.png">"#), Image::Decoration);
     }
 }

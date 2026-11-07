@@ -172,8 +172,15 @@ actor FakeSearchBackend: SearchBackend {
         waiting.removeAll { $0.caller == caller }
     }
 
+    /// **A caller whose task was cancelled is refused** when set, as a backend may: `SearchBackend` does not promise to
+    /// answer a cancelled task, so a model that asks from inside one must not count on the answer.
+    var refusesCancelledCallers = false
+
+    func refuseCancelledCallers() { refusesCancelledCallers = true }
+
     func request(_ operation: ServiceOperation) -> ClientOutcome {
         requests.append(operation)
+        if refusesCancelledCallers, Task.isCancelled { return .failure(.wire(.interrupted)) }
         return answer(operation)
     }
 

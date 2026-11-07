@@ -1,5 +1,7 @@
 # The IPC conformance gate: the real service, started by the production client over the production pipe, answers the
-# handshake and the typed refusals. WI-4 extends the runner to conformance/'s dictionary operations.
+# handshake and the typed refusals, then conformance/'s tiny and matrix suites through the dictionary operations. The
+# runner refuses to run without --generated and --expected, and prints each suite's case count and the steps no
+# operation reaches.
 [CmdletBinding()]
 param([switch]$Full)
 

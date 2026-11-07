@@ -22,8 +22,8 @@ pub mod words;
 #[cfg(not(target_family = "wasm"))]
 pub use crate::core::MAX_SYNC_BYTES;
 pub use crate::core::{
-    Core, DISPLAY_OPTIONS, EDITION_SCHEME, EditionStyle, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, MAX_SUGGEST,
-    NORMALIZATION, PROTOCOL, STYLE, StyleReport,
+    Core, DISPLAY_OPTIONS, EDITION_SCHEME, EditionStyle, INDEX_FORMAT, MAX_PAGE, MAX_REANCHOR_RENDERS,
+    MAX_RESOURCE_BYTES, MAX_SUGGEST, MAX_ZONE_OFFSETS, NORMALIZATION, PROTOCOL, STYLE, StyleReport,
 };
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
 pub use examples::{

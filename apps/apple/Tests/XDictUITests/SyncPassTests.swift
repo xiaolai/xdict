@@ -59,6 +59,24 @@ struct SyncPassTests {
         #expect(again.lastSuccess == Date(timeIntervalSince1970: 50))
     }
 
+    /// **The logs a pass left out are named in the pane** (audit 2026-11-05, M16): the pass still succeeded with the
+    /// rest, and the status says which files it could not read.
+    @Test func theLogsAPassLeftOutAreNamed() async throws {
+        let refusal = SyncRefusal(file: "xdict-b.xdlog", detail: "Malformed")
+        let pass = SyncPass(defaults: try defaults(), now: { Date(timeIntervalSince1970: 70) },
+                            open: { _ in ("/tmp/folder", {}) },
+                            perform: { _ in SyncReport(exported: 1, peers: 2, added: 4, skipped: 0, refused: [refusal]) })
+        await pass.run(Self.folder)
+        #expect(pass.phase == .synced(added: 4, peers: 2, refused: ["xdict-b.xdlog"]))
+        #expect(pass.lastSuccess == Date(timeIntervalSince1970: 70), "the others merged: a success")
+        let line = try #require(LearningSettings.refusedLine(pass.phase))
+        #expect(String(localized: line).contains("xdict-b.xdlog"))
+        #expect(LearningSettings.refusedLine(.synced(added: 4, peers: 2)) == nil, "nothing left out, nothing said")
+        let none = try #require(LearningSettings.syncLine(.synced(added: 0, peers: 0, refused: ["xdict-b.xdlog"])))
+        #expect(String(localized: none) != String(localized: "No other device’s log is in this folder yet."),
+                "a folder whose only log was refused is not an empty folder")
+    }
+
     /// A folder that no longer opens is its own sentence, not a failed sync.
     @Test func aFolderThatDoesNotOpenIsSaid() async throws {
         let pass = SyncPass(defaults: try defaults(), open: { _ in nil }, perform: { _ in nil })

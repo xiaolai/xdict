@@ -65,6 +65,34 @@ struct AccessibilitySessionTests {
             elementAt: { _, _ in (.cannotComplete, nil) }))
         #expect(throws: CaptureError.notResponding) { try hung.hitTest(application, at: .zero) }
     }
+
+    /// **The attribute list goes through the seam like every other request** (audit 2026-11-05 G9): it called the real
+    /// API directly, so no test could see, stall or fail it. Here the seam answers it, is asked exactly once, and a hung
+    /// app's answer ends the read as not responding; past the budget it is never asked.
+    @Test func theAttributeListIsAskedThroughTheSeam() throws {
+        let asked = Mutex(0)
+        let element = AXUIElementCreateApplication(91_004)
+        let answering = AccessibilitySession(budget: .seconds(60), requests: AccessibilityRequests(
+            attribute: { _, _ in (.noValue, nil) }, parameterized: { _, _, _ in (.noValue, nil) },
+            attributeNames: { _ in
+                asked.withLock { $0 += 1 }
+                return (.success, [kAXRoleAttribute, "AXScripted"])
+            }))
+        #expect(try answering.attributeNames(element) == [kAXRoleAttribute, "AXScripted"])
+        #expect(asked.withLock { $0 } == 1, "the seam was not asked for the attribute list")
+        let hung = AccessibilitySession(budget: .seconds(60), requests: AccessibilityRequests(
+            attribute: { _, _ in (.noValue, nil) }, parameterized: { _, _, _ in (.noValue, nil) },
+            attributeNames: { _ in (.cannotComplete, nil) }))
+        #expect(throws: CaptureError.notResponding) { try hung.attributeNames(element) }
+        let spent = AccessibilitySession(budget: .zero, requests: AccessibilityRequests(
+            attribute: { _, _ in (.noValue, nil) }, parameterized: { _, _, _ in (.noValue, nil) },
+            attributeNames: { _ in
+                asked.withLock { $0 += 1 }
+                return (.success, [])
+            }))
+        #expect(throws: CaptureError.deadlineExceeded) { try spent.attributeNames(element) }
+        #expect(asked.withLock { $0 } == 1, "the list was asked after the budget was spent")
+    }
 }
 
 struct BreadthFirstTests {

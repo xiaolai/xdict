@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -144,6 +145,53 @@ public class ServiceLifecycleTests
             view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20, originalStyle = false } });
         Assert.Null(entry.Error);
         Assert.NotEmpty(entry.Payload!);
+    }
+
+    [Fact]
+    public async Task AReopenAfterARestartHoldsALookupCreditAsTheServiceChargesIt()
+    {
+        // The service charges an open to its lookup class, eight slots. A reopen made for an entry, which holds a
+        // bulk credit, went out with eight lookups in flight, and the service answered it busy.
+        using var client = Start(TimeSpan.FromSeconds(10));
+        string fixture = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")!, "tiny", "tiny.mdx");
+        object[] files = [client.Observe("tiny", "tiny", fixture)];
+        var package = new { mdx = new { file = "tiny" } };
+        Assert.Null(client.Call("import", new { package }, files).Error);
+        Reply opened = client.Call("open", new { package }, files);
+        string dict = opened.Ok!.Value.GetProperty("dict").GetString()!;
+        var body = new { dict, entry = new { edition = opened.Ok.Value.GetProperty("edition").GetString(), key = "run", occurrence = 0 },
+            view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20, originalStyle = false } };
+        using (var first = Process.GetProcessById(client.ProcessId))
+        {
+            first.Kill();
+            await first.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        client.Handshake(); // a new service, the package not yet reopened on it
+        using var process = Process.GetProcessById(client.ProcessId);
+        var sent = new ConcurrentQueue<string>();
+        int lookups = 0;
+        var full = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.RequestSent += (_, operation) =>
+        {
+            sent.Enqueue(operation);
+            if (operation == "versions" && Interlocked.Increment(ref lookups) == 8) full.TrySetResult();
+        };
+        Assert.Equal(0, NtSuspendProcess(process.SafeHandle));
+        try
+        {
+            var active = Enumerable.Range(0, 8).Select(_ => client.CallAsync("versions", null)).ToArray();
+            await full.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var entry = client.CallAsync("entry", body);
+            await Task.Delay(500);
+            Assert.DoesNotContain("open", sent);
+            Assert.Equal(0, NtResumeProcess(process.SafeHandle));
+            Assert.All(await Task.WhenAll(active).WaitAsync(TimeSpan.FromSeconds(5)), reply => Assert.Null(reply.Error));
+            Reply read = await entry.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Null(read.Error);
+            Assert.NotEmpty(read.Payload!);
+            Assert.Contains("open", sent);
+        }
+        finally { _ = NtResumeProcess(process.SafeHandle); }
     }
 
     [Fact]

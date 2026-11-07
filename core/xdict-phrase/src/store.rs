@@ -99,29 +99,45 @@ impl Inventory {
         Ok(out)
     }
 
-    /// The store, or `None` when it is not this edition's of these versions, truncated, or checksum-broken — a store
-    /// that does not decode is one to build again, never one to read.
-    pub fn decode(bytes: &[u8], edition: &str, versions: Versions) -> Option<Self> {
-        let checksum_at = bytes.len().checked_sub(8)?;
-        let (body, checksum) = (bytes.get(..checksum_at)?, bytes.get(checksum_at..)?);
-        if xxhash_rust::xxh3::xxh3_64(body).to_le_bytes() != checksum {
-            return None;
+    /// The store, or why it is not one to read: another format, extractor, versions, edition or slot vocabulary than
+    /// this build's, or bytes that are truncated or checksum-broken. A refused store is one to build again.
+    pub fn decode(bytes: &[u8], edition: &str, versions: Versions, slots: &Slots) -> Result<Self, Refused> {
+        let checksum_at = bytes.len().checked_sub(8).ok_or(Refused::Damaged)?;
+        let (body, checksum) = (bytes.get(..checksum_at).ok_or(Refused::Damaged)?, bytes.get(checksum_at..));
+        if Some(xxhash_rust::xxh3::xxh3_64(body).to_le_bytes().as_slice()) != checksum {
+            return Err(Refused::Damaged);
         }
         let mut read = Reader { bytes: body, at: 0 };
-        if read.take(4)? != MAGIC {
-            return None;
+        if read.take(4).ok_or(Refused::Damaged)? != MAGIC {
+            return Err(Refused::NotAStore);
         }
-        if read.u32()? != FORMAT
-            || read.u32()? != EXTRACTOR
-            || read.u32()? != versions.policy
-            || read.u32()? != versions.folding
-        {
-            return None;
+        let format = read.u32().ok_or(Refused::Damaged)?;
+        if format != FORMAT {
+            return Err(Refused::Format(format));
         }
-        if read.str()? != edition {
-            return None;
+        let extractor = read.u32().ok_or(Refused::Damaged)?;
+        if extractor != EXTRACTOR {
+            return Err(Refused::Extractor(extractor));
         }
+        let policy = read.u32().ok_or(Refused::Damaged)?;
+        let stored = Versions { policy, folding: read.u32().ok_or(Refused::Damaged)? };
+        if stored != versions {
+            return Err(Refused::Versions(stored));
+        }
+        if read.str().ok_or(Refused::Damaged)? != edition {
+            return Err(Refused::Edition);
+        }
+        let inventory = Self::rest(read, body.len()).ok_or(Refused::Damaged)?;
+        // **The slot list is the store's layout of meaning** (audit 2026-11-05, G9): it decided which keys became
+        // templates, so a store written under another list is not this build's, however well it reads.
+        if &inventory.slots != slots {
+            return Err(Refused::Slots);
+        }
+        Ok(inventory)
+    }
 
+    /// The slots and phrases after the header; `None` when they do not read whole.
+    fn rest(mut read: Reader<'_>, end: usize) -> Option<Self> {
         let slot_count = read.u32()? as usize;
         let mut slots = Slots::default();
         for _ in 0..slot_count {
@@ -132,7 +148,7 @@ impl Inventory {
         // **The count is bounded by the bytes that are left before anything is reserved**: a checksum-valid header
         // could otherwise name `usize::MAX` phrases and make the decoder allocate (or overflow) before it reads one.
         let offsets_needed = count.checked_add(1)?;
-        let remaining = body.len().checked_sub(read.at)?;
+        let remaining = end.checked_sub(read.at)?;
         if offsets_needed > remaining / 4 {
             return None;
         }
@@ -142,7 +158,7 @@ impl Inventory {
         }
         let arena_len = usize::try_from(read.u64()?).ok()?;
         let arena = read.take(arena_len)?;
-        if read.at != body.len() {
+        if read.at != end {
             return None;
         }
         // **The offsets must cover the arena exactly and name nonempty phrases** (audit round 2): `[0, 0]` over a
@@ -161,6 +177,47 @@ impl Inventory {
         Some(Self { phrases, slots })
     }
 }
+
+/// Why a store was not read: each a reason to build it again, said in a sentence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Refused {
+    /// Truncated, checksum-broken, or inconsistent inside.
+    Damaged,
+    /// Not a phrase store at all.
+    NotAStore,
+    /// Written in another format of the store, which this build does not read.
+    Format(u32),
+    /// Written by another extractor.
+    Extractor(u32),
+    /// Written under another public-key predicate or folding.
+    Versions(Versions),
+    /// Another edition's.
+    Edition,
+    /// Written under another slot vocabulary, so its templates are not the ones this build would make.
+    Slots,
+}
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Damaged => f.write_str("the phrase store is damaged"),
+            Self::NotAStore => f.write_str("the file is not a phrase store"),
+            Self::Format(found) => write!(f, "the phrase store is format {found}; this build reads format {FORMAT}"),
+            Self::Extractor(found) => {
+                write!(f, "the phrase store was made by extractor {found}; this build's is {EXTRACTOR}")
+            }
+            Self::Versions(found) => write!(
+                f,
+                "the phrase store was made under policy {} and folding {}, not this build's",
+                found.policy, found.folding
+            ),
+            Self::Edition => f.write_str("the phrase store is another edition's"),
+            Self::Slots => f.write_str("the phrase store was made under another slot vocabulary"),
+        }
+    }
+}
+
+impl std::error::Error for Refused {}
 
 /// A store larger than its format holds: a phrase or the arena over 4 GiB.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

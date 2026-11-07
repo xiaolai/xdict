@@ -397,6 +397,22 @@ remote_products() {  # $1: the folder
 # nothing else, and refuses a run whose bundle names another tree than the one being keyed (2026-10-17).
 readonly PROVENANCE=Contents/Resources/Provenance.txt
 
+# **The core's symbols are counted before the strip** (the 2026-11-05 audit, L16): `strip -x` removes every local symbol,
+# and the core's Rust symbols are local in a linked binary (hidden visibility), so after it an app that had linked the
+# core statically showed none of them, and `verify_service_boundaries`, which reads the shipped (stripped) binaries,
+# could not see it. Read off the products as linked: the app holds no core symbol, local or global; the service holds
+# some, which is also the proof that `nm` read what it was given.
+verify_core_unstripped() {
+    local app_binary=$1 service_binary=$2 symbols count
+    symbols=$(nm "$service_binary" 2>/dev/null) || { echo "nm could not read $service_binary"; return 1; }
+    count=$(grep -cE "$CORE_SYMBOLS" <<<"$symbols" || true)
+    [ "$count" -ge 1 ] || { echo "nm listed no core symbol in the unstripped $service_binary: it read nothing"; return 1; }
+    symbols=$(nm "$app_binary" 2>/dev/null) || { echo "nm could not read $app_binary"; return 1; }
+    [ -n "$symbols" ] || { echo "nm listed nothing of $app_binary: it read nothing"; return 1; }
+    count=$(grep -cE "$CORE_SYMBOLS" <<<"$symbols" || true)
+    [ "$count" -eq 0 ] || { echo "the unstripped app carries $count symbols of the core; the core belongs to the service alone"; return 1; }
+}
+
 assemble() {
     local tree toolchain
     tree=$(Tools/source-tree.sh) || fail "could not read the source tree"
@@ -444,6 +460,9 @@ assemble() {
         LC_ALL=C grep -aqF -- "$mark" "$products/$CAPTURE_LAB" \
             || fail "$products/$CAPTURE_LAB does not hold $mark, so a search of the shipped binaries for it would see nothing"
     done
+
+    local core_problem
+    core_problem=$(verify_core_unstripped "$products/$APP_NAME" "$products/$SERVICE") || fail "$core_problem"
 
     local contents=$STAGE/Contents xpc=$STAGE/$XPC_PATH number plist
     rm -rf "$STAGE_ROOT"

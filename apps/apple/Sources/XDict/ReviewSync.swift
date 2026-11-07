@@ -25,10 +25,21 @@ enum ReviewSync {
             if !staged.oversized.isEmpty {
                 log.error("left out, over the sync bound: \(staged.oversized.joined(separator: ", "), privacy: .public)")
             }
-            guard let report = await study.sync(input: inbox.path(percentEncoded: false),
+            if !staged.unreadable.isEmpty {
+                log.error("left out, could not be copied: \(staged.unreadable.joined(separator: ", "), privacy: .public)")
+            }
+            guard let merged = await study.sync(input: inbox.path(percentEncoded: false),
                                                 output: outbox.path(percentEncoded: false)) else { return nil }
             try SyncStaging.collect(from: outbox, to: folder)
-            return report
+            for refusal in merged.refused {
+                log.error("left out by the merge: \(refusal.file, privacy: .public): \(refusal.detail, privacy: .public)")
+            }
+            // **Every log left out is named to the reader** (audit 2026-11-05, M16): the app's own refusals join the
+            // core's, so Settings lists each file this pass did not merge, whichever side refused it.
+            let staging = (staged.oversized.map { SyncRefusal(file: $0, detail: "over the sync bound") }
+                + staged.unreadable.map { SyncRefusal(file: $0, detail: "could not be copied") })
+            return SyncReport(exported: merged.exported, peers: merged.peers, added: merged.added,
+                              skipped: merged.skipped, refused: staging + merged.refused)
         } catch {
             log.error("sync files: \(String(describing: error), privacy: .public)")
             return nil

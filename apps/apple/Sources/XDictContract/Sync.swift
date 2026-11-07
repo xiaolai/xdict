@@ -46,11 +46,25 @@ public struct SyncReport: Codable, Hashable, Sendable {
     public let added: UInt64
     /// The events both already had.
     public let skipped: UInt64
+    /// **The peer logs it left out** (audit 2026-11-05, M16): each could not be read or merged; the others still merged.
+    public let refused: [SyncRefusal]
 
-    public init(exported: UInt64, peers: UInt64, added: UInt64, skipped: UInt64) {
+    public init(exported: UInt64, peers: UInt64, added: UInt64, skipped: UInt64, refused: [SyncRefusal] = []) {
         self.exported = exported
         self.peers = peers
         self.added = added
         self.skipped = skipped
+        self.refused = refused
+    }
+}
+
+/// A peer log a sync pass left out: its file name, and why, for logs.
+public struct SyncRefusal: Codable, Hashable, Sendable {
+    public let file: String
+    public let detail: String
+
+    public init(file: String, detail: String) {
+        self.file = file
+        self.detail = detail
     }
 }

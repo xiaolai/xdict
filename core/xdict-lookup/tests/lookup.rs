@@ -37,6 +37,16 @@ fn a_band_with_no_candidate_falls_back_to_the_whole_file() {
     assert_eq!(out.first().map(String::as_str), Some("the"), "band 'h' is empty, the fallback finds it: {out:?}");
 }
 
+/// **A band that holds a candidate is the whole answer** (audit 2026-11-05, G9): `dot` is as near to `cot` as `cat`,
+/// but the full scan runs only when the first letter's band held nothing.
+#[test]
+fn a_band_with_a_candidate_is_not_widened() {
+    let f = file(&[("cat", "animal"), ("dot", "point")]);
+    let mut out = Vec::new();
+    nearest(&f, "cot", 1, 5, &mut out).unwrap();
+    assert_eq!(out, ["cat"], "band 'c' answered, so 'dot' is not scanned");
+}
+
 /// A word already held is not offered twice, and a distance of zero still answers (the call is the miss's, not the
 /// exact lookup's).
 #[test]

@@ -1,7 +1,9 @@
 #!/bin/bash
 # Tests of Tools/land.sh that reach no host: ssh and rsync are stubs that refuse and log. Every gate already passed
 # prints `cached pass`, asks no host and exits 0; a corrupt cache runs everything, and with no host fit for it, fails
-# red with the command that re-runs each gate alone. Runs no E2E: its last line only says what is pending.
+# red with the command that re-runs each gate alone. A pass is recorded only for the tree that was keyed: an edit between
+# the keys and the copy leaves it unrecorded (the 2026-11-05 audit, M12). Runs no E2E: its last line only says what is
+# pending.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 failures=0
@@ -19,7 +21,7 @@ printf 'BUILD_HOSTS = stub-a stub-b\nBUILD_HOSTS_XCODE = stub-x\nBUILD_HOST = st
 export XDICT_GATE_CACHE=$scratch/cache XDICT_LAND_CORPUS=$scratch/corpus XDICT_LAND_LOCAL_MK=$scratch/local.mk
 # The hosts the Makefile exports from a real local.mk (run under `make test`, they are set): Tools/e2e-facts.sh asks
 # XDICT_BUILD_HOST for its toolchain, which reached a real host from "all cached asks no host" (2026-10-18).
-unset XDICT_BUILD_HOST XDICT_BUILD_CORPUS XDICT_E2E_HOST XDICT_E2E_HOST_2 XDICT_E2E_CORPUS
+unset XDICT_BUILD_HOST XDICT_BUILD_CORPUS XDICT_E2E_HOST XDICT_E2E_CORPUS
 # The gallery's keys and the render record, scratch ones (Tools/gallery/render_affected.py pending ends land's output).
 python3 -I -c 'import json, sys
 dicts = [l.split()[1:] for l in open("Tools/gallery/render-affected.map") if l.startswith("dicts ")][0]
@@ -78,5 +80,57 @@ grep -q 'corrupt' "$scratch/out" && ok "the corruption is said" || bad "corrupti
 grep -q 'stub-a skipped: unreachable' "$scratch/out" && ok "an unfit host is skipped with its reason" || bad "no skip reason"
 grep -q 're-run only core: make -C apps/apple land ONLY=core' "$scratch/out" && ok "a failure prints its re-run command" \
     || bad "no re-run line: $(tail -5 "$scratch/out")"
+
+# A host that answers: ssh plays the probe and passes every gate, rsync copies nothing. With FAKE_EDIT set, the copy is
+# the moment the working copy is edited (the source tree is read from a file here), between the keys and the gate.
+mkdir -p "$scratch/fit"
+cat >"$scratch/fit/ssh" <<'EOF'
+#!/bin/bash
+[ -z "${FAKE_SSH_LOG:-}" ] || printf '%s\n' "$*" >>"$FAKE_SSH_LOG"
+case "$*" in
+    *'rust=$(rustc'*) printf 'rust=1.99.0\nfmt=yes\nclippy=yes\nswiftlint=0.65.1\nxcode=27.0\ncorpus=%s\nrun1=yes\nbusy=0\n' "${FAKE_CORPUS:-}" ;;
+    *) echo "gate ran" ;;
+esac
+EOF
+cat >"$scratch/fit/rsync" <<'EOF'
+#!/bin/bash
+[ -z "${FAKE_EDIT:-}" ] || echo edited >"$FAKE_TREE"
+EOF
+chmod +x "$scratch/fit/"*
+printf 'BUILD_HOSTS = fit-a\nBUILD_HOSTS_XCODE = fit-a\nBUILD_HOST = fit-a\n' >"$scratch/fit.mk"
+core_status() {
+    facts=()
+    while IFS= read -r a; do facts+=("$a"); done < <(bash Tools/land.sh --facts-of core "$corpus")
+    XDICT_GATE_CACHE=$1 python3 -I Tools/gate-cache.py status "${facts[@]}" core | cut -f1
+}
+fit_land() {  # fit_land <cache> [edit]: land ONLY=core against the answering host
+    echo keyed >"$scratch/tree"
+    FAKE_EDIT=${2:-} FAKE_TREE=$scratch/tree PATH=$scratch/fit:$PATH TMPDIR=$scratch/tmp XDICT_HOST_LOCK_WAIT=0 \
+        XDICT_GATE_CACHE=$1 XDICT_LAND_LOCAL_MK=$scratch/fit.mk XDICT_SOURCE_TREE_CMD="cat $scratch/tree" ONLY=core \
+        bash Tools/land.sh >"$scratch/out" 2>&1
+}
+if fit_land "$scratch/cache-same" && grep -qE '^core .* PASS gate ran' "$scratch/out" \
+    && [ "$(core_status "$scratch/cache-same")" = skip ]; then
+    ok "an unchanged tree: the pass is recorded (positive control)"
+else bad "unchanged tree: not recorded: $(grep -E '^core ' "$scratch/out"; tail -3 "$scratch/out")"; fi
+if fit_land "$scratch/cache-edit" edit; then ok "a tree edited during the run still prints its pass, exit 0"
+else bad "edited tree exited non-zero: $(tail -3 "$scratch/out")"; fi
+grep -qE '^core .* PASS passed; NOT cached: the tree changed during the run' "$scratch/out" \
+    && ok "an edited tree: passed; NOT cached: the tree changed during the run" \
+    || bad "edited tree's line: $(grep -E '^core ' "$scratch/out")"
+[ "$(core_status "$scratch/cache-edit")" = run ] && [ ! -s "$scratch/cache-edit/passes.tsv" ] \
+    && ok "an edited tree records nothing" || bad "an edit between key and gate was recorded as a pass"
+
+# The corpus gates demand their corpus: XDICT_CORPUS_REQUIRED=1 makes an unset or empty XDICT_MDX_CORPUS fail the test
+# with a sentence rather than pass as "not measured" (2026-11-05). Seen in what the host is asked to run.
+: >"$scratch/ssh.log"
+FAKE_SSH_LOG=$scratch/ssh.log FAKE_CORPUS=xdict-corpus/the24 PATH=$scratch/fit:$PATH TMPDIR=$scratch/tmp \
+    XDICT_HOST_LOCK_WAIT=0 XDICT_GATE_CACHE=$scratch/cache-corpus XDICT_LAND_LOCAL_MK=$scratch/fit.mk \
+    ONLY=entries,lookup-corpus bash Tools/land.sh >"$scratch/out" 2>&1
+for g in 'xdict-core --test entries_corpus' 'xdict-lookup --test corpus'; do
+    if grep -F -- "$g" "$scratch/ssh.log" | grep -qF 'XDICT_CORPUS_REQUIRED=1 XDICT_MDX_CORPUS=$HOME/xdict-corpus/the24 '; then
+        ok "the corpus is required where land runs: $g"
+    else bad "no XDICT_CORPUS_REQUIRED=1 on $g: $(grep -F -- "$g" "$scratch/ssh.log" | head -1)"; fi
+done
 
 [ "$failures" -eq 0 ] && echo "land: all passed" || { echo "land: $failures failed"; exit 1; }

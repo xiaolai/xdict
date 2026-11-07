@@ -14,6 +14,10 @@ public struct LearningSettings: View {
     /// The sync pass the pane shows (UI40): the app's own, shared with its startup pass (audit 2026-10-27).
     private let pass: SyncPass?
     @State private var confirmingDisconnect = false
+    /// The export SwiftUI's save panel is writing, while it is open (L13).
+    @State private var exported: ExportedText?
+    /// The erase's confirmation is up (L13: SwiftUI's alert, not `NSAlert`).
+    @State private var confirmingErase = false
     private let declared: @MainActor () -> [String]
     private let study: StudyModel?
     private let reminders: ReviewReminders?
@@ -127,6 +131,12 @@ public struct LearningSettings: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("learning.sync.status")
                 }
+                if let line = Self.refusedLine(pass.phase) {
+                    Text(line)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("learning.sync.refused")
+                }
                 if let last = pass.lastSuccess {
                     Text("Last synced \(last.formatted(.relative(presentation: .named))).")
                         .font(.caption)
@@ -167,12 +177,20 @@ public struct LearningSettings: View {
     static func syncLine(_ phase: SyncPass.Phase) -> LocalizedStringResource? {
         switch phase {
         case .idle: nil
-        case .synced(added: _, peers: 0): "No other device’s log is in this folder yet."
-        case .synced(let added, _): "Synced: \(added) new events."
+        case .synced(added: _, peers: 0, let refused) where refused.isEmpty: "No other device’s log is in this folder yet."
+        case .synced(added: _, peers: 0, refused: _): "No other device’s log in this folder could be read."
+        case .synced(let added, _, _): "Synced: \(added) new events."
         case .failed: "The sync could not finish."
         case .folderUnavailable: "The folder could not be opened. Choose it again."
         case .noFolder: "No sync folder yet."
         }
+    }
+
+    /// **The logs a pass left out, by name** (audit 2026-11-05, M16): each could not be read or merged, and the others
+    /// still merged.
+    static func refusedLine(_ phase: SyncPass.Phase) -> LocalizedStringResource? {
+        guard case .synced(_, _, let refused) = phase, !refused.isEmpty else { return nil }
+        return "Left out, could not be read: \(refused.formatted(.list(type: .and)))."
     }
 
     private func chooseSyncFolder(_ pass: SyncPass) {
@@ -193,7 +211,7 @@ public struct LearningSettings: View {
             ActionRow {
                 Text("Erase every reading, note and grade kept on this Mac.")
             } actions: {
-                Button("Erase…") { erase(study) }
+                Button("Erase…") { confirmingErase = true }
                     .accessibilityIdentifier("learning.erase")
             }
             if let status {
@@ -205,6 +223,26 @@ public struct LearningSettings: View {
         } header: {
             Text("Your Data")
         }
+        .fileExporter(isPresented: Binding(get: { exported != nil }, set: { if !$0 { exported = nil } }),
+                      document: exported, contentType: .json, defaultFilename: "XDict Learning Data.json") { result in
+            exported = nil
+            switch result {
+            case .success(let url):
+                status = String(localized: "Exported to \(url.lastPathComponent).")
+            case .failure(let error as CocoaError) where error.code == .userCancelled:
+                break
+            case .failure:
+                status = String(localized: "The file could not be written.")
+            }
+        }
+        .alert(Text("Erase all learning data?"), isPresented: $confirmingErase) {
+            // Cancel is the default, at Return: an erase is never one keystroke away (R3).
+            Button("Cancel", role: .cancel) {}  // placement: system-alert
+                .keyboardShortcut(.defaultAction)  // placement: system-alert
+            Button("Erase", role: .destructive) { erase(study) }  // placement: system-alert
+        } message: {
+            Text("Every reading, note and grade on this Mac is erased. This cannot be undone.")
+        }
     }
 
     private func export(_ study: StudyModel) {
@@ -213,28 +251,12 @@ public struct LearningSettings: View {
                 status = String(localized: "The data could not be exported.")
                 return
             }
-            let panel = NSSavePanel()
-            panel.nameFieldStringValue = "XDict Learning Data.json"
-            panel.allowedContentTypes = [.json]
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            do {
-                try Data(json.utf8).write(to: url)
-                status = String(localized: "Exported to \(url.lastPathComponent).")
-            } catch {
-                status = String(localized: "The file could not be written.")
-            }
+            exported = ExportedText(json)
         }
     }
 
+    /// The erase, once the reader confirmed it in the alert.
     private func erase(_ study: StudyModel) {
-        let alert = NSAlert()
-        alert.messageText = String(localized: "Erase all learning data?")
-        alert.informativeText = String(localized: "Every reading, note and grade on this Mac is erased. This cannot be undone.")
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: String(localized: "Cancel"))  // placement: system-alert
-        alert.addButton(withTitle: String(localized: "Erase"))  // placement: system-alert
-        // Cancel is the default, at Return: an erase is never one keystroke away (R3).
-        guard alert.runModal() == .alertSecondButtonReturn else { return }
         Task {
             guard let report = await study.erase() else {
                 status = String(localized: "Nothing was erased.")

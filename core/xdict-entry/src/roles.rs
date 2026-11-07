@@ -1379,43 +1379,17 @@ fn merge(into: &mut Props, over: &Props) {
     into.inline = over.inline.or(into.inline);
 }
 
-/// A tag's attributes, names in lower case and values unquoted, at most [`ATTRIBUTES`] of them.
+/// A tag's attributes as [`crate::tag`] reads them, names in lower case and values unquoted and decoded, at most
+/// [`ATTRIBUTES`] of them and [`VALUE_BYTES`] of each value.
 pub(crate) fn attributes(tag: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let inner = tag.trim_start_matches('<');
-    let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
-    let mut rest = inner.get(name_len..).unwrap_or("");
-    while out.len() < ATTRIBUTES {
-        rest = rest.trim_start_matches(|c: char| c.is_ascii_whitespace() || c == '/');
-        if rest.is_empty() || rest.starts_with('>') {
-            break;
-        }
-        let len = rest.find(|c: char| c.is_ascii_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
-        let name = rest.get(..len.max(1)).unwrap_or("").to_ascii_lowercase();
-        rest = rest.get(len.max(1)..).unwrap_or("");
-        let after = rest.trim_start();
-        let value = if let Some(v) = after.strip_prefix('=') {
-            let v = v.trim_start();
-            let (value, next) = match v.chars().next() {
-                Some(q @ ('"' | '\'')) => {
-                    let body = v.get(1..).unwrap_or("");
-                    let end = body.find(q).unwrap_or(body.len());
-                    (body.get(..end).unwrap_or(""), body.get(end + 1..).unwrap_or(""))
-                }
-                _ => {
-                    let end = v.find(|c: char| c.is_ascii_whitespace() || c == '>').unwrap_or(v.len());
-                    (v.get(..end).unwrap_or(""), v.get(end..).unwrap_or(""))
-                }
-            };
-            rest = next;
+    crate::tag::attributes(tag)
+        .take(ATTRIBUTES)
+        .map(|a| {
+            let value = a.value.map_or("", |v| v.text);
             let cut = (0..=value.len().min(VALUE_BYTES)).rev().find(|&i| value.is_char_boundary(i)).unwrap_or(0);
-            crate::rewrite::unescaped_html(value.get(..cut).unwrap_or(""))
-        } else {
-            String::new()
-        };
-        out.push((name, value));
-    }
-    out
+            (a.name.to_ascii_lowercase(), crate::rewrite::unescaped_html(value.get(..cut).unwrap_or("")))
+        })
+        .collect()
 }
 
 fn audio_attr(handlers: &str, data: &str) -> bool {
@@ -3280,7 +3254,7 @@ pub fn roles_marked(text: &str, key: &str, style: &crate::Style, base: &str) -> 
             rest = from.get(1..).unwrap_or("");
             continue;
         }
-        let len = from.find('>').map_or(from.len(), |e| e + 1);
+        let len = crate::tag::source_len(from);
         let tag = from.get(..len).unwrap_or(from);
         let name_len = body.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(body.len());
         let name = body.get(..name_len).unwrap_or("");

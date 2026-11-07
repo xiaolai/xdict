@@ -159,11 +159,30 @@ public final class Diagnostics: @unchecked Sendable {
     /// A value, not a formatter: `ISO8601DateFormatter` is not Sendable, and a line's stamp is all this needs.
     private static let stamp = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// A value on one line: newlines and quotes would break the log's shape.
-    private static func escaped(_ value: String) -> String {
-        value.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
+    /// **A value as one field of one line** (audit 2026-11-05 L15: a tab, a form feed, any other control character or a
+    /// Unicode line break went through raw, and a space or `=` split a value into two fields). The backslash and the
+    /// quote are escaped, `\n`, `\r` and `\t` by name, every other control character (C0, DEL, C1) and U+2028/U+2029
+    /// as `\u{…}`; a value holding a space, `=` or a quote is written in quotes. An ordinary value is written as it is.
+    static func escaped(_ value: String) -> String {
+        var out = ""
+        var quoted = false
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\\": out += "\\\\"
+            case "\"":
+                out += "\\\""
+                quoted = true
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            case " ", "=":
+                out.unicodeScalars.append(scalar)
+                quoted = true
+            case _ where scalar.properties.generalCategory == .control || scalar == "\u{2028}" || scalar == "\u{2029}":
+                out += "\\u{\(String(scalar.value, radix: 16))}"
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return quoted ? "\"\(out)\"" : out
     }
 }

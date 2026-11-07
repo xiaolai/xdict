@@ -14,6 +14,7 @@ public struct HoverSettings: View {
     let hover: HoverControl
     @State private var typedSite = ""
     @State private var siteAnswer: ExcludedSiteAnswer?
+    @State private var choosingApp = false
 
     public init(hover: HoverControl) {
         self.hover = hover
@@ -118,8 +119,13 @@ public struct HoverSettings: View {
             }
         }
         LabeledContent {
-            Button { addApp() } label: { Text("Add an App…") }  // placement: form-row
+            Button { choosingApp = true } label: { Text("Add an App…") }  // placement: form-row
                 .accessibilityIdentifier("hover.addApp")
+                // SwiftUI's own open panel (L13), opening where the apps are.
+                .fileImporter(isPresented: $choosingApp, allowedContentTypes: [.application]) { result in
+                    if case .success(let url) = result { addApp(at: url) }
+                }
+                .fileDialogDefaultDirectory(URL(filePath: "/Applications", directoryHint: .isDirectory))
         } label: {
             Text("Never look up in")
             Text("Hover reads nothing in these apps. Looking up a selection works in any app.")
@@ -190,13 +196,11 @@ public struct HoverSettings: View {
 
     /// The bundle identifier is read from the app the reader picks, never typed: an identifier typed by hand is an
     /// exclusion that silently covers nothing.
-    private func addApp() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.application]
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        guard panel.runModal() == .OK, let url = panel.url, let changed = Self.excluding(appAt: url, from: hover.policy)
-        else { return }
+    private func addApp(at url: URL) {
+        // A file importer's URL is security-scoped: its bundle is read inside the access it grants.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let changed = Self.excluding(appAt: url, from: hover.policy) else { return }
         hover.setPolicy(changed)
     }
 

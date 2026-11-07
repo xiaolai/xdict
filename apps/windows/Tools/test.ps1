@@ -8,6 +8,9 @@ $layout = Get-XDictLayout
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'test' -Full:$Full -Action {
+    # The gate runner's own test, in its own process: it points LOCALAPPDATA at a scratch cache.
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests\gates-test.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'the gate runner test failed' }
     # tokens.py reads tokens.toml with tomllib: Python 3.11 or newer. Checked before use, so an older interpreter is a
     # sentence about the prerequisite rather than a traceback from inside the token gate.
     & python -I -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" 2>$null

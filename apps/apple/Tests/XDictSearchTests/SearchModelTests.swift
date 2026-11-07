@@ -252,6 +252,40 @@ struct SearchModelTests {
         #expect(results.repeatedKeys == ["EC"])
     }
 
+    /// **A superseded page ends its wait** (audit 2026-11-05, M10): the answer that never came left `loadingMore` set,
+    /// and no further page of that dictionary was asked for again in the lookup.
+    @Test func aSupersededPageCanBeAskedForAgain() async {
+        let records: UInt32 = 250
+        let firstFurther = Slot()
+        let backend = FakeSearchBackend { _, _, options in
+            if options.offset > 0, firstFurther.fulfil(.failure(.superseded)) { return .failure(.superseded) }
+            let range = options.offset..<min(records, options.offset + options.limit)
+            return .success(Page(hits: range.map { Fixture.hit("A", "EC", $0) }, total: UInt64(records), generation: 7,
+                                 problems: []))
+        }
+        let model = Self.model(backend, Sources([Fixture.source(1, "A")]))
+        model.submit("EC")
+        await model.idle()
+        await model.answersSettled()
+        model.loadMore(Fixture.id(1))
+        await model.answersSettled()
+        guard case .results(let waited)? = model.sections.first?.status else {
+            Issue.record("no results: \(model.sections)")
+            return
+        }
+        #expect(!waited.loadingMore, "the superseded page is no longer waited for")
+        #expect(waited.moreFailed == nil, "a superseded page is not a failure to tell")
+        #expect(waited.hits.count == 100)
+        model.loadMore(Fixture.id(1))
+        await model.answersSettled()
+        guard case .results(let results)? = model.sections.first?.status else {
+            Issue.record("no results: \(model.sections)")
+            return
+        }
+        #expect(results.hits.count == Int(records), "the page was asked for again and answered")
+        #expect(await backend.lookups.map(\.options.offset) == [0, 100, 100])
+    }
+
     // MARK: - No answer, told apart (Q11)
 
     @Test func eachUnavailableStateIsItsOwnWithItsNextAction() async {

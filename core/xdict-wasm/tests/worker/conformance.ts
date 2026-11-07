@@ -228,7 +228,7 @@ ledgerCases.readings.forEach((c: any, i: number) => {
   check(`ledger.readings[${i}]`, c.expect, outcome(() => ledgerCore.ledgerRecord(c.reading, c.operation, c.targetLanguages)));
 });
 check('ledger.history', ledgerCases.history.expect,
-  outcome(() => ledgerCore.ledgerHistory(ledgerCases.history.now, ledgerCases.history.utcOffsetSeconds)));
+  outcome(() => ledgerCore.ledgerHistory(ledgerCases.history.now, ledgerCases.history.zone)));
 // Two imports stored three indexes (the MDX, its volume, the copy's MDX under the same edition); opening read them
 // in pieces, not whole.
 check('web.indexStorage', true, calls.put >= 2 && calls.get >= 2 && calls.reads > 2);

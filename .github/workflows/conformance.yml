@@ -1,5 +1,6 @@
 # The core's gate, and conformance/ through every binding that has a suite (AGENTS.md, conformance/README.md).
-# C# joins when its spike lands (ADR-0003).
+# C# is not here: windows.yml runs its own conformance gate (apps/windows/Tools/conformance.ps1), so far the IPC
+# handshake and typed refusals; conformance/'s dictionary operations join it later (that script says so).
 name: conformance
 
 on:
@@ -30,7 +31,7 @@ jobs:
       - run: cargo test
       - run: cargo clippy --all-targets -- -D warnings
       # The pack tool builds what the explorer reads: its own tests are self-contained, need no network and take a
-      # moment. Run from core/ (the job's working directory), so the start directory is xdict-core/tools.
+      # moment. Run from core/ (the job's working directory), so the start directory is xdict-pack/reference.
       - name: the pack tool's tests
         run: python3 -I -m unittest discover -s xdict-pack/reference -p 'test_word_lexicon.py'
 

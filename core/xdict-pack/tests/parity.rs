@@ -153,6 +153,9 @@ fn the_report_is_the_reference_builders() {
         return;
     };
     let report = run(&scratch("report"));
+    // **Parsed and written again, not compared as written** (audit 2026-11-05, L11): the report's two paths are this
+    // machine's and must be blanked first, and `report_text` escapes every non-ASCII character as the reference's
+    // `ensure_ascii` does, while the fixture keeps them raw, so the first serialisation cannot be reused byte for byte.
     let mut parsed: serde_json::Value = serde_json::from_str(&report.report_text).expect("the report is JSON");
     parsed["pack"] = serde_json::Value::String(String::new());
     parsed["notices"] = serde_json::Value::String(String::new());

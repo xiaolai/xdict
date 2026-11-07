@@ -3,7 +3,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use xdict_entry::{
-    Counts, Style, css_normalized_within, css_styled_within, html_normalized_within, html_styled_within, script_purpose,
+    Counts, Entry, Style, css_normalized_within, css_styled_within, entry_normalized_within, html_normalized_within,
+    html_styled_within, script_purpose,
 };
 
 const BASE: &str = "xdict://d/";
@@ -211,4 +212,33 @@ fn s14_base64_images_get_their_src() {
     let s = plain();
     let out = html(r#"<img class="pic" base64="data:image/png;base64,AAAA" src="">"#, &s);
     assert_eq!(out, r#"<img class="pic" src="data:image/png;base64,AAAA">"#);
+}
+
+/// **An attribute is read as HTML reads it, by every rule that reads one** (audit 2026-11-05): a `>` quoted in one
+/// value does not end the tag, and `name=` quoted in one value is no attribute.
+#[test]
+fn an_attribute_is_read_as_html_reads_it() {
+    let s = Style::of_sheets([]);
+    // S1: a script file is judged when it is served, wherever its `src` stands; a value naming `src` makes no file.
+    assert!(html(r#"<script title="a>b" src="a.js"></script>"#, &s).contains("src="), "a quoted `>`");
+    let (out, counts) =
+        html_normalized_within(r#"<script title="x src=a.js">track()</script>t"#, BASE, "", &s, usize::MAX).unwrap();
+    assert_eq!((out.as_str(), counts.strip.scripts_other), ("t", 1), "a quoted `src=`");
+    // R22: a presentational attribute past a quoted `>` is absorbed; one named in a value is not.
+    assert!(html(r#"<font title="a>b" color="red">x</font>"#, &s).contains("style="), "a quoted `>`");
+    assert!(!html(r#"<font title="x color=red">x</font>"#, &s).contains("style="), "a quoted `color=`");
+    // S13: a missing image's `src` and `alt` past a quoted `>`; the tag goes whole, nothing of it left as text.
+    let none = |_: &str| false;
+    let e = Entry { key: "x", resource: Some(&none), is_key: None, strip_off_for_tests: false, original: false };
+    let (out, counts) =
+        entry_normalized_within(r#"<p><img title="a>b" alt="pic" src="gone.png">.</p>"#, BASE, "", &s, &e, usize::MAX)
+            .unwrap();
+    assert_eq!((out.as_str(), counts.strip.missing_images), ("<p>pic.</p>", 1));
+    // A speaker is a link whose own `href` is a sound, not one whose title names one.
+    let link = html(r#"<a title="x href=sound://a.mp3" href="entry://b">b</a>"#, &s);
+    assert!(!link.contains("data-xdict-control"), "{link}");
+    // A table's own `role`.
+    let table = "<tr><td>run</td><td>ran</td></tr><tr><td>go</td><td>went</td></tr></table>";
+    let forged = html(&format!(r#"<table title="x role=presentation">{table}"#), &s);
+    assert!(forged.contains(r#"data-xdict-table="data""#), "{forged}");
 }

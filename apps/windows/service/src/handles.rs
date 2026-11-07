@@ -15,6 +15,7 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use serde_json::Value;
 use xdict_core::{ByteSource, CoreError, FileIdentity};
 
 use crate::failure::Failure;
@@ -86,7 +87,7 @@ pub struct HandleSource {
 
 impl HandleSource {
     pub fn take(spec: &FileSpec, ledger: Arc<Ledger>, write: bool) -> Result<Self, Failure> {
-        if spec.handle == 0 || spec.handle > i64::MAX as u64 {
+        if !usable(spec.handle) {
             return Err(Failure::admission(format!("{}: no usable handle", spec.id)));
         }
         // SAFETY: the app duplicated this handle into this process for this request, and nothing else here owns the
@@ -368,13 +369,6 @@ pub fn admit(
                 }));
             }
             let previous = ledger.state(&spec.id).flatten();
-            ledger.merge(
-                &spec.id,
-                Observation {
-                    observed_at: spec.observed_at,
-                    identity: spec.identity,
-                },
-            );
             // From here a File owns the handle; its drop closes it on every error path of `take`.
             owned.insert(spec.handle);
             let source = HandleSource::take(spec, ledger.clone(), spec.write)?;
@@ -405,21 +399,77 @@ pub fn admit(
     if let Err(failure) = result {
         for spec in specs {
             if !owned.contains(&spec.handle) {
-                close_raw(spec.handle);
+                close_handle(spec.handle);
             }
         }
         return Err(failure);
+    }
+    // Observations are merged only once every file is admitted: a refused one must not become the newest state the
+    // next request is checked against.
+    for spec in specs {
+        ledger.merge(
+            &spec.id,
+            Observation {
+                observed_at: spec.observed_at,
+                identity: spec.identity,
+            },
+        );
     }
     Ok(sources)
 }
 
 /// Closes a handle the service was given but never took: no `File` owns it, so nobody else will.
 #[allow(unsafe_code)]
-fn close_raw(handle: u64) {
-    if handle == 0 || handle > i64::MAX as u64 {
+pub fn close_handle(handle: u64) {
+    if !usable(handle) {
         return;
     }
     unsafe { CloseHandle(handle as *mut c_void) };
+}
+
+/// A value that can name a HANDLE here; 0 never does.
+fn usable(handle: u64) -> bool {
+    handle != 0 && handle <= i64::MAX as u64
+}
+
+/// The handles one received record carries, owned from the moment it parses: each was duplicated into this process
+/// for this request and is the service's to close. A refusal before admission (malformed, contractMismatch, an
+/// answer, cancel, busy) drops this and so closes them; `admit` is the one place that takes them over. A body that is
+/// not JSON names no value the service could close.
+pub struct Carried<C: Fn(u64)> {
+    handles: Vec<u64>,
+    close: C,
+}
+
+impl<C: Fn(u64)> Carried<C> {
+    pub fn of(record: &Value, close: C) -> Self {
+        let mut handles = Vec::new();
+        let files = record.get("files").and_then(Value::as_array);
+        for handle in files
+            .into_iter()
+            .flatten()
+            .filter_map(|file| file.get("handle").and_then(Value::as_u64))
+        {
+            // One value named twice is one handle: closing it twice could close a handle opened since.
+            if usable(handle) && !handles.contains(&handle) {
+                handles.push(handle);
+            }
+        }
+        Self { handles, close }
+    }
+
+    /// Hands the handles to `admit`, which closes each one on every path of its own.
+    pub fn into_admission(mut self) {
+        self.handles.clear();
+    }
+}
+
+impl<C: Fn(u64)> Drop for Carried<C> {
+    fn drop(&mut self) {
+        for handle in self.handles.drain(..) {
+            (self.close)(handle);
+        }
+    }
 }
 
 // The held object's times may have moved since the last observation. Admit that same file object so the core's
@@ -430,6 +480,13 @@ fn same_object(left: Option<FileIdentity>, right: Option<FileIdentity>) -> bool 
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing
+    )]
+
     use super::*;
 
     fn identity(inode: u64, time: i64) -> FileIdentity {
@@ -472,5 +529,47 @@ mod tests {
             },
         );
         assert_eq!(ledger.state("a"), Some(Some(identity(1, 2))));
+    }
+
+    /// A read-only handle to a fresh file, as the app would duplicate it in, and the file's identity.
+    fn handle(tag: &str) -> (u64, FileIdentity, std::path::PathBuf) {
+        use std::os::windows::io::IntoRawHandle;
+        let path = std::env::temp_dir().join(format!("xdict-admit-{}-{tag}", std::process::id()));
+        std::fs::write(&path, b"tiny").unwrap();
+        let file = File::open(&path).unwrap();
+        let identity = super::identity(&file).unwrap();
+        (file.into_raw_handle() as u64, identity, path)
+    }
+
+    #[test]
+    fn a_refused_observation_leaves_the_ledger_unchanged() {
+        let ledger = Arc::new(Ledger::default());
+        let (raw, actual, path) = handle("refused");
+        let mut wrong = actual;
+        wrong.inode += 1;
+        let spec = FileSpec {
+            id: "a".into(),
+            name: "a".into(),
+            handle: raw,
+            identity: Some(wrong),
+            observed_at: 7,
+        };
+        assert!(admit(std::slice::from_ref(&spec), &ledger).is_err());
+        assert_eq!(ledger.state("a"), None, "a refused observation was merged");
+
+        // The control: the same observation of the file the handle holds is admitted and merged.
+        let (raw, actual, other) = handle("admitted");
+        let spec = FileSpec {
+            handle: raw,
+            identity: Some(actual),
+            ..spec
+        };
+        let Ok(sources) = admit(std::slice::from_ref(&spec), &ledger) else {
+            panic!("the matching observation was refused");
+        };
+        assert_eq!(ledger.state("a"), Some(Some(actual)));
+        drop(sources);
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(other);
     }
 }

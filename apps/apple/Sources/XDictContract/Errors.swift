@@ -100,7 +100,7 @@ public enum Refusal: Error, Codable, Hashable, Sendable {
     /// Handles and the package's files differ in number.
     case handleCountMismatch(files: Int, handles: Int)
     /// A package arrived with no handle at all (through `call`, or with an empty list). Never answered by opening a
-    /// path: the contract has none.
+    /// path: a package's files are never named by one.
     case missingHandle
     /// Handles arrived with an operation that reads none.
     case unexpectedHandles(count: Int)
@@ -128,4 +128,8 @@ public enum Refusal: Error, Codable, Hashable, Sendable {
     case envelopeTooLarge(bytes: UInt64, limit: UInt64)
     /// A `suggest` asking for more than `Limits.maxSuggestions`.
     case suggestLimitOutOfRange(requested: UInt32, ceiling: UInt32)
+    /// A path a word-pack or sync operation named leads into the service's own container (its registry, ledger, indexes
+    /// or state), or is not absolute, takes a `..` step or cannot be resolved (`PathConfinement`; contract 22). The path
+    /// is not repeated: the client knows what it sent, and the service's log stays free of the reader's folders.
+    case forbiddenPath
 }

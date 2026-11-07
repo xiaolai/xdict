@@ -34,19 +34,20 @@ public final class HistoryModel {
 
     @ObservationIgnored private let service: any HistoryService
     @ObservationIgnored private let now: @Sendable () -> Date
-    @ObservationIgnored private let utcOffset: @Sendable (Date) -> Int
+    /// The reader's zone, as the offsets the core buckets days by (audit 2026-11-05, L5d).
+    @ObservationIgnored private let timeZone: @Sendable () -> TimeZone
     @ObservationIgnored private let device: @Sendable () -> String
     /// A refresh that a newer one replaced must not write its answer (audit rule: a superseded check cannot speak).
     @ObservationIgnored private var generation = 0
 
     public init(service: any HistoryService, preferences: LearningPreferences,
                 now: @escaping @Sendable () -> Date = { Date() },
-                utcOffset: @escaping @Sendable (Date) -> Int = { TimeZone.current.secondsFromGMT(for: $0) },
+                timeZone: @escaping @Sendable () -> TimeZone = { TimeZone.current },
                 device: @escaping @Sendable () -> String = { DeviceIdentity.current() }) {
         self.service = service
         self.preferences = preferences
         self.now = now
-        self.utcOffset = utcOffset
+        self.timeZone = timeZone
         self.device = device
     }
 
@@ -263,7 +264,7 @@ public final class HistoryModel {
         state = .loading
         let at = now()
         let outcome = await service.call(.ledgerHistory(now: at.timeIntervalSince1970.rounded(.down),
-                                                        utcOffsetSeconds: Int32(utcOffset(at))))
+                                                        zone: ZoneOffset.zone(timeZone(), around: at)))
         guard mine == generation else { return }
         if case .success(let delivered) = outcome, case .ledgerHistory(let history) = delivered.answer {
             state = .loaded(history)

@@ -17,7 +17,7 @@ use std::time::Instant;
 use xdict_mdx::{File, Kind};
 use xxhash_rust::xxh64::Xxh64;
 
-fn dictionary_files(roots: &str) -> Vec<PathBuf> {
+fn dictionary_files(roots: &std::ffi::OsStr) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for root in std::env::split_paths(roots) {
         let mut stack = vec![(root, 0)];
@@ -57,7 +57,7 @@ fn name(path: &Path) -> String {
 
 #[test]
 fn every_dictionary_in_the_corpus_opens_and_answers() {
-    let Ok(roots) = std::env::var("XDICT_MDX_CORPUS") else {
+    let Some(roots) = xdict_mdx_writer::corpus::wanted("XDICT_MDX_CORPUS").unwrap_or_else(|why| panic!("{why}")) else {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };

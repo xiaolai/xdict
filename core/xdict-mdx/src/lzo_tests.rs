@@ -115,3 +115,15 @@ fn arbitrary_bytes_never_panic() {
         }
     }
 }
+
+/// **An output too large to reserve is an error, not an abort** (audit 2026-11-05, L6): the declared size comes from
+/// the file, and is reserved fallibly as the zlib path does, so a size past the allocator is `OutOfMemory` rather than
+/// a capacity-overflow panic.
+#[test]
+fn an_unreservable_size_is_refused_as_out_of_memory() {
+    let stream = lzo::assemble(&[lit(b"abcd")]).unwrap();
+    match decompress(&stream, usize::MAX, "test block") {
+        Err(Error::Io(e)) => assert_eq!(e.kind(), std::io::ErrorKind::OutOfMemory, "{e}"),
+        other => panic!("{other:?}"),
+    }
+}

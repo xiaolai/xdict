@@ -46,7 +46,9 @@ struct EntryTextServiceTests {
         }
         // **The senses crossed the IPC contract with the text** (contract 13, ADR-0029 d.2, d.3): the revision is
         // named, every sense lies inside the text, and every run's membership names a sense that is there.
-        #expect(projected.style == 14)
+        // `STYLE` is `xdict-entry`'s normaliser version, carried on every projection so a stored one is read against the
+        // rules that made it; 15 since 2026-11-05 (the vendor-prefix and forged-mark drops), 14 before.
+        #expect(projected.style == 15)
         for sense in projected.senses {
             #expect(sense.start <= bytes && sense.len <= bytes - sense.start, "a sense outside its text: \(sense)")
             if let parent = sense.parent {

@@ -114,7 +114,7 @@ fn two_devices_readings_merge_through_the_folder() {
     let second = b.ledger_sync(inbox_text.clone(), out_b.to_string_lossy().to_string(), "b".into()).unwrap();
     assert_eq!(second.peers, 1);
     assert_eq!(second.added, 1, "the reading crossed");
-    assert_eq!(b.ledger_history(at + 1.0, 0).unwrap().days.len(), 1);
+    assert_eq!(b.ledger_history(at + 1.0, vec![ZoneOffset::fixed(0)]).unwrap().days.len(), 1);
     deliver(&out_b, &inbox);
 
     // The other direction converges, and a second pass adds nothing.
@@ -203,4 +203,161 @@ fn the_sync_artifact_holds_no_definition() {
     assert!(text.contains("my own words"), "the reader's own words travel");
     assert!(!text.contains("move fast"), "the definition never does");
     assert!(!text.contains("<div"), "nor its markup");
+}
+
+/// **A folder the system refuses is an I/O failure that names its path** (audit 2026-11-05, M16): a missing folder and an
+/// output that is a file are the reader's storage, not a malformed log, and the shell reads `Io` to say so.
+#[test]
+fn a_folder_that_cannot_be_read_or_written_is_an_io_failure_naming_it() {
+    let dir = Scratch::new("io");
+    let a = device(&dir.path("data-a"));
+    let missing = dir.0.join("not-there");
+    let out = dir.path("out");
+    match a.ledger_sync(missing.to_string_lossy().into(), out.to_string_lossy().into(), "a".into()) {
+        Err(CoreError::Io { kind: IoKind::NotFound, detail }) => {
+            assert!(detail.contains("not-there"), "the detail names the folder: {detail}")
+        }
+        other => panic!("a missing sync folder: {other:?}"),
+    }
+    let file = dir.0.join("a-file");
+    std::fs::write(&file, b"").unwrap();
+    let inbox = dir.path("inbox");
+    match a.ledger_sync(inbox.to_string_lossy().into(), file.to_string_lossy().into(), "a".into()) {
+        Err(CoreError::Io { detail, .. }) => assert!(detail.contains("a-file"), "{detail}"),
+        other => panic!("an output folder that is a file: {other:?}"),
+    }
+}
+
+/// A whole frame — the log's magic, length and checksum — around a payload that is not an event: what a peer's corrupt
+/// log looks like once its checksum no longer hides the damage.
+fn corrupt_log() -> Vec<u8> {
+    let payload = b"{\"not\": \"an event\"";
+    let mut out = Vec::new();
+    out.extend_from_slice(&0x5844_4C47u32.to_le_bytes());
+    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(&xxhash_rust::xxh3::xxh3_64(payload).to_le_bytes());
+    out.extend_from_slice(payload);
+    out
+}
+
+/// One device's log with one reading, written by a sync pass of its own, as the folder would hold it.
+fn peer_log(dir: &Scratch, name: &str, surface: &str, at: f64) -> Vec<u8> {
+    let core = device(&dir.path(&format!("data-{name}")));
+    let reading = Reading {
+        surface: surface.into(),
+        lemma: surface.into(),
+        sentence: format!("They {surface} each day."),
+        span: None,
+        cut: 0,
+        quality: "complete".into(),
+        edition: "mdx-sha256-v1:aa".into(),
+        entry_key: surface.into(),
+        occurrence: 0,
+        dictionary_name: "Tiny".into(),
+        language: "en".into(),
+        at,
+        device: name.into(),
+    };
+    core.ledger_record(reading, format!("{name}-1"), vec![]).unwrap();
+    let out = dir.path(&format!("out-{name}"));
+    core.ledger_sync(dir.path("empty").to_string_lossy().into(), out.to_string_lossy().into(), name.into()).unwrap();
+    std::fs::read(out.join(format!("xdict-{name}.xdlog"))).unwrap()
+}
+
+/// **One bad peer log does not block sync, and is named** (audit 2026-11-05, M16): of three peers the middle one is
+/// corrupt; the other two merge, this device's log is still written, and the report names the one it left out.
+#[test]
+fn a_corrupt_peer_is_named_and_the_others_still_merge() {
+    let dir = Scratch::new("corrupt-peer");
+    let (inbox, out) = (dir.path("inbox"), dir.path("out"));
+    let at = 1_790_640_000.0;
+    std::fs::write(inbox.join("xdict-a.xdlog"), peer_log(&dir, "a", "run", at)).unwrap();
+    std::fs::write(inbox.join("xdict-b.xdlog"), corrupt_log()).unwrap();
+    std::fs::write(inbox.join("xdict-c.xdlog"), peer_log(&dir, "c", "walk", at + 1.0)).unwrap();
+    let me = device(&dir.path("data-me"));
+
+    let report = me.ledger_sync(inbox.to_string_lossy().into(), out.to_string_lossy().into(), "me".into()).unwrap();
+    assert_eq!((report.peers, report.added), (2, 2), "both readable peers merged");
+    let refused: Vec<&str> = report.refused.iter().map(|refusal| refusal.file.as_str()).collect();
+    assert_eq!(refused, ["xdict-b.xdlog"], "the corrupt one is named");
+    assert!(out.join("xdict-me.xdlog").exists(), "this device's log is written whatever a peer holds");
+    assert!(report.exported > 0);
+    assert_eq!(me.ledger_history(at + 2.0, vec![ZoneOffset::fixed(0)]).unwrap().days[0].cards.len(), 2);
+}
+
+/// **A peer over the size bound is a size refusal that names the bound** (audit 2026-11-05, M16), not damage: the file
+/// is sparse, so the test writes nothing, and it is refused before a byte of it is read.
+#[test]
+fn a_peer_over_the_size_bound_is_named_with_the_bound() {
+    let dir = Scratch::new("over-bound");
+    let (inbox, out) = (dir.path("inbox"), dir.path("out"));
+    std::fs::File::create(inbox.join("xdict-huge.xdlog")).unwrap().set_len(MAX_SYNC_BYTES + 1).unwrap();
+    let me = device(&dir.path("data-me"));
+    let report = me.ledger_sync(inbox.to_string_lossy().into(), out.to_string_lossy().into(), "me".into()).unwrap();
+    let [refusal] = report.refused.as_slice() else { panic!("one refusal: {report:?}") };
+    assert_eq!(refusal.file, "xdict-huge.xdlog");
+    assert!(refusal.detail.contains("TooLarge"), "a size refusal: {}", refusal.detail);
+    assert!(refusal.detail.contains(&format!("{MAX_SYNC_BYTES}-byte")), "the bound is in it: {}", refusal.detail);
+    assert_eq!(report.peers, 0);
+    assert!(out.join("xdict-me.xdlog").exists());
+}
+
+/// **A link is never followed** (audit 2026-11-05, the class of L1): the service checks a path and the core opens it
+/// later, so a symbolic link put in the folder between the two would read a file outside it. A peer that is a link is
+/// refused and named; a sync folder or an output folder that is a link refuses the pass, naming it.
+#[cfg(unix)]
+#[test]
+fn a_link_in_the_sync_folder_is_refused_and_named() {
+    let dir = Scratch::new("link");
+    let (inbox, out) = (dir.path("inbox"), dir.path("out"));
+    let outside = dir.0.join("outside.xdlog");
+    std::fs::write(&outside, peer_log(&dir, "a", "run", 1_790_640_000.0)).unwrap();
+    std::os::unix::fs::symlink(&outside, inbox.join("xdict-a.xdlog")).unwrap();
+    let me = device(&dir.path("data-me"));
+    let report = me.ledger_sync(inbox.to_string_lossy().into(), out.to_string_lossy().into(), "me".into()).unwrap();
+    assert_eq!(report.peers, 0, "the file outside the folder was not read");
+    let [refusal] = report.refused.as_slice() else { panic!("one refusal: {report:?}") };
+    assert_eq!(refusal.file, "xdict-a.xdlog");
+    assert!(refusal.detail.contains("symbolic link"), "{}", refusal.detail);
+
+    let linked = dir.0.join("linked-inbox");
+    std::os::unix::fs::symlink(&inbox, &linked).unwrap();
+    match me.ledger_sync(linked.to_string_lossy().into(), out.to_string_lossy().into(), "me".into()) {
+        Err(CoreError::Io { kind: IoKind::PermissionDenied, detail }) => {
+            assert!(detail.contains("linked-inbox"), "{detail}")
+        }
+        other => panic!("a sync folder that is a link: {other:?}"),
+    }
+    let linked_out = dir.0.join("linked-out");
+    std::os::unix::fs::symlink(&out, &linked_out).unwrap();
+    match me.ledger_sync(inbox.to_string_lossy().into(), linked_out.to_string_lossy().into(), "me".into()) {
+        Err(CoreError::Io { kind: IoKind::PermissionDenied, detail }) => {
+            assert!(detail.contains("linked-out"), "{detail}")
+        }
+        other => panic!("an output folder that is a link: {other:?}"),
+    }
+    // This device's log, made a link to a file outside, is replaced by the log, never written through.
+    let target = dir.0.join("victim");
+    std::fs::write(&target, b"untouched").unwrap();
+    std::os::unix::fs::symlink(&target, out.join("xdict-me.xdlog.tmp")).unwrap();
+    me.ledger_sync(inbox.to_string_lossy().into(), out.to_string_lossy().into(), "me".into()).unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"untouched", "the temporary link was not written through");
+}
+
+/// **A zone is a list of offsets in ascending order** (audit 2026-11-05, L5d): none, one out of order, or one beyond any
+/// zone's offset is a malformed request, refused before the ledger reads it.
+#[test]
+fn a_zone_out_of_order_or_empty_is_malformed() {
+    let dir = Scratch::new("zone");
+    let me = device(&dir.path("data-me"));
+    let at = 1_790_640_000.0;
+    for zone in [
+        vec![],
+        vec![ZoneOffset { from: at, seconds: 0 }, ZoneOffset { from: at - 1.0, seconds: 3_600 }],
+        vec![ZoneOffset { from: f64::NAN, seconds: 0 }],
+        vec![ZoneOffset::fixed(25 * 3_600)],
+    ] {
+        assert!(matches!(me.ledger_history(at, zone.clone()), Err(CoreError::Malformed { .. })), "{zone:?} is refused");
+        assert!(matches!(me.ledger_compact(at, zone.clone()), Err(CoreError::Malformed { .. })), "{zone:?}");
+    }
 }

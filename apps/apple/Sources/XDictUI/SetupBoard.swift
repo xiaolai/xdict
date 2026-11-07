@@ -77,6 +77,24 @@ public struct SetupBoard: Equatable, Sendable {
             }
         }
 
+        /// **The row of XDict's own Settings that holds this row's control** (audit 2026-11-05, M9: the hover row opened
+        /// General, which has had no hover control since the Lookup pane took it on 2026-10-30). Nil for a row whose
+        /// control is the system's or sits on the board's row itself.
+        public var settingsItem: SettingsSearch.Item? {
+            let anchor: SettingsSearch.Anchor? = switch self {
+            case .dictionaries: .dictionaryList
+            case .shortcut: .lookupShortcut
+            case .hover: .hover
+            case .ai: .aiSource
+            case .accessibility, .screenRecording, .services, .appleLookUp, .spotlight: nil
+            }
+            return anchor.flatMap { anchor in SettingsSearch.items.first { $0.anchor == anchor } }
+        }
+
+        /// The pane that row is in: Settings search's own table says where each control lives, so the board cannot
+        /// name a pane the control has left.
+        public var settingsPane: SettingsTab? { settingsItem?.pane }
+
         /// The group the row is drawn in.
         public var group: Group {
             switch self {
@@ -138,6 +156,9 @@ public struct SetupBoard: Equatable, Sendable {
     public var trusted: Bool
     /// Whether the lookup shortcut is registered.
     public var shortcutWorks: Bool
+    /// **Why the shortcut is not registered, when the registrar knows** (audit 2026-11-05, L14): each problem is worded
+    /// as the recorder words it, where the row used to say "in use by another app" for every one of them.
+    public var shortcutProblem: ShortcutProblem?
     /// **XDict's own Screen Recording grant** (owner, 2026-10-23: the board did not include it, so the grant hover's
     /// screen reading needs was found only inside the hover pane): the one row that asks, read without prompting.
     public var screenRecording: ScreenRecordingRow
@@ -163,10 +184,12 @@ public struct SetupBoard: Equatable, Sendable {
     public init(dictionaries: Int, trusted: Bool, shortcutWorks: Bool, hoverOn: Bool = false, hoverKey: String = "⌥",
                 hoverDoubleTap: Bool = false, screenRecording: ScreenRecordingRow = .notSetUp,
                 services: SystemFact = .unreadable, appleLookUp: AppleLookUp = AppleLookUp(),
-                spotlightEnabled: Bool = false, spotlightFailed: Bool = false, aiConfigured: Bool = false) {
+                spotlightEnabled: Bool = false, spotlightFailed: Bool = false, aiConfigured: Bool = false,
+                shortcutProblem: ShortcutProblem? = nil) {
         self.dictionaries = dictionaries
         self.trusted = trusted
         self.shortcutWorks = shortcutWorks
+        self.shortcutProblem = shortcutProblem
         self.screenRecording = screenRecording
         self.hoverOn = hoverOn
         self.hoverKey = hoverKey
@@ -304,18 +327,20 @@ public struct SetupBoard: Equatable, Sendable {
                     Security ▸ Accessibility; this row updates by itself.
                     """)
         case .shortcut:
-            return state == .done
-                ? LocalizedStringResource("Select a word anywhere and press the shortcut to look it up.")
-                : LocalizedStringResource("The shortcut is in use by another app. Choose another one.")
+            if state == .done {
+                return LocalizedStringResource("Select a word anywhere and press the shortcut to look it up.")
+            }
+            if let shortcutProblem { return AnywhereSentences.problem(shortcutProblem) }
+            return LocalizedStringResource("No lookup shortcut is registered. Choose one.")
         case .hover:
             // The verb carries the gesture and the key is the key itself: "Tap ⌥ twice", never "Tap ⌥⌥ twice".
             switch (state, hoverDoubleTap) {
             case (.done, true):
                 return LocalizedStringResource(
-                    "Tap \(hoverKey) twice with the pointer resting on a word. Change the key in General.")
+                    "Tap \(hoverKey) twice with the pointer resting on a word. Change the key in Settings ▸ Lookup.")
             case (.done, false):
                 return LocalizedStringResource(
-                    "Hold \(hoverKey) and rest the pointer on a word in any app. Change the key in General.")
+                    "Hold \(hoverKey) and rest the pointer on a word in any app. Change the key in Settings ▸ Lookup.")
             case (_, true):
                 return LocalizedStringResource("""
                     Off. Turn it on to look up the word under the pointer: tap \(hoverKey) twice with it resting on a \

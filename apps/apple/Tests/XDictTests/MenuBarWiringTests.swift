@@ -9,6 +9,18 @@ import XDictTestSupport
 /// `MenuBarExtra` is used at all — measured, SwiftUI drives its button privately and a right click cannot reach it, and an
 /// `isInserted:` binding rebuilt the main menu forever on macOS 27 and hung the launch (`ui-fix`, 2026-10-17).
 struct MenuBarWiringTests {
+    /// **The tooltip follows the shortcut** (L14): assigned once at install it named the launch's shortcut, or none,
+    /// through every later change. Read off the code, as the rest of this suite is: every assignment goes through
+    /// `Observed.follow`, which applies it again after each change (`ObservedTests`).
+    @Test func theTooltipIsKeptInStepWithTheShortcut() throws {
+        let file = Manifest.package.appending(path: "Sources/XDict/MenuBarItem.swift")
+        let code = SourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
+        let assignments = code.components(separatedBy: "\n").filter { $0.contains("toolTip =") }
+        #expect(!assignments.isEmpty, "the premise: the tooltip is set somewhere")
+        #expect(assignments.allSatisfy { $0.contains("apply:") }, "a tooltip set outside a follow: \(assignments)")
+        #expect(code.contains("Observed.follow("))
+    }
+
     @Test func theAppAnswersFromTheReadersChoiceAndOwnsItsStatusItem() throws {
         let app = Manifest.package.appending(path: "Sources/XDict")
         let files = try SourceScan.files(under: app).map { (name: $0.file.lastPathComponent, text: $0.text) }

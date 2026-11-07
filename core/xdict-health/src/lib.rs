@@ -14,13 +14,13 @@
 //! ([`MAX_CACHED_KEYS`]) — and every check is linear in the record (`tests/linear.rs`).
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{Hash, Hasher};
 
 use xdict_mdx::{Budget, File, Kept};
 
 /// The checker's version: raised by any change to what it counts, so a cached report of an older one is checked again.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 /// Examples kept per class, and the characters each shows around its place.
 pub const EXAMPLES: usize = 3;
 const WINDOW: usize = 60;
@@ -28,8 +28,6 @@ const WINDOW: usize = 60;
 const HUGE: usize = 1 << 20;
 /// Records read between two progress reports.
 const CHUNK: usize = 4096;
-/// Redirect hops followed before a chain is `redirect.chain_too_deep`.
-const CHAIN: usize = 5;
 /// Redirects kept for the chain check; past it, each is `redirect.unchecked`.
 pub const MAX_REDIRECTS: usize = 1 << 20;
 /// Distinct missing stylesheets and scripts named; past it, each is counted under `""`.
@@ -88,16 +86,18 @@ pub enum Stop {
 }
 
 /// Checks every record of `file`, in file order. `has_resource` says whether the package holds a path as an entry
-/// writes it (a sidecar or a volume's key); `progress` is told records done of all after each chunk, and answering
-/// `false` stops the check.
+/// writes it (a sidecar or a volume's key); `progress` is told records done of all after each chunk, then the redirect
+/// walk counted on after the records (done and all both grow by the redirect count, known once every record is read),
+/// after each chunk of it; answering `false` stops the check.
 pub fn check(
     file: &File,
     has_resource: &dyn Fn(&str) -> bool,
     progress: &mut dyn FnMut(u64, u64) -> bool,
 ) -> Result<Report, Stop> {
     let total = file.len();
-    let mut scan = Scan { file, has_resource, found: HashMap::new(), report: Report::default() };
-    let mut redirects: Vec<(usize, String, String)> = Vec::new();
+    let mut scan = Scan { file, has_resource, found: HashMap::new(), report: Report::default(), failure: None };
+    let mut redirects: Vec<(usize, String)> = Vec::new();
+    let mut targets: HashMap<usize, Vec<String>> = HashMap::new();
     let mut run = Run::default();
     let mut kept = Kept::default();
     let mut from = 0usize;
@@ -109,15 +109,22 @@ pub fn check(
             let text = String::from_utf8_lossy(&record.data);
             scan.report.records += 1;
             run.add(&mut scan.report, &record.key, &record.data);
-            if let Some(target) = redirect_target(&text) {
+            // **A redirect is what the lookup reads as one** (audit 2026-11-05, L8): its predicate and its targets.
+            if xdict_lookup::is_redirect(&text) {
                 if redirects.len() < MAX_REDIRECTS {
-                    redirects.push((i, record.key.clone(), target.to_owned()));
+                    redirects.push((i, record.key.clone()));
+                    targets.insert(i, xdict_lookup::redirect_targets(&text));
                 } else {
                     scan.report.add("redirect.unchecked", 1);
                 }
             }
             scan.record(&record.key, &text, record.lossy);
-            Ok(())
+            // **A link whose lookup failed stops the check with the failure** (L8): read as "missing", a damaged
+            // key block would have been counted as hundreds of broken links.
+            match scan.failure.take() {
+                Some(failure) => Err(failure),
+                None => Ok(()),
+            }
         })
         .map_err(Stop::Read)?;
         from = to;
@@ -127,7 +134,7 @@ pub fn check(
     }
     run.flush(&mut scan.report);
     let mut report = scan.report;
-    chains(file, &redirects, &mut report).map_err(Stop::Read)?;
+    chains(file, &redirects, &targets, &mut report, progress, total as u64)?;
     Ok(report)
 }
 
@@ -183,56 +190,64 @@ impl Run {
     }
 }
 
-/// Every redirect's target followed: missing, the redirect itself, a loop, too deep, or a chain that ends in an entry.
-fn chains(file: &File, redirects: &[(usize, String, String)], report: &mut Report) -> Result<(), xdict_mdx::Error> {
-    let targets: HashMap<usize, &str> = redirects.iter().map(|(i, _, t)| (*i, t.as_str())).collect();
-    for (i, key, target) in redirects {
-        let shown = format!("{key} -> @@@LINK={target}");
-        if target.is_empty() {
-            report.hit("redirect.empty_target", key, &shown, 0);
-            continue;
-        }
-        let mut seen = HashSet::from([*i]);
-        let mut current = target.clone();
-        let mut depth = 0;
-        loop {
-            let found = file.find(&current)?;
-            if found.is_empty() {
-                let class = if depth == 0 { "redirect.missing_target" } else { "redirect.chain_ends_missing" };
-                report.hit(class, key, &shown, 0);
-                break;
-            }
-            // A key found under the file's folding rules may be the redirect's own: only the others count.
-            let found: Vec<usize> = found.into_iter().filter(|f| !seen.contains(f)).collect();
-            if found.is_empty() {
-                let class = if depth == 0 { "redirect.to_itself" } else { "redirect.loop" };
-                report.hit(class, key, &shown, 0);
-                break;
-            }
-            // Followed only when every target is itself a redirect.
-            let mut next = None;
-            let mut all_redirects = true;
-            for f in found {
-                seen.insert(f);
-                match targets.get(&f) {
-                    Some(t) => next = Some((*t).to_owned()),
-                    None => all_redirects = false,
-                }
-            }
-            if !all_redirects {
-                if depth > 0 {
-                    report.add("redirect.chained_ok", 1);
-                }
-                break;
-            }
-            depth += 1;
-            if depth >= CHAIN {
-                report.hit("redirect.chain_too_deep", key, &shown, 0);
-                break;
-            }
-            current = next.unwrap_or_default();
+/// **Every redirect followed by the lookup's own walk** (`xdict_lookup::follow_known`; audit 2026-11-05, L8): one that
+/// reaches no entry is classed by the first thing that stopped it short — a target that names nothing or no key, a
+/// loop, the lookup's hop or fan-out limit; one that reaches entries through another redirect is `redirect.chained_ok`.
+/// **The walk is counted in the progress the record pass reports**: done and all are the records plus the redirects
+/// walked and to walk, told after each [`CHUNK`] of the walk and after its last partial chunk, as the record pass is
+/// told; so a bar that reached every record goes on to the end of the walk instead of sitting at the end while a
+/// million redirects are followed, and a cancel there is heard. No redirect, no report: the record pass's last one stands.
+fn chains(
+    file: &File,
+    redirects: &[(usize, String)],
+    targets: &HashMap<usize, Vec<String>>,
+    report: &mut Report,
+    progress: &mut dyn FnMut(u64, u64) -> bool,
+    total: u64,
+) -> Result<(), Stop> {
+    let all = total.saturating_add(redirects.len() as u64);
+    for (n, (i, key)) in redirects.iter().enumerate() {
+        walk_one(file, *i, key, targets, report)?;
+        let walked = n.saturating_add(1);
+        if (walked % CHUNK == 0 || walked == redirects.len()) && !progress(total.saturating_add(walked as u64), all) {
+            return Err(Stop::Cancelled);
         }
     }
+    Ok(())
+}
+
+/// One redirect followed and classed (the body of [`chains`]'s loop).
+fn walk_one(
+    file: &File,
+    i: usize,
+    key: &str,
+    targets: &HashMap<usize, Vec<String>>,
+    report: &mut Report,
+) -> Result<(), Stop> {
+    let named = targets.get(&i).map(Vec::as_slice).unwrap_or(&[]);
+    let shown = format!("{key} -> @@@LINK={}", named.first().map_or("", String::as_str));
+    let walked = xdict_lookup::follow_known(file, i, targets).map_err(Stop::Read)?;
+    // **Broken only when the lookup reaches no entry through it**: a reader's click on a redirect that also
+    // names a dead end, or loops beside an entry, still lands on the entry.
+    if !walked.reached.is_empty() {
+        if walked.reached.iter().any(|(_, chain)| chain.len() > 2) {
+            report.add("redirect.chained_ok", 1);
+        }
+        return Ok(());
+    }
+    let class = match walked.problems.first() {
+        Some(xdict_lookup::Problem::Dangling { from, target }) if *from == i && target.is_empty() => {
+            "redirect.empty_target"
+        }
+        Some(xdict_lookup::Problem::Dangling { from, .. }) if *from == i => "redirect.missing_target",
+        Some(xdict_lookup::Problem::Dangling { .. }) => "redirect.chain_ends_missing",
+        Some(xdict_lookup::Problem::Loop { chain }) if chain.len() == 2 => "redirect.to_itself",
+        Some(xdict_lookup::Problem::Loop { .. }) => "redirect.loop",
+        Some(xdict_lookup::Problem::Limit { .. }) => "redirect.chain_too_deep",
+        // Nothing reached and nothing met is not a walk the lookup makes; counted as a dead end, never dropped.
+        None => "redirect.missing_target",
+    };
+    report.hit(class, key, &shown, 0);
     Ok(())
 }
 
@@ -332,13 +347,6 @@ pub fn resource_key(path: &str) -> String {
     format!("\\{p}")
 }
 
-/// The target of a record that is `@@@LINK=…`.
-fn redirect_target(text: &str) -> Option<&str> {
-    let t = text.trim_start_matches('\u{feff}').trim_start();
-    let rest = t.strip_prefix("@@@LINK=")?;
-    Some(rest.split(['\r', '\n', '\0']).next().unwrap_or("").trim())
-}
-
 /// Sorted, non-overlapping byte ranges, asked about at positions that never decrease: linear in all.
 struct Ranges {
     ranges: Vec<(usize, usize)>,
@@ -373,13 +381,24 @@ struct Scan<'a> {
     has_resource: &'a dyn Fn(&str) -> bool,
     found: HashMap<String, Found>,
     report: Report,
+    /// The first lookup that failed while a record was checked: the check stops with it.
+    failure: Option<xdict_mdx::Error>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Found {
     Tier1,
     Folded,
     Missing,
+}
+
+/// What a link's matches say of its key: at tier 1, at tier 2 only, or nowhere.
+fn found(matched: Result<Vec<(usize, xdict_lookup::How)>, xdict_mdx::Error>) -> Result<Found, xdict_mdx::Error> {
+    Ok(match matched?.into_iter().next() {
+        None => Found::Missing,
+        Some((_, xdict_lookup::How::Unmarked)) => Found::Folded,
+        Some(_) => Found::Tier1,
+    })
 }
 
 impl Scan<'_> {
@@ -389,11 +408,13 @@ impl Scan<'_> {
         if let Some(&f) = self.found.get(key) {
             return f;
         }
-        let matched = xdict_lookup::matches(self.file, key, xdict_lookup::Mode::Link).ok();
-        let f = match matched.and_then(|m| m.into_iter().next()) {
-            None => Found::Missing,
-            Some((_, xdict_lookup::How::Unmarked)) => Found::Folded,
-            Some(_) => Found::Tier1,
+        let f = match found(xdict_lookup::matches(self.file, key, xdict_lookup::Mode::Link)) {
+            Ok(f) => f,
+            Err(failure) => {
+                // Not counted and not cached: the check stops with the failure once this record is done.
+                self.failure.get_or_insert(failure);
+                return Found::Tier1;
+            }
         };
         if self.found.len() < MAX_CACHED_KEYS {
             self.found.insert(key.to_owned(), f);
@@ -493,7 +514,7 @@ impl Scan<'_> {
         if lossy > 0 {
             self.report.hit("text.undecodable_bytes", key, text, text.find('\u{fffd}').unwrap_or(0));
         }
-        if redirect_target(text).is_some() {
+        if xdict_lookup::is_redirect(text) {
             return;
         }
         if let Some(at) = text.find("@@@LINK=") {
@@ -846,5 +867,16 @@ mod tests {
         run.flush(&mut report);
         assert_eq!(report.count("key.duplicate_identical_records"), 1);
         assert_eq!(report.count("key.duplicate_differing_records"), 0);
+    }
+
+    /// **A link whose lookup fails is a failure, never a missing key** (audit 2026-11-05, L8): the error's sentence
+    /// stops the check, rather than counting a link the edition may hold as broken.
+    #[test]
+    fn a_failed_lookup_is_an_error_not_a_missing_key() {
+        let failed = found(Err(xdict_mdx::Error::Malformed("the key block's checksum does not match".into())));
+        assert!(matches!(&failed, Err(e) if e.to_string().contains("checksum")), "{failed:?}");
+        assert!(matches!(found(Ok(vec![])), Ok(Found::Missing)));
+        assert!(matches!(found(Ok(vec![(0, xdict_lookup::How::Exact)])), Ok(Found::Tier1)));
+        assert!(matches!(found(Ok(vec![(0, xdict_lookup::How::Unmarked)])), Ok(Found::Folded)));
     }
 }

@@ -61,21 +61,29 @@ fn the_phrase_vectors_conform() {
             failures.push(e);
         }
     };
+    // **Every case is counted by its kind** (audit 2026-11-05, G9): an empty or truncated vectors file would otherwise
+    // pass having checked nothing.
+    let (mut builds, mut vectors_run, mut lines) = (0usize, 0usize, 0usize);
     for (number, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
+        lines += 1;
         let case: Value =
             serde_json::from_str(line).unwrap_or_else(|e| panic!("vectors.jsonl line {}: {e}", number + 1));
         let name = case["name"].as_str().unwrap_or("case");
         match case["kind"].as_str().unwrap() {
             // The inventory's build: the fixture's phrases counted, and a second build answering from the store.
-            "build" => check(
-                &format!("{name}.build"),
-                &case["expect"],
-                &outcome(core.phrases_build(dict.clone(), &NoProgress)),
-            ),
+            "build" => {
+                builds += 1;
+                check(
+                    &format!("{name}.build"),
+                    &case["expect"],
+                    &outcome(core.phrases_build(dict.clone(), &NoProgress)),
+                );
+            }
             "vector" => {
+                vectors_run += 1;
                 let sentence = case["sentence"].as_str().unwrap().to_string();
                 let location = case["term"]["location"].as_u64().unwrap();
                 let length = case["term"]["length"].as_u64().unwrap();
@@ -95,5 +103,8 @@ fn the_phrase_vectors_conform() {
             other => panic!("vectors.jsonl line {}: no kind {other}", number + 1),
         }
     }
+    let ran = format!("the vectors ran {builds} builds and {vectors_run} vectors");
+    assert!(builds > 0 && vectors_run > 0, "{ran}: a kind is missing");
+    assert_eq!(builds + vectors_run, lines, "a line of the vectors was not run as a case");
     assert!(failures.is_empty(), "{} phrase failures:\n  {}", failures.len(), failures.join("\n  "));
 }

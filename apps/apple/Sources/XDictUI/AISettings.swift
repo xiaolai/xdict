@@ -435,7 +435,7 @@ public struct AISettings: View {
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("ai.key")
             Button("Save Key") { model.saveKey() }  // placement: form-pane
-                .disabled(model.draftKey.isEmpty)
+                .disabled(model.draftKeyToSave.isEmpty)
                 .accessibilityIdentifier("ai.key.save")
         }
     }

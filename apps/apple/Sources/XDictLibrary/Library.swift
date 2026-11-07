@@ -317,11 +317,18 @@ public final class Library {
     // MARK: - Importing
 
     private func enqueue(_ id: UUID) {
-        guard running?.id != id, !queue.contains(id) else { return }
+        // A cancelled run of the same id that is still finishing (a remove, then Undo) does not refuse the new import:
+        // it is queued behind that run. Refused, the restored dictionary was left Cancelled by the run's end.
+        guard !isImporting(id), !queue.contains(id) else { return }
         queue.append(id)
         working()
         set(id, .waiting)
         pump()
+    }
+
+    /// Whether `id` has a run that is not being cancelled.
+    private func isImporting(_ id: UUID) -> Bool {
+        running.map { $0.id == id && !$0.cancelled } ?? false
     }
 
     private func pump() {
@@ -362,6 +369,8 @@ public final class Library {
             }
         case .failure(let failure):
             convertingAgain.remove(id)
+            // Restored while this cancelled run finished: the queued import speaks for the dictionary now.
+            guard !(current.cancelled && queue.contains(id)) else { return }
             let refusal = ImportRefusal(failure, fileName: { [entries] file in
                 entries.lazy.flatMap(\.files).first { $0.id == file }?.fileName
             })
@@ -482,7 +491,7 @@ public final class Library {
 
     /// Imports a dictionary again: after a cancel or a failure, or a refused one the reader has replaced.
     public func retry(_ id: UUID) {
-        guard let at = index(id), running?.id != id, !queue.contains(id) else { return }
+        guard let at = index(id), !isImporting(id), !queue.contains(id) else { return }
         entries[at].refusal = nil
         save()
         enqueue(id)
@@ -506,7 +515,11 @@ public final class Library {
         }
         set(id, .opening)
         let outcome = await backend.open(package)
-        guard index(id) != nil else { return }
+        guard index(id) != nil else {
+            // Removed while it opened: the service's handle is closed here, or it stayed open until the service quit.
+            if case .success(.ready(let dict, _, _)) = outcome { _ = await backend.close(dict) }
+            return
+        }
         switch outcome {
         case .success(.ready(let dict, let edition, _)):
             if let old = handles[id], old != dict { _ = await backend.close(old) }

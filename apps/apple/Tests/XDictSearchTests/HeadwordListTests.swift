@@ -94,6 +94,37 @@ struct HeadwordListTests {
         #expect(model.text == "take o", "the field keeps what the reader typed")
     }
 
+    /// **A first-match jump is about the lookup it was decided for** (audit 2026-11-05, M10): "take o" has no entry, so
+    /// its jump to "take off" is queued — behind a step the reader had already asked for. That step's lookup must
+    /// stand: the jump used to rename its place and supersede it.
+    @Test func aJumpQueuedBehindANewerLookupDoesNothing() async {
+        let backend = Self.backend()
+        let model = await Self.model(backend)
+        await backend.hold(Fixture.handle("A"))
+        await backend.hold(Fixture.handle("B"))
+        // A place with an entry, so the next step stops to read its scroll offset: the step is queued, not yet taken.
+        model.adopt(Visit(query: "take o", mode: .reader, scope: .all, result: Fixture.result(1, "A", "take on"),
+                          typed: "take o", isOrigin: true))
+        await model.idle()
+        #expect(await eventually { model.listing?.typed == "take o" })
+        let gate = Slot()
+        model.scrollReader = {
+            _ = await gate.value()
+            return 0
+        }
+        model.submit("apple")
+        // "take o" answers nothing of its own, so the list settles and the jump to its first row is queued.
+        await backend.release(Fixture.handle("A"))
+        await backend.release(Fixture.handle("B"))
+        #expect(await eventually { model.listing?.settled == true })
+        gate.fulfil(.failure(.superseded))
+        await model.idle()
+        await model.answersSettled()
+        #expect(model.lookup?.query == "apple", "the stale jump replaced the newer lookup")
+        #expect(model.trail.current?.query == "apple")
+        #expect(await eventually { model.shown?.result == Fixture.result(1, "A", "apple") })
+    }
+
     /// **P9, P11**: choosing a row shows that headword, keeps the list, and is a place Back returns from.
     @Test func choosingARowShowsItAndKeepsTheList() async {
         let model = await Self.model(Self.backend())

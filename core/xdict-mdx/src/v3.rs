@@ -46,8 +46,7 @@ pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Par
     let [record_data, record_index, key_data, key_index] = sections(source, at, &key)?;
     let key_count = check_descriptors(&record_data, &record_index, &key_data, &key_index)?;
     // A 3.0 file's record blocks are read before its keys, so the keys get what the block table left.
-    let blocks_cost = block::weigh(record_data.count, limits::INDEX_BYTES)?;
-    let blocks = record_blocks(source, &record_data, &record_index, &key, limits::INDEX_BYTES)?;
+    let (blocks, blocks_cost) = record_blocks(source, &record_data, &record_index, &key, limits::INDEX_BYTES)?;
     let budget = limits::INDEX_BYTES.saturating_sub(blocks_cost);
     let (key_blocks, table_cost) = key_blocks(source, &key_index, &key_data, key_count, &key, budget)?;
 
@@ -135,15 +134,16 @@ fn check_descriptors(
     Ok(key_count)
 }
 
-/// Where each record block lies, from the record index: per block, its unit's size and decompressed size.
+/// Where each record block lies, from the record index: per block, its unit's size and decompressed size. With what
+/// the block table costs, weighed once against `budget` before the index is read.
 fn record_blocks(
     source: &dyn Source,
     record_data: &Section,
     record_index: &Section,
     key: &[u8; 16],
     budget: u64,
-) -> Result<Vec<RecordBlock>, Error> {
-    block::weigh(record_data.count, budget)?;
+) -> Result<(Vec<RecordBlock>, u64), Error> {
+    let cost = block::weigh(record_data.count, budget)?;
     let index = section_data(source, record_index, key, "record index")?;
     if Some(index.len() as u64) != record_data.count.checked_mul(16) {
         return Err(Error::Malformed("the record index has the wrong length".into()));
@@ -164,7 +164,7 @@ fn record_blocks(
             return Err(Error::Malformed("a record block's sizes disagree with the record index".into()));
         }
     }
-    Ok(blocks)
+    Ok((blocks, cost))
 }
 
 /// What each key block holds, from the key index: per block, its key count, first and last key, unit

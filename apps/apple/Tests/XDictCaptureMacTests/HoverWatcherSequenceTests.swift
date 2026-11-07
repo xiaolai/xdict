@@ -22,16 +22,23 @@ struct HoverWatcherSequenceTests {
         let watcher: HoverWatcher
         /// The monotonic clock the watcher reads, which the test moves.
         let clock = TestClock()
+        /// The primary display's height the watcher reads; nil is a Mac with no display.
+        let display = TestDisplay()
 
         @MainActor
         final class TestClock {
             var now = ContinuousClock.now
         }
 
+        @MainActor
+        final class TestDisplay {
+            var height: CGFloat? = 1_000
+        }
+
         init(gesture: HoverGesture = .hold) {
             var policy = HoverPolicy.shipped
             policy.gesture = gesture
-            let pointer = pointer, timer = timer, clock = clock
+            let pointer = pointer, timer = timer, clock = clock, display = display
             // **The log this rig writes to is its own** (owner's report, 2026-10-30): a test reads what the watcher wrote
             // without touching the app's file, or racing the app that is running beside it.
             diagnostics = Diagnostics(
@@ -39,7 +46,7 @@ struct HoverWatcherSequenceTests {
                 directory: FileManager.default.temporaryDirectory.appending(path: "watcher-\(UUID().uuidString)"))
             watcher = HoverWatcher(
                 policy: { policy }, requests: requests, restTolerance: HoverFixtures.rest,
-                primaryHeight: { 1_000 }, events: events, pointer: { pointer.read() },
+                primaryHeight: { display.height }, events: events, pointer: { pointer.read() },
                 schedule: { timer.schedule($0, $1) }, now: { clock.now }, reader: reader, diagnostics: diagnostics)
             watcher.sink = sink
             watcher.start()
@@ -506,6 +513,48 @@ struct HoverWatcherSequenceTests {
         await rig.asks(2)
         #expect(rig.reader.asks.map(\.request.number) == [rig.reader.asks[0].request.number, rig.reader.asks[0].request.number],
                 "the re-ask was numbered \(rig.reader.asks.map(\.request.number))")
+    }
+
+    /// **A read the reader left, refused for a busy capture, ends its request** (audit 2026-11-05 M7; `lifecycle.md` rule
+    /// 2): the pointer moved off, the read was dropped, and it came back `.captureInFlight`. Red while the watcher finished
+    /// an origin only for a `.nothing` end and the session emitted no `.drop` for a busy one: the request stayed open.
+    @Test func aBusyCaptureAfterThePointerLeftEndsTheRequest() async {
+        let rig = Rig()
+        await rig.rest()
+        rig.pointer.at = UpPoint(x: 400, y: 100)
+        rig.events.emit(.pointerMoved)
+        rig.reader.answer(.quiet(.captureInFlight))
+        await HoverFixtures.settle { rig.requests.terminal(of: rig.reader.asks[0].request) != nil }
+        #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled, "the dropped request stayed open")
+    }
+
+    /// **A read stopped mid-flight and refused for a busy capture ends its request** (audit 2026-11-05 M7): stopping
+    /// leaves the read in flight to end its own. Red while a busy end after a stop ended nothing.
+    @Test func aBusyCaptureAfterAStopEndsTheRequest() async {
+        let rig = Rig()
+        await rig.rest()
+        rig.watcher.stop()
+        rig.reader.answer(.quiet(.captureInFlight))
+        await HoverFixtures.settle { rig.requests.terminal(of: rig.reader.asks[0].request) != nil }
+        #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled, "the stopped request stayed open")
+    }
+
+    /// **A tap served with no display to read on ends its request** (audit 2026-11-05 M7, the same shape): the tap made
+    /// during a read reserved its number, and the ask that found no display ended the read without ending that request.
+    @Test func aTapServedWithNoDisplayEndsItsRequest() async {
+        let rig = Rig(gesture: .doubleTap)
+        rig.events.doubleTap(from: 10)
+        await rig.asks(1)
+        let first = rig.reader.asks[0].request
+        rig.events.emit(.modifiers([], at: 10.3, location: nil))
+        rig.events.doubleTap(from: 11)
+        // Reserved by the tap during the read: the next number handed out.
+        let waiting = CaptureRequest(number: first.number + 1, trigger: .pointerGesture)
+        rig.display.height = nil
+        rig.reader.answer(.quiet(.cancelled))
+        await HoverFixtures.settle { rig.requests.terminal(of: waiting) != nil }
+        #expect(rig.reader.asks.count == 1, "the tap was read with no display")
+        #expect(rig.requests.terminal(of: waiting)?.outcome == .cancelled, "the reserved request stayed open")
     }
 
     /// **A recognised word is presented with its context pending** (ADR-0014 d.2): acquisition `recognition`, the context

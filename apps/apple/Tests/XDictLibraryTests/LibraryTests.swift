@@ -506,6 +506,43 @@ struct LibraryTests {
         #expect(try LibraryStore(directory: storeDir).load()?.entries.isEmpty == true)
     }
 
+    /// **A dictionary removed while it was opening leaves no handle open** (L14): the open answered after the removal,
+    /// found no entry and returned, and the service kept the dictionary open until it quit.
+    @Test func aDictionaryRemovedWhileOpeningIsClosedWhenTheOpenAnswers() async throws {
+        try dir.files("a.mdx")
+        let library = library()
+        await library.start()
+        await backend.holdOpens()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        for _ in 0..<500 where await backend.heldOpenCount == 0 { try? await Task.sleep(for: .milliseconds(10)) }
+        try #require(await backend.heldOpenCount == 1, "the open never started")
+        await library.remove(id)
+        await backend.releaseOpens()
+        await library.settle()
+        for _ in 0..<100 where await backend.closed.isEmpty { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(library.entries.isEmpty)
+        #expect(await backend.closed == [DictId(rawValue: String(format: "%016x", 1))])
+    }
+
+    /// **Undo of a removal made while its import was being cancelled imports it again** (L14): the cancelled run was
+    /// still finishing, so the restore's import was refused as already running, and the run's end left it Cancelled.
+    @Test func aDictionaryRestoredWhileItsImportIsCancellingIsImportedAgain() async throws {
+        try dir.files("a.mdx")
+        let library = library()
+        await library.start()
+        await backend.hold()
+        await backend.slowCancel()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await waitUntilHeld()
+        let removed = try #require(await library.removeForUndo(id))
+        library.restore(removed)
+        await backend.release()
+        await backend.answerCancels()
+        await library.settle()
+        #expect(library.phases[id] == .ready)
+        #expect(await backend.imports == ["a.mdx", "a.mdx"])
+    }
+
     /// **Remove can be undone** (UI review L-09): the dictionary returns with its id (its lineage and everything kept
     /// under it), at its place in the order, and opens again.
     @Test func aRemovedDictionaryComesBackWhereItWas() async throws {

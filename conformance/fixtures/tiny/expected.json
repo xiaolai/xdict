@@ -470,7 +470,7 @@
   ],
   "health": {
     "comment": "WI-12: the import health check of the open dictionary, its findings compared by subset (the census classes behind them are not). The one problem tiny holds is the redirect lost -> nowhere.",
-    "version": 1,
+    "version": 2,
     "entries": 8,
     "findings": [
       {

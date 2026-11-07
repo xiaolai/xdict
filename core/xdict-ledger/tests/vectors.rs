@@ -30,7 +30,7 @@ struct Case {
 #[serde(rename_all = "camelCase")]
 struct HistoryCase {
     now: f64,
-    utc_offset_seconds: i32,
+    zone: Vec<xdict_ledger::ZoneOffset>,
     expect: Value,
 }
 
@@ -85,7 +85,7 @@ fn the_bindings_conformance_vectors_hold_in_the_core() {
         assert_eq!(actual, Value::String(case.expect.clone()), "operation {}", case.operation);
     }
 
-    let history = ledger.history(cases.history.now, cases.history.utc_offset_seconds);
+    let history = ledger.history(cases.history.now, &cases.history.zone);
     let actual = serde_json::to_value(&history).expect("a history is JSON");
     if let Err(why) = subset(&cases.history.expect, &actual, "history") {
         panic!("{why}");

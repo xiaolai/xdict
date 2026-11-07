@@ -18,7 +18,10 @@ use crate::colour::{self, Role};
 ///
 /// 14: the text projection gives a nested role inside an example or a translation its container's role (918d61e),
 /// which changes the sense spans and markup an entry is written with.
-pub const STYLE: u32 = 14;
+/// 15: a rule with a nested block is normalized, a vendor-prefixed property is read as its own, every colour property
+/// is on the palette, an escaped image function drawn as content goes, a dictionary's `data-xdict-*` attributes go,
+/// and a block nested past the depth followed is dropped (audit 2026-11-05, M2 and M3).
+pub const STYLE: u32 = 15;
 
 /// Every token the core may write, by `dev-docs/reading-style.md` §1's names: the frame defines exactly these, and a
 /// name not among them would fall back silently. The one list; a test holds every output to it.
@@ -81,8 +84,8 @@ pub const TOKENS: [&str; 52] = [
 const FONT: &str = "var(--xdict-font)";
 /// The size a browser gives a page that sets none.
 const DEFAULT_PX: f64 = 16.0;
-/// Blocks nested deeper than this are copied without being followed: no sheet needs them, and a hostile one of
-/// a million `{` would otherwise hold a million frames.
+/// Blocks nested deeper than this are not followed, and their bodies are dropped: copied, they would reach the page
+/// as written. No sheet needs them, and a hostile one of a million `{` would otherwise hold a million frames.
 const MAX_DEPTH: usize = 64;
 /// The longest selector a report quotes.
 const SELECTOR_CHARS: usize = 160;
@@ -99,6 +102,8 @@ pub struct Style {
     page_px: f64,
     over_page: BTreeSet<String>,
     kept: Vec<Kept>,
+    /// `kept`'s selectors as stored, one for each ([`Style::phonetic`]).
+    kept_selectors: Vec<String>,
     /// `kept`'s families as compared: lower case, unquoted, spaces collapsed.
     keys: BTreeMap<String, usize>,
     /// What the edition's rules and scripts say about its elements (`crate::facts`).
@@ -334,7 +339,8 @@ impl Style {
                 }
             }
         }
-        let mut kept: BTreeMap<String, Kept> = BTreeMap::new();
+        // Each with its rule's selector as stored, which the phonetic marker reads; the report's is cut.
+        let mut kept: BTreeMap<String, (Kept, String)> = BTreeMap::new();
         for rule in rules.iter().filter(|r| !r.face) {
             let content = rule.decls.iter().rev().find(|(n, _)| n == "content").map(|(_, v)| v.trim());
             let private = content.is_some_and(private_use);
@@ -358,9 +364,10 @@ impl Style {
                     } else {
                         continue;
                     };
-                    let better = kept.get(&key).is_none_or(|k| reason < k.reason);
+                    let better = kept.get(&key).is_none_or(|(k, _)| reason < k.reason);
                     if better {
-                        kept.insert(key, Kept { family, reason, selector: report_selector(&rule.selector) });
+                        let shown = Kept { family, reason, selector: report_selector(&rule.selector) };
+                        kept.insert(key, (shown, rule.selector.clone()));
                     }
                 }
             }
@@ -378,12 +385,27 @@ impl Style {
             Some(m) => (Base { px: m.px, from: BaseFrom::Text { chars: m.chars, share: m.share } }, m.over_page),
             None => (voted, BTreeSet::new()),
         };
-        let mut list: Vec<Kept> = kept.into_values().collect();
-        list.sort_by(|a, b| a.family.cmp(&b.family));
+        let mut both: Vec<(Kept, String)> = kept.into_values().collect();
+        both.sort_by(|a, b| a.0.family.cmp(&b.0.family));
+        let (list, kept_selectors): (Vec<Kept>, Vec<String>) = both.into_iter().unzip();
         let keys = list.iter().enumerate().map(|(i, k)| (key(&k.family), i)).collect();
         let mut facts = crate::facts::Facts::of_rules(&rules);
         facts.find_wrapper(entries.iter().copied());
-        Self { base, page_px, over_page, kept: list, keys, facts }
+        Self { base, page_px, over_page, kept: list, kept_selectors, keys, facts }
+    }
+
+    /// The phonetic fonts kept, each with the whole selector of the rule that showed it (audit 2026-11-05, L10): the
+    /// report's is cut at [`SELECTOR_CHARS`], and what a selector matches is decided by all of it. A selector cut at
+    /// [`SELECTOR_STORED_CHARS`] loses its last piece, which the cut may have fallen in.
+    pub(crate) fn phonetic(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.kept.iter().zip(&self.kept_selectors).filter(|(k, _)| k.reason == KeptReason::Phonetic).map(|(k, s)| {
+            let whole = if s.chars().count() < SELECTOR_STORED_CHARS {
+                s.as_str()
+            } else {
+                s.rfind(',').and_then(|at| s.get(..at)).unwrap_or("")
+            };
+            (k.family.as_str(), whole)
+        })
     }
 
     /// R4 (D48): the step a relative size `ratio` on `selector` takes when every selector of it sized, in the sample,
@@ -405,6 +427,7 @@ impl Style {
             page_px: DEFAULT_PX,
             over_page: BTreeSet::new(),
             kept: Vec::new(),
+            kept_selectors: Vec::new(),
             keys: BTreeMap::new(),
             facts: crate::facts::Facts::default(),
         }
@@ -624,23 +647,41 @@ pub(crate) enum Kind {
     Skip,
 }
 
-/// A block being read: what it is, where its body starts in the output, where its `;`s were written there, whether
-/// a block opened inside it (CSS nesting; its own declarations are then left as they are), and its prelude.
+/// Where a block's body was cut, in the output: a `;` between declarations, or the `}` of a block nested in it (CSS
+/// nesting), which ends a piece kept as it is, the nested rule normalized on its own when it closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Sep {
+    Semi(usize),
+    Block(usize),
+}
+
+/// A block being read: what it is, where its body starts in the output, where its body was cut there, and its
+/// prelude.
 pub(crate) struct Frame {
     pub(crate) kind: Kind,
     pub(crate) start: usize,
-    pub(crate) seps: Vec<usize>,
-    pub(crate) child: bool,
+    pub(crate) seps: Vec<Sep>,
     pub(crate) prelude: (usize, usize),
     /// Inside `@media`, `@supports` or their kin: a rule here does not hold whatever the state.
     pub(crate) grouped: bool,
 }
 
+/// What a `}` (or the end of the text) closed.
+pub(crate) enum Closed {
+    /// A block followed: its body is normalized.
+    Block(Frame),
+    /// The outermost block opened past [`MAX_DEPTH`]: its body, from `start` in the output, is dropped.
+    TooDeep { start: usize },
+}
+
 /// Blocks as the tokenizer meets them.
 pub(crate) struct Blocks<'t> {
     frames: Vec<Frame>,
-    /// Blocks opened past [`MAX_DEPTH`], copied without being followed.
+    /// Blocks opened past [`MAX_DEPTH`], not followed: their bodies are dropped (a body nobody normalized would reach
+    /// the page as written).
     deep: usize,
+    /// Where the outermost of those bodies starts in the output.
+    deep_start: usize,
     /// Where the current prelude starts in the input.
     stmt: usize,
     /// For a `style=""`, its element.
@@ -653,37 +694,30 @@ impl<'t> Blocks<'t> {
         let frames = match inline {
             Some(element) => {
                 let page = matches!(element.to_ascii_lowercase().as_str(), "html" | "body");
-                vec![Frame {
-                    kind: Kind::Rule { page },
-                    start: 0,
-                    seps: Vec::new(),
-                    child: false,
-                    prelude: (0, 0),
-                    grouped: false,
-                }]
+                vec![Frame { kind: Kind::Rule { page }, start: 0, seps: Vec::new(), prelude: (0, 0), grouped: false }]
             }
             None => Vec::new(),
         };
-        Self { frames, deep: 0, stmt: 0, inline }
+        Self { frames, deep: 0, deep_start: 0, stmt: 0, inline }
     }
 
     /// A `{` at `at` in `text`, its body starting at `start` in the output.
     pub(crate) fn open(&mut self, text: &str, at: usize, start: usize) {
         if self.deep > 0 || self.frames.len() >= MAX_DEPTH {
+            if self.deep == 0 {
+                self.deep_start = start;
+            }
             self.deep += 1;
             return;
         }
         let parent = self.frames.last().map(|f| f.kind);
-        if let Some(top) = self.frames.last_mut() {
-            top.child = true;
-        }
         let prelude = text.get(self.stmt..at).unwrap_or("");
         let kind = match parent {
             Some(Kind::Face | Kind::Skip) => Kind::Skip,
             _ => kind_of(prelude),
         };
         let grouped = self.frames.iter().any(|f| f.kind == Kind::Group);
-        self.frames.push(Frame { kind, start, seps: Vec::new(), child: false, prelude: (self.stmt, at), grouped });
+        self.frames.push(Frame { kind, start, seps: Vec::new(), prelude: (self.stmt, at), grouped });
         self.stmt = at + 1;
     }
 
@@ -692,28 +726,43 @@ impl<'t> Blocks<'t> {
         if self.deep == 0
             && let Some(top) = self.frames.last_mut()
         {
-            top.seps.push(written);
+            top.seps.push(Sep::Semi(written));
         }
         self.stmt = at + 1;
     }
 
     /// A `}` at `at`: the block it closes, if one was followed.
-    pub(crate) fn close(&mut self, at: usize) -> Option<Frame> {
+    pub(crate) fn close(&mut self, at: usize) -> Option<Closed> {
         self.stmt = at + 1;
         if self.deep > 0 {
             self.deep -= 1;
-            return None;
+            return (self.deep == 0).then_some(Closed::TooDeep { start: self.deep_start });
         }
         // A `style=""`'s own block is closed only at its end.
         if self.inline.is_some() && self.frames.len() == 1 {
             return None;
         }
-        self.frames.pop()
+        self.frames.pop().map(Closed::Block)
     }
 
     /// The blocks still open at the end, innermost first.
-    pub(crate) fn rest(&mut self) -> Option<Frame> {
-        self.frames.pop()
+    pub(crate) fn rest(&mut self) -> Option<Closed> {
+        if self.deep > 0 {
+            self.deep = 0;
+            return Some(Closed::TooDeep { start: self.deep_start });
+        }
+        self.frames.pop().map(Closed::Block)
+    }
+
+    /// A block nested in the one now open has closed, its `}` to be written at `written` in the output: in a rule,
+    /// it ends a piece of the rule's body that is kept as it is.
+    pub(crate) fn nested_end(&mut self, written: usize) {
+        if self.deep == 0
+            && let Some(top) = self.frames.last_mut()
+            && matches!(top.kind, Kind::Rule { .. } | Kind::Face)
+        {
+            top.seps.push(Sep::Block(written));
+        }
     }
 
     /// A frame's selector, for a report.
@@ -829,23 +878,24 @@ impl Facts {
 pub(crate) fn finish(
     body: &str,
     frame: &Frame,
+    prelude: &str,
     selector: impl FnOnce() -> String,
     norm: &mut Norm<'_>,
 ) -> Option<String> {
     let (page, face) = match frame.kind {
-        Kind::Rule { page } if !frame.child => (page, false),
+        Kind::Rule { page } => (page, false),
         Kind::Face => (false, true),
         _ => return None,
     };
-    let mut pieces = Vec::with_capacity(frame.seps.len() + 1);
-    let mut from = 0;
-    for &sep in &frame.seps {
-        let at = sep.saturating_sub(frame.start);
-        pieces.push(body.get(from..at).unwrap_or(""));
-        from = at + 1;
+    let pieces = pieces(body, frame);
+    let decls: Vec<Option<Decl<'_>>> =
+        pieces.iter().map(|p| if p.nested { None } else { Decl::parse(p.text) }).collect();
+    // **A dictionary's rule never selects by XDict's marks** (audit 2026-11-05, M3), in either style: it would hide,
+    // show or restyle what the roles pass marked. The whole prelude is read, not the stored selector, which is cut.
+    if !face && names_xdict_attribute(prelude) {
+        norm.counts.dropped += decls.iter().flatten().count() as u64;
+        return Some(String::new());
     }
-    pieces.push(body.get(from..).unwrap_or(""));
-    let decls: Vec<Option<Decl<'_>>> = pieces.iter().map(|p| Decl::parse(p)).collect();
     let selector = selector();
     if let Some(rules) = &mut norm.rules {
         let decls = decls.iter().flatten().map(|d| (d.name.clone(), d.value.trim().to_owned())).collect();
@@ -871,16 +921,16 @@ pub(crate) fn finish(
     }
     let facts = Facts::of(&decls, &selector, style);
     let mut changed = false;
-    let mut out: Vec<String> = Vec::with_capacity(pieces.len() + 1);
+    let mut out: Vec<(String, bool)> = Vec::with_capacity(pieces.len() + 1);
     let mut sized: Option<&str> = None;
     for (piece, decl) in pieces.iter().zip(&decls) {
         let Some(decl) = decl else {
-            out.push((*piece).to_owned());
+            out.push((piece.text.to_owned(), piece.nested));
             continue;
         };
         let mut act = action(&decl.name, page);
         // A CSS image drawn as content is an icon or decoration (Plain by default).
-        if decl.name == "content" && decl.value.to_ascii_lowercase().contains("url(") {
+        if decl.name == "content" && draws_image(decl.value) {
             act = Action::Drop;
         }
         // An icon face's glyph is dropped: XDict's control or label replaces what it drew, and what it decorated
@@ -899,7 +949,7 @@ pub(crate) fn finish(
         if facts.rule
             && ["border", "background", "height", "color", "margin", "outline", "box-shadow"]
                 .iter()
-                .any(|p| decl.name.starts_with(p))
+                .any(|p| unprefixed(&decl.name).starts_with(p))
         {
             act = Action::Drop;
         }
@@ -974,33 +1024,83 @@ pub(crate) fn finish(
         };
         changed |= value.is_some();
         if value.is_none() && !strip {
-            out.push((*piece).to_owned());
+            out.push((piece.text.to_owned(), false));
             continue;
         }
         let important = if decl.important && !strip { " !important" } else { "" };
-        out.push(format!("{}{}{important}{}", decl.head, value.as_deref().unwrap_or(decl.value), decl.tail));
+        out.push((format!("{}{}{important}{}", decl.head, value.as_deref().unwrap_or(decl.value), decl.tail), false));
     }
     // R4: every size carries its leading, so text never inherits a leading set for another size: large text wraps
     // less airily (unification R, 2026-10-16: 1.6, 1.3 when large).
     if let Some(leading) = sized {
         let last = out.pop().unwrap_or_default();
-        if last.trim().is_empty() {
-            out.push(leading.to_owned());
+        if last.0.trim().is_empty() && !last.1 {
+            out.push((leading.to_owned(), false));
             out.push(last);
         } else {
             out.push(last);
-            out.push(leading.to_owned());
+            out.push((leading.to_owned(), false));
         }
         changed = true;
     }
-    changed.then(|| out.join(";"))
+    changed.then(|| joined(&out))
+}
+
+/// A piece of a block's body: a declaration (or what stands where one would), or a block nested in it, up to and
+/// with its `}`.
+struct Piece<'a> {
+    text: &'a str,
+    nested: bool,
+}
+
+/// A block's body cut at its separators.
+fn pieces<'a>(body: &'a str, frame: &Frame) -> Vec<Piece<'a>> {
+    let mut pieces = Vec::with_capacity(frame.seps.len() + 1);
+    let mut from = 0;
+    for &sep in &frame.seps {
+        let (piece, next) = match sep {
+            Sep::Semi(at) => {
+                let at = at.saturating_sub(frame.start);
+                (Piece { text: body.get(from..at).unwrap_or(""), nested: false }, at + 1)
+            }
+            // A nested block left open at the end has no `}`.
+            Sep::Block(at) => {
+                let end = (at.saturating_sub(frame.start) + 1).min(body.len());
+                (Piece { text: body.get(from..end).unwrap_or(""), nested: true }, end)
+            }
+        };
+        pieces.push(piece);
+        from = next;
+    }
+    pieces.push(Piece { text: body.get(from..).unwrap_or(""), nested: false });
+    pieces
+}
+
+/// Pieces put back together: a `;` after each declaration, none after a nested block, whose `}` ends it.
+fn joined<S: AsRef<str>>(pieces: &[(S, bool)]) -> String {
+    let mut out = String::new();
+    let mut after_declaration = false;
+    for (text, nested) in pieces {
+        if after_declaration {
+            out.push(';');
+        }
+        out.push_str(text.as_ref());
+        after_declaration = !nested;
+    }
+    out
+}
+
+/// Whether a `content` value draws an image, its function's name read as a browser reads it (`u\72l(` is `url(`).
+fn draws_image(value: &str) -> bool {
+    let decoded = crate::rewrite::unescaped(value).to_ascii_lowercase();
+    ["url(", "image(", "image-set("].iter().any(|f| decoded.contains(f))
 }
 
 /// A block's declarations in "Original style" (ADR-0010 Q3): as written, but for what the strip list takes (S9) and
 /// what XDict's marks replace (a CSS image drawn as content, an icon face's glyph), both the same in either style. The
 /// normalization of type, colour and spacing is what original style leaves out.
 fn marked(
-    pieces: &[&str],
+    pieces: &[Piece<'_>],
     decls: &[Option<Decl<'_>>],
     selector: &str,
     page: bool,
@@ -1008,7 +1108,7 @@ fn marked(
     norm: &mut Norm<'_>,
 ) -> Option<String> {
     let mut changed = false;
-    let mut out: Vec<&str> = Vec::with_capacity(pieces.len());
+    let mut out: Vec<(&str, bool)> = Vec::with_capacity(pieces.len());
     for (piece, decl) in pieces.iter().zip(decls) {
         if let Some(decl) = decl
             && !page
@@ -1020,7 +1120,7 @@ fn marked(
         }
         if let Some(decl) = decl
             && decl.name == "content"
-            && (decl.value.to_ascii_lowercase().contains("url(") || icon)
+            && (draws_image(decl.value) || icon)
         {
             if icon {
                 *norm.counts.icons.entry("glyph-dropped".into()).or_default() += 1;
@@ -1028,9 +1128,9 @@ fn marked(
             changed = true;
             continue;
         }
-        out.push(piece);
+        out.push((piece.text, piece.nested));
     }
-    changed.then(|| out.join(";"))
+    changed.then(|| joined(&out))
 }
 
 /// S9: a declaration that hides the element wrapping every entry, until the dictionary's script shows it.
@@ -1129,7 +1229,7 @@ const TEXT: Action = Action::Colour(Role::Text);
 
 /// `dev-docs/reading-style.md` §3, as rows. "Plain by default" (the owner, 2026-10-15): every background, border,
 /// outline and shadow the dictionary sets is dropped; the frame's surface is the only background.
-const RULES: [Row; 40] = [
+const RULES: [Row; 47] = [
     row("font", Action::Font),
     row("font-family", Action::Family),
     row("font-size", Action::Size),
@@ -1141,6 +1241,11 @@ const RULES: [Row; 40] = [
     row("text-decoration-color", TEXT),
     row("-webkit-text-fill-color", TEXT),
     row("caret-color", TEXT),
+    // SVG's and WebKit's text paint: colours, whatever their name says.
+    row("fill", TEXT),
+    row("stroke", TEXT),
+    row("text-stroke", TEXT),
+    row("text-emphasis", TEXT),
     row("background", Action::Drop),
     row("background-", Action::Drop),
     row("border", Action::Drop),
@@ -1148,6 +1253,7 @@ const RULES: [Row; 40] = [
     row("outline", Action::Drop),
     row("outline-", Action::Drop),
     row("column-rule", Action::Drop),
+    row("column-rule-", Action::Drop),
     row("text-shadow", Action::Drop),
     row("box-shadow", Action::Drop),
     row("margin", Action::Space(true)),
@@ -1166,7 +1272,10 @@ const RULES: [Row; 40] = [
     row("zoom", Action::Drop),
     // `all` resets the colour (and the rest) to the engine's own: CanvasText, outside the palette.
     row("all", Action::Drop),
-    row("-webkit-text-size-adjust", Action::Drop),
+    row("text-size-adjust", Action::Drop),
+    // A mask can hide the text it covers.
+    row("mask", Action::Drop),
+    row("mask-", Action::Drop),
     row("animation", Action::Drop),
     row("animation-", Action::Drop),
     // R9: a bullet drawn as an image hides the frame's marker.
@@ -1199,11 +1308,23 @@ fn action(name: &str, page: bool) -> Action {
     if page {
         return if page_kept(name) { Action::Keep } else { Action::Drop };
     }
-    RULES
-        .iter()
-        .find(|r| r.property == name)
-        .or_else(|| RULES.iter().find(|r| r.property.ends_with('-') && name.starts_with(r.property)))
-        .map_or(Action::Keep, |r| r.action)
+    let row = |name: &str| {
+        RULES
+            .iter()
+            .find(|r| r.property == name)
+            .or_else(|| RULES.iter().find(|r| r.property.ends_with('-') && name.starts_with(r.property)))
+            .map(|r| r.action)
+    };
+    // A vendor prefix is its property (`-webkit-animation` animates); a colour property no row names is a text
+    // colour, on the palette or gone (a custom property is not a colour property: what reads it decides).
+    let bare = unprefixed(name);
+    let colour = bare.ends_with("-color") && !bare.starts_with("--");
+    row(name).or_else(|| row(bare)).unwrap_or(if colour { TEXT } else { Action::Keep })
+}
+
+/// A property's name without its vendor prefix.
+fn unprefixed(name: &str) -> &str {
+    ["-webkit-", "-moz-", "-ms-", "-o-"].iter().find_map(|p| name.strip_prefix(p)).unwrap_or(name)
 }
 
 fn colour_value(value: &str, role: Role, facts: &Facts, counts: &mut Counts) -> Option<String> {
@@ -1578,8 +1699,20 @@ pub(crate) fn presentational(element: &str, name: &str, value: &str, style: &Sty
     }
 }
 
-/// Whether a presentational attribute is dropped outright (R10, R11, R22, R7).
-pub(crate) fn dropped_attribute(element: &str, name: &str) -> bool {
+/// Whether an attribute of an entry's start tag is dropped (`name` in lower case). The attribute policy, in one place:
+///
+/// - **XDict's own marks are never believed from a dictionary** (audit 2026-11-05, M3): every `data-xdict-*` goes
+///   before this is asked, where the rewrite reads an attribute, on every path through it (`rewrite::tag`).
+/// - **Presentation is XDict's** in the normalized style: `bgcolor` and `background` go (R10), a table's and a cell's
+///   sizes and borders (R11), an `<hr>`'s line (Q9, R7), an image's border; `color`, `size`, `face` and `align` are
+///   absorbed into the element's `style` (R22, [`presentational`]). Original style keeps them.
+/// - Elsewhere in the rewriter, not here: a URL attribute is rewritten to XDict's own scheme or refused, a
+///   `javascript:` link (S6) and a handler that only plays audio (Q6) go, and an attribute named with a `<` goes.
+///   Everything else is kept as written.
+pub(crate) fn dropped_attribute(element: &str, name: &str, original: bool) -> bool {
+    if original {
+        return false;
+    }
     if matches!(name, "bgcolor" | "background") {
         return true;
     }
@@ -1877,6 +2010,72 @@ fn without_comments(text: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// Whether a selector names an attribute only XDict writes, `[data-xdict-…]`: in any case, escaped or not, with a
+/// namespace or not, anywhere in the list (inside `:is()`, `:where()` and `:not()` too). A `[` inside a string is text.
+pub(crate) fn names_xdict_attribute(prelude: &str) -> bool {
+    let clean = without_comments(prelude);
+    let mut rest = clean.as_str();
+    while let Some(at) = rest.find(['[', '"', '\'', '\\']) {
+        crate::work::scanned(at);
+        let from = rest.get(at..).unwrap_or("");
+        let mut chars = from.chars();
+        match chars.next() {
+            Some('\\') => {
+                chars.next();
+                rest = chars.as_str();
+            }
+            Some(q @ ('"' | '\'')) => {
+                let mut body = chars;
+                loop {
+                    match body.next() {
+                        None => break,
+                        Some('\\') => {
+                            body.next();
+                        }
+                        Some(c) if c == q => break,
+                        Some(_) => {}
+                    }
+                }
+                rest = body.as_str();
+            }
+            _ => {
+                let inner = chars.as_str().trim_start_matches(|c: char| c.is_ascii_whitespace());
+                let len = name_len(inner);
+                let written = inner.get(..len).unwrap_or("").trim_end_matches(['*', '|', '~', '^', '$']);
+                let name = crate::rewrite::css_unescape(written.rsplit('|').next().unwrap_or(written));
+                if name.get(..11).is_some_and(|p| p.eq_ignore_ascii_case("data-xdict-")) {
+                    return true;
+                }
+                rest = chars.as_str();
+            }
+        }
+    }
+    false
+}
+
+/// How far an attribute selector's name runs in `inner` (with a namespace and the operator's first character, which
+/// the caller trims): to a space, `=` or `]`. An escape is part of it: `\` and up to six hex digits with the one space
+/// that ends them, or `\` and any other character.
+fn name_len(inner: &str) -> usize {
+    let mut chars = inner.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if c == '\\' {
+            let mut hex = 0;
+            while hex < 6 && chars.next_if(|(_, h)| h.is_ascii_hexdigit()).is_some() {
+                hex += 1;
+            }
+            if hex == 0 {
+                chars.next();
+            } else {
+                chars.next_if(|(_, w)| w.is_ascii_whitespace());
+            }
+        } else if c.is_ascii_whitespace() || c == '=' || c == ']' {
+            return i;
+        }
+    }
+    inner.len()
 }
 
 /// A selector as the rules read it: comments out, spaces collapsed, at most [`SELECTOR_STORED_CHARS`] characters.

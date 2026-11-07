@@ -39,16 +39,20 @@ hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshn
   (Sources/XDictCapture, Sources/XDictCaptureMac), a floating constant or default, a literal bound through CGFloat(...)
   or `as CGFloat`, and a whole number any file of the same target wraps as CGFloat must be 0 or 1, handed in, or named
   with a Ratio, Fraction or Overlap suffix.
+  Since 2026-11-05 (the audit's M13): a numeric constant a design position names (`static let side = 320.0` with
+  `.frame(width: Self.side)`, or `Layout.side` from another file), reported at its declaration; a literal bound through
+  `CGFloat(…)`/`Double(…)`/`Float(…)` or `as CGFloat` anywhere; and `.custom(_, size:)`/`fixedSize:` font sizes.
   CSS: lengths (px pt rem em lh vw vh ch ex) and colours (#hex, rgb(), hsl()) outside tokens.css and outside the
-  fallback of a `var(`.
+  fallback of a `var(`; and the same lengths inside Style/*.js (since 2026-11-05: `'6px'`, `width:1px`).
   ALLOWED, and nothing else:
     - 0 in a length position (any of the Swift positions above, or a CSS length): it means none.
     - 1 as an opacity (`.opacity(1)`): it means unchanged. Every other 1 (a hairline, a 1 pt rect) is a length.
     - a literal right after `*` or `/`: a factor or ratio (`/ 2`, `/ 255`), not a length.
     - anything in Sources/XDictTokens (the tokens themselves) and in generated files (EntryStyleFiles.swift).
-    - a line ending in `// token-exempt: <reason>` (CSS: `/* token-exempt: <reason> */`): counted and listed by
+    - a line ending in `// token-exempt: <reason>` (CSS: `/* token-exempt: <reason> */`; JavaScript: either): counted and listed by
       `check`; an exemption with no reason is itself a finding.
-  Not seen: CSS and numbers inside Swift string literals (the reading style's own Swift-side CSS), and JavaScript.
+  Not seen: CSS and numbers inside Swift string literals (the reading style's own Swift-side CSS), and colours a
+  script paints.
 """
 import argparse
 import hashlib
@@ -708,7 +712,7 @@ SWIFT_CALLS = [
     (r"\.lineSpacing\(", "line-spacing"),
     (r"\.opacity\(", "opacity"),
     (r"\.insetBy\(", "geometry"),
-    (r"\.system\(\s*size:|[sS]ystemFont\(ofSize:|\bNSFont\(name:", "font-size"),
+    (r"\.system\(\s*size:|[sS]ystemFont\(ofSize:|\bNSFont\(name:|\.custom\(", "font-size"),
     # The positions added on 2026-10-29 (owner: "no handrolled, hardcoded magic value, 100% tokenized"): each is a design
     # value the checker had never looked at, so a literal there was invisible.
     (r"\.animation\(|\bwithAnimation\(|\.interpolatingSpring\(|\.timingCurve\(|\.spring\(|\.easeIn\(|\.easeOut\(|"
@@ -746,6 +750,7 @@ KIND_GROUPS = {
     "frame": ["window", "control", "row", "size", "space", "inset"],
     "geometry": ["window", "control", "row", "size", "space", "inset"],
     "constant": ["window", "control", "row", "inset", "space", "radius", "line", "size"],
+    "wrapped": ["window", "control", "row", "inset", "space", "radius", "line", "size"],
     "radius": ["radius"], "line-spacing": ["space"], "font-size": ["text"], "opacity": [],
     "colour": ["colour"], "css-length": ["css", "density", "fill"], "css-colour": ["css", "palette"],
     "distance": ["space", "inset", "size"],
@@ -991,38 +996,130 @@ def capture_dir(rel):
     return next((d for d in CAPTURE_DIRS if rel.startswith(d)), None)
 
 
-def scan_swift(rel, text, modules=None):
+# Where a value is a design value, for a name as much as for a literal: every SWIFT_CALLS position and these labels.
+DESIGN_LABELS = [
+    (re.compile(r"\bspacing:\s*|\bSpacer\(minLength:\s*"), "spacing"),
+    (re.compile(r"\b(?:cornerRadius|lineSpacing)\s*=\s*"), "radius"),
+]
+
+
+def design_spans(clean):
+    """(kind, start, stop) for each stretch of `clean` whose values are design values: a SWIFT_CALLS call's arguments
+    (an animation's without its `value:`), or the expression after a design label."""
+    out = []
+    for pattern, kind in SWIFT_CALLS:
+        for m in re.finditer(pattern, clean):
+            end = span(clean, m.end()) if m.group(0).endswith("(") else expression_end(clean, m.end())
+            if kind == "radius" and not m.group(0).endswith("("):
+                end = m.end() + len(re.match(r"[^,)\n]*", clean[m.end():]).group(0))
+            # **`value:` observes, it does not design** (`.animation(.default, value: count == 2)`): only the arguments
+            # before it are the animation's own.
+            if kind == "motion" and m.group(0).endswith("("):
+                out += [(kind, a, b) for a, b in call_arguments(clean, m.end(), end)
+                        if not re.match(r"\s*value\s*:", clean[a:b])]
+                continue
+            out.append((kind, m.end(), end))
+    for rx, kind in DESIGN_LABELS:
+        for m in rx.finditer(clean):
+            out.append((kind, m.end(), expression_end(clean, m.end())))
+    return out
+
+
+# **A literal given a name is still a literal** (the 2026-11-05 audit, M13: `static let side = 320.0` then
+# `.frame(width: Self.side)` passed `check`, as did `CGFloat(12)` and `.custom(_, size: 14)`). A numeric constant is a
+# finding, at its declaration, when a design position names it: bare or through `Self.` in its own file, or as
+# `Type.name` from any file when it is declared inside that type. What the literal would be allowed (0, an opacity of 1,
+# a factor after `*` or `/` at the place it is used) is allowed. A name used only in counts, limits or comparisons is not
+# a design value and is not seen.
+NUMERIC_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*(?:CGFloat|Double|Float|Int|TimeInterval)\s*)?=\s*"
+                              r"(-?\d[\d_]*(?:\.\d+)?)\s*(?=$|;|\n)", re.M)
+TYPE_DECL = re.compile(r"\b(?:enum|struct|class|actor|extension)\s+([A-Za-z_][\w.]*)[^{;=]*\{")
+REFERENCE = re.compile(r"(?<![\w.])((?:[A-Za-z_]\w*\.)*)([a-z_]\w*)\b(?!\s*[:(])")
+# A literal bound through a floating wrapper anywhere: `CGFloat(12)`, `Double(exactly: 0.3)!`, `12 as CGFloat`.
+WRAPPED_LITERAL = re.compile(r"\b(?:CGFloat|Double|Float)\(\s*(?:exactly:\s*)?(-?\d[\d_]*(?:\.\d+)?)\s*\)!?"
+                             r"|(?<![\w.])(-?\d[\d_]*(?:\.\d+)?)\s+as\s+(?:CGFloat|Double|Float)\b")
+
+
+def enclosing_types(clean):
+    """(open, close, name) of each type body: `enum Layout {` … `}`; an extension's by its last name component."""
+    out = []
+    for m in TYPE_DECL.finditer(clean):
+        name = m.group(1).split(".")[-1]
+        if name in SWIFT_KEYWORDS:
+            continue
+        out.append((m.end() - 1, span_braces(clean, m.end()), name))
+    return out
+
+
+def span_braces(text, open_end):
+    depth, j = 1, open_end
+    while j < len(text) and depth:
+        depth += text[j] == "{"
+        depth -= text[j] == "}"
+        j += 1
+    return j
+
+
+def named_constants(files):
+    """{rel: [(position, raw)]}: each numeric constant some design position names (see NUMERIC_CONSTANT's note).
+    `files` is {rel: blanked source} of every Swift file scanned together."""
+    decls = {}  # name -> [(rel, type or None, position, raw)]
+    for rel, clean in files.items():
+        types = enclosing_types(clean)
+        for m in NUMERIC_CONSTANT.finditer(clean):
+            inside = [t for t in types if t[0] < m.start() < t[1]]
+            owner = max(inside)[2] if inside else None
+            decls.setdefault(m.group(1), []).append((rel, owner, m.start(2), m.group(2)))
+    out = {}
+    for rel, clean in files.items():
+        for kind, start, stop in design_spans(clean):
+            for r in REFERENCE.finditer(clean, start, stop):
+                qualifier = r.group(1).rstrip(".").split(".")[-1] if r.group(1) else ""
+                for drel, owner, pos, raw in decls.get(r.group(2), []):
+                    if qualifier in ("", "Self", "self"):
+                        if drel != rel:
+                            continue
+                    elif owner != qualifier:
+                        continue
+                    if allowed(kind, numeric_value(raw), clean, r.start()):
+                        continue
+                    out.setdefault(drel, set()).add((pos, raw))
+    return {rel: sorted(v) for rel, v in out.items()}
+
+
+def wrapped_literals(clean, found, capture):
+    """(position, raw) of each literal bound through a floating wrapper that no other rule has reported. In a capture
+    target, a constant bound that way is the capture rule's (named a fraction, or reported there)."""
+    out = []
+    handled = set()
+    if capture:
+        for m in WRAPPED_CONSTANT.finditer(clean):
+            handled.add(m.start(2) if m.group(2) is not None else m.start(3))
+    for m in WRAPPED_LITERAL.finditer(clean):
+        pos, raw = (m.start(1), m.group(1)) if m.group(1) is not None else (m.start(2), m.group(2))
+        if pos in handled or any(m.start() <= k < m.end() for k in found):
+            continue
+        if not allowed("wrapped", numeric_value(raw), clean, m.start()):
+            out.append((pos, raw))
+    return out
+
+
+def scan_swift(rel, text, modules=None, named=None):
     clean = blank_swift(text)
     lines = text.split("\n")
     found = {}
 
     def add(kind, pos, value):
         found.setdefault(pos, (kind, clean.count("\n", 0, pos) + 1, value))
-    for pattern, kind in SWIFT_CALLS:
-        for m in re.finditer(pattern, clean):
-            end = span(clean, m.end()) if m.group(0).endswith("(") else expression_end(clean, m.end())
-            if kind == "font-size" and not m.group(0).endswith("("):
-                end = span(clean, m.end())
-            if kind == "radius" and not m.group(0).endswith("("):
-                end = m.end() + len(re.match(r"[^,)\n]*", clean[m.end():]).group(0))
-            # **`value:` observes, it does not design** (`.animation(.default, value: count == 2)`): only the arguments
-            # before it are the animation's own.
-            if kind == "motion" and m.group(0).endswith("("):
-                for start, stop in call_arguments(clean, m.end(), end):
-                    if re.match(r"\s*value\s*:", clean[start:stop]):
-                        continue
-                    for nm in NUMBER.finditer(clean, start, stop):
-                        if not allowed(kind, numeric_value(nm.group(1)), clean, nm.start()):
-                            add(kind, nm.start(), nm.group(1))
-                continue
-            for nm in NUMBER.finditer(clean, m.end(), end):
-                value = numeric_value(nm.group(1))
-                if kind == "font-size":
-                    # Only the size argument: after `size:` or `ofSize:`.
-                    if not re.search(r"(?:size|ofSize):\s*$", clean[max(0, nm.start() - 16):nm.start()]):
-                        continue
-                if not allowed(kind, value, clean, nm.start()):
-                    add(kind, nm.start(), nm.group(1))
+    for kind, start, stop in design_spans(clean):
+        for nm in NUMBER.finditer(clean, start, stop):
+            value = numeric_value(nm.group(1))
+            if kind == "font-size":
+                # Only the size argument: after `size:`, `ofSize:` or `fixedSize:`.
+                if not re.search(r"(?:size|ofSize|fixedSize):\s*$", clean[max(0, nm.start() - 16):nm.start()]):
+                    continue
+            if not allowed(kind, value, clean, nm.start()):
+                add(kind, nm.start(), nm.group(1))
     for m in SWIFT_COLOUR.finditer(clean):
         end = span(clean, clean.index("(", m.start()) + 1)
         add("colour", m.start(), " ".join(clean[m.start():end].split()))
@@ -1047,6 +1144,10 @@ def scan_swift(rel, text, modules=None):
                 add("default", m.start(2), m.group(2))
     for kind, pos, value in distance_comparisons(clean):
         add(kind, pos, value)
+    for pos, value in (named if named is not None else named_constants({rel: clean})).get(rel, []):
+        add("constant", pos, value)
+    for pos, value in wrapped_literals(clean, found, capture_dir(rel)):
+        add("wrapped", pos, value)
     return [(rel, line, kind, value, lines[line - 1]) for kind, line, value in
             sorted(found.values(), key=lambda f: f[1])], EXEMPT_SWIFT
 
@@ -1054,14 +1155,21 @@ def scan_swift(rel, text, modules=None):
 def blank_css(text):
     """Comments and `var(--x, fallback)` fallbacks blanked, newlines kept."""
     out = list(text)
+    for m in re.finditer(r"/\*.*?\*/", text, re.S):
+        for k in range(m.start(), m.end()):
+            if out[k] != "\n":
+                out[k] = " "
+    return blank_fallbacks("".join(out))
+
+
+def blank_fallbacks(clean):
+    """`clean` with each `var(--x, fallback)`'s fallback blanked: a fallback is what a missing token falls back to."""
+    out = list(clean)
 
     def blank(a, b):
         for k in range(a, b):
             if out[k] != "\n":
                 out[k] = " "
-    for m in re.finditer(r"/\*.*?\*/", text, re.S):
-        blank(m.start(), m.end())
-    clean = "".join(out)
     for m in re.finditer(r"\bvar\(", clean):
         end = span(clean, m.end())
         depth, j = 0, m.end()
@@ -1092,6 +1200,46 @@ def scan_css(rel, text):
     return out, EXEMPT_CSS
 
 
+EXEMPT_JS = re.compile(r"(?://|/\*)\s*token-exempt:((?:(?!\*/).)*)")
+
+
+def blank_js(text):
+    """`text` with `//` and `/* */` comments blanked, newlines kept; a `//` inside a string literal is not a comment."""
+    out, i, n = list(text), 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in "'\"`":
+            j = i + 1
+            while j < n and text[j] != c and (c == "`" or text[j] != "\n"):
+                j += 2 if text[j] == "\\" else 1
+            i = j + 1
+        elif text.startswith("//", i) or text.startswith("/*", i):
+            j = text.find("\n", i) if text[i + 1] == "/" else text.find("*/", i + 2)
+            j = n if j < 0 else (j if text[i + 1] == "/" else j + 2)
+            for k in range(i, j):
+                if out[k] != "\n":
+                    out[k] = " "
+            i = j
+        else:
+            i += 1
+    return "".join(out)
+
+
+def scan_js(rel, text):
+    """CSS lengths the reading style's scripts write (`'6px'`, `width:1px`, `setProperty('…', '6px')`): a length set
+    from JavaScript is a design value as much as one in a stylesheet (the 2026-11-05 audit, M13). 0 means none; a
+    `var(--xdict-…, fallback)`'s fallback is allowed, as in CSS. Lengths only: a colour a script paints is not seen."""
+    clean = blank_fallbacks(blank_js(text))
+    lines = text.split("\n")
+    out = []
+    for m in CSS_LENGTH.finditer(clean):
+        if float(m.group(1)) == 0:
+            continue
+        line = clean.count("\n", 0, m.start()) + 1
+        out.append((rel, line, "css-length", m.group(0), lines[line - 1]))
+    return out, EXEMPT_JS
+
+
 def scan(root):
     """(findings, exemptions): each finding (file, line, kind, value, source line)."""
     findings, exemptions = [], []
@@ -1108,6 +1256,16 @@ def scan(root):
                         with open(os.path.join(dirpath, fn), encoding="utf-8") as f:
                             parts.append(blank_swift(f.read()))
             modules[d] = "\n".join(parts)
+    # Every scanned Swift file blanked, for the rule that follows a named constant from a design position to its
+    # declaration in another file (`Layout.side`).
+    swift = {}
+    for dirpath, dirnames, filenames in os.walk(sources):
+        for fn in filenames:
+            rel = os.path.relpath(os.path.join(dirpath, fn), root)
+            if fn.endswith(".swift") and not rel.startswith(SKIP_DIRS) and rel not in SKIP_FILES:
+                with open(os.path.join(dirpath, fn), encoding="utf-8") as f:
+                    swift[rel] = blank_swift(f.read())
+    named = named_constants(swift)
     for dirpath, dirnames, filenames in os.walk(sources):
         dirnames.sort()
         for fn in sorted(filenames):
@@ -1119,11 +1277,13 @@ def scan(root):
                 scanner = scan_swift
             elif fn.endswith(".css") and rel.startswith(STYLE_DIR):
                 scanner = scan_css
+            elif fn.endswith(".js") and rel.startswith(STYLE_DIR):
+                scanner = scan_js
             else:
                 continue
             with open(path, encoding="utf-8") as f:
                 text = f.read()
-            hits, exempt_rx = scanner(rel, text, modules) if scanner is scan_swift else scanner(rel, text)
+            hits, exempt_rx = scanner(rel, text, modules, named) if scanner is scan_swift else scanner(rel, text)
             seen_lines = set()
             for hit in hits:
                 m = exempt_rx.search(hit[4])

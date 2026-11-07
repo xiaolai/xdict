@@ -54,8 +54,8 @@ public enum MeaningProviders {
     }
 
     /// **Whether a source can answer, without asking a model** (Settings ▸ AI's live status): local checks only — the
-    /// on-device model's availability, an endpoint's shape, a CLI's presence, version and sign-in. Nothing here sends the
-    /// reader's text. What a check cannot prove says `.configured`, never `.ready`.
+    /// on-device model's availability, an endpoint's shape, a CLI's presence and version (and, for Codex, the sign-in it
+    /// records). Nothing here sends the reader's text. What a check cannot prove says `.configured`, never `.ready`.
     public static func status(_ settings: MeaningSettings) async -> MeaningSourceStatus {
         guard let source = settings.source else { return .notConfigured }
         switch source {
@@ -77,19 +77,28 @@ public enum MeaningProviders {
             }
         case .claudeCLI:
             // **Typed, never a cast and a fallback** (audit finding, 2026-10-25): the provider is built as itself, and
-            // its check proves the program and version. The sign-in in XDict's own configuration is checked by the
-            // first ask, so this is `.configured`, not `.ready`.
+            // its check proves the program and version. Whether the account answers is proved by the first ask.
             do {
-                return .configured(try await claude().check())
+                return cliStatus(.success(try await claude().check()))
             } catch {
-                return .failed(error)
+                return cliStatus(.failure(error))
             }
         case .codexCLI:
             do {
-                return .ready(try await codex().check())
+                return cliStatus(.success(try await codex().check()))
             } catch {
-                return .failed(error)
+                return cliStatus(.failure(error))
             }
+        }
+    }
+
+    /// **What a command-line source's check means for the row, the same for both** (audit 2026-11-05 L15): Codex's
+    /// check also reads the sign-in it records, Claude Code's does not, and neither proves the account will answer —
+    /// so both say `.configured`. Codex said `.ready` for that proof.
+    static func cliStatus(_ checked: Result<String, AIProviderError>) -> MeaningSourceStatus {
+        switch checked {
+        case .success(let version): .configured(version)
+        case .failure(let error): .failed(error)
         }
     }
 

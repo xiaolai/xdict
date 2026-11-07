@@ -83,6 +83,9 @@ class Root:
     def css(self, text, name="sheet.css"):
         (self.path / "Sources/XDictEntryView/Style" / name).write_text(text)
 
+    def js(self, text, name="script.js"):
+        (self.path / "Sources/XDictEntryView/Style" / name).write_text(text)
+
     def findings(self):
         return tokens.scan(str(self.path))
 
@@ -450,6 +453,74 @@ class Check(unittest.TestCase):
             "let t = Color(nsColor: .labelColor)", "let frame = CGRect(origin: .zero, size: size)",
         ]) + "\n")
         self.assertEqual(found, [])
+
+    # The blind spots the 2026-11-05 audit found (M13): a literal moved into a named constant, wrapped in a floating
+    # type, given to a custom font, or written as a CSS length inside the reading style's JavaScript.
+    def test_a_named_constant_in_a_design_position_is_seen_at_its_declaration(self):
+        cases = {
+            "static let side = 320.0\nx.frame(width: Self.side)": [("constant", "320.0")],
+            "static let side = 320\nx.frame(width: side)": [("constant", "320")],
+            "static let gap: Double = 6\nVStack(spacing: gap) {}": [("constant", "6")],
+            "enum Layout {\n    static let fade = 0.25\n}\nx.animation(.easeOut(duration: Layout.fade))": [("constant", "0.25")],
+            "static let size: Int = 13\nx.font(.system(size: CGFloat(size)))": [("constant", "13")],
+            # Allowed as the literal would be: none, a factor, an opacity of 1; and a name used nowhere in a design
+            # position, a name of another type, or an argument label.
+            "static let none = 0.0\nx.padding(Self.none)": [],
+            "static let half = 2.0\nx.frame(width: w / Self.half)": [],
+            "static let full = 1.0\nx.opacity(Self.full)": [],
+            "static let limit = 12\nif items.count > limit {}": [],
+            "enum A {\n    static let side = 9.0\n}\nx.frame(width: B.side)": [],
+            "static let width = 30.0\nx.frame(width: Tokens.Window.width)": [],
+        }
+        for code, expected in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.kinds(swift=code + "\n")[0], expected)
+
+    def test_a_named_constant_used_from_another_file_is_seen(self):
+        root = Root(self)
+        root.swift("enum Layout {\n    static let side = 320.0\n}\n", name="Layout.swift")
+        root.swift("x.frame(width: Layout.side)\n")
+        self.assertEqual([(f[0], f[2], f[3]) for f in root.findings()[0]],
+                         [("Sources/XDictUI/Layout.swift", "constant", "320.0")])
+
+    def test_a_literal_wrapped_in_a_floating_type_is_seen(self):
+        cases = {
+            "let w = width + CGFloat(12)": [("wrapped", "12")],
+            "let t = Double(0.3) + base": [("wrapped", "0.3")],
+            "let w = CGFloat(exactly: 12)! + width": [("wrapped", "12")],
+            "let w = width + 12 as CGFloat": [("wrapped", "12")],
+            "let w = width + CGFloat(0)": [],
+            "let w = width / CGFloat(2)": [],
+            "let w = CGFloat(count)": [],
+        }
+        for code, expected in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.kinds(swift=code + "\n")[0], expected)
+
+    def test_a_custom_font_size_is_seen(self):
+        self.assertEqual(self.kinds(swift='x.font(.custom("Avenir", size: 14))\n')[0], [("font-size", "14")])
+        self.assertEqual(self.kinds(swift='x.font(.custom("Avenir", fixedSize: 9))\n')[0], [("font-size", "9")])
+        self.assertEqual(self.kinds(swift='x.font(.custom("Avenir", size: Tokens.Text.m))\n')[0], [])
+
+    def test_css_lengths_in_the_reading_styles_javascript_are_seen(self):
+        root = Root(self)
+        root.js("\n".join([
+            "probe.style.cssText = 'position:fixed;width:1px;height:2px';",
+            "el.style.setProperty('margin-top', '6px');",
+            "el.style.width = '0px';",
+            "el.style.padding = 'var(--xdict-space-1, 4px)';",
+            "// a comment: 12px",
+            "/* 13px */ const url = 'http://x/y'; const n = 3;",
+            "el.style.height = h + 'px';",
+            "el.style.margin = '5px'; // token-exempt: a probe the reader never sees",
+        ]) + "\n")
+        findings, exemptions = root.findings()
+        self.assertEqual([(f[0], f[1], f[2], f[3]) for f in findings], [
+            ("Sources/XDictEntryView/Style/script.js", 1, "css-length", "1px"),
+            ("Sources/XDictEntryView/Style/script.js", 1, "css-length", "2px"),
+            ("Sources/XDictEntryView/Style/script.js", 2, "css-length", "6px"),
+        ])
+        self.assertEqual([e[2] for e in exemptions], ["a probe the reader never sees"])
 
     def test_a_1_that_is_a_length_is_seen(self):
         self.assertEqual(self.kinds(swift="x.frame(height: 1)\n")[0], [("frame", "1")])

@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 import XDictAI
 import XDictTestSupport
@@ -461,5 +462,17 @@ struct TranslationLanguageTests {
         #expect(second.settings.translationLanguage == "zh-Hans")
         // The explanation's own language is a separate choice and did not move with it.
         #expect(second.settings.language == "en")
+    }
+}
+
+/// **A save updates first and adds only where nothing is stored** (L4): a stored item that could not be read was taken
+/// for absent and added again, which the Keychain refused as a duplicate; any other status is the reader's to see.
+struct KeychainSaveStepTests {
+    @Test func theUpdatesStatusDecidesTheNextStep() {
+        #expect(KeychainKeyStore.afterUpdate(errSecSuccess) == .done)
+        #expect(KeychainKeyStore.afterUpdate(errSecItemNotFound) == .add, "only a missing item is added")
+        #expect(KeychainKeyStore.afterUpdate(errSecInteractionNotAllowed) == .refuse(errSecInteractionNotAllowed),
+                "a locked Keychain is said, not retried as an add")
+        #expect(KeychainKeyStore.afterUpdate(errSecDuplicateItem) == .refuse(errSecDuplicateItem))
     }
 }

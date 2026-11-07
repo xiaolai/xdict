@@ -86,15 +86,21 @@ export type StudyCard = {
 };
 export type ReviewSummary = { due: number; nextDue: number | null };
 export type ReviewOutcome = { outcome: RecordOutcome; card: StudyCard };
-export type ReanchorResult = 'reanchored' | 'reordered' | 'changed' | 'missing';
+/** `failed`: the note could not be classified and stays where it is; `detail` is for logs (audit 2026-11-05, M5). */
+export type ReanchorResult = 'reanchored' | 'reordered' | 'changed' | 'missing' | { failed: { detail: string } };
 export type ReanchorOutcome = { target: StudyTarget; result: ReanchorResult };
-export type ReanchorReport = { outcomes: ReanchorOutcome[] };
+/** `next`, when set, is the `after` of the following call: the work budget stopped this one before the rest. */
+export type ReanchorReport = { outcomes: ReanchorOutcome[]; next: string | null };
 /** A grade a device made from a revision another device also graded (ADR-0027). */
 export type ConflictCandidate = { id: string; grade: StudyGrade; at: number; device: string; after: CardState };
 /** A card two devices left in two states: the reader keeps one candidate. */
 export type CardConflict = { target: StudyTarget; note: StudyNote; candidates: ConflictCandidate[] };
 /** What one sync pass did with the reader's folder; sync itself is a native shell's (plan §2.6). */
-export type SyncReport = { exported: number; peers: number; added: number; skipped: number };
+export type SyncReport = { exported: number; peers: number; added: number; skipped: number; refused: SyncRefusal[] };
+/** A peer log a sync pass left out, by its file name; `detail` is for logs (audit 2026-11-05, M16). */
+export type SyncRefusal = { file: string; detail: string };
+/** An offset east of UTC from the instant `from` (epoch seconds); a zone lists them ascending (audit 2026-11-05, L5d). */
+export type ZoneOffset = { from: number; seconds: number };
 export type Recoverability = 'freeBlocks';
 export type EraseReport = { clearedReadings: number; clearedNotes: number; clearedGrades: number; recoverable: Recoverability };
 export type Removal = { eventIds: string[]; at: number; device: string };
@@ -192,7 +198,7 @@ interface GlueCore {
   entry_text(dict: string, entry: string, view: string): string;
   entry_gloss(entry: string): string;
   ledger_record(reading: string, operation: string, targetLanguages: string): string;
-  ledger_history(now: number, utcOffsetSeconds: number): string;
+  ledger_history(now: number, zone: string): string;
   ledger_remove(removal: string, operation: string): string;
   ledger_restore(removal: string, operation: string): string;
   study_note(dict: string, entry: string, text: string, name: string, stamp: string, operation: string): string;
@@ -207,7 +213,7 @@ interface GlueCore {
   review_conflicts(): string;
   review_resolve(targetKey: string, keep: string, stamp: string, operation: string): string;
   definition_hash_of(dict: string, entry: string): string;
-  study_reanchor(oldEdition: string, newEdition: string, stamp: string, operationPrefix: string): string;
+  study_reanchor(oldEdition: string, newEdition: string, stamp: string, operationPrefix: string, after?: string | null): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
   displayOptions(dict: string): string;
@@ -415,9 +421,9 @@ export class XDictCore {
     return this.call(() => this.inner.ledger_restore(JSON.stringify(removal), operation));
   }
 
-  /** The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock. */
-  ledgerHistory(now: number, utcOffsetSeconds: number): History {
-    return this.call(() => this.inner.ledger_history(now, utcOffsetSeconds));
+  /** The days the drawer shows, in the reader's own zone: its offsets east of UTC, ascending by the instant each begins. */
+  ledgerHistory(now: number, zone: ZoneOffset[]): History {
+    return this.call(() => this.inner.ledger_history(now, JSON.stringify(zone)));
   }
 
   /** Saves the reader's note on an entry (plan §5.1) and enrols it for review. */
@@ -470,9 +476,11 @@ export class XDictCore {
     return this.call(() => this.inner.definition_hash_of(dict, JSON.stringify(entry)));
   }
 
-  /** Re-anchors notes of one edition to another under the same lineage (plan §5.1). */
-  studyReanchor(oldEdition: string, newEdition: string, stamp: Stamp, operationPrefix: string): ReanchorReport {
-    return this.call(() => this.inner.study_reanchor(oldEdition, newEdition, JSON.stringify(stamp), operationPrefix));
+  /** Re-anchors notes of one edition to another under the same lineage (plan §5.1); `after` is a report's `next`. */
+  studyReanchor(
+    oldEdition: string, newEdition: string, stamp: Stamp, operationPrefix: string, after: string | null = null,
+  ): ReanchorReport {
+    return this.call(() => this.inner.study_reanchor(oldEdition, newEdition, JSON.stringify(stamp), operationPrefix, after));
   }
 
   /** **The cards two devices left conflicted** (ADR-0027): the reader chooses a branch. */

@@ -236,4 +236,114 @@ struct WordDataModelTests {
         #expect(model.state == .refused(.build(detail: "oewn: line 12: an undeclared synset")))
         #expect(model.phase == nil, "the failure's sentence takes the place of the progress")
     }
+
+    /// A network that never delivers: the download waits until it is cancelled.
+    private struct StalledTransfer: WordPackTransfer {
+        func fetch(_ url: URL, to destination: URL, limit: UInt64,
+                   written: @escaping @Sendable (Int64) -> Void) async throws {
+            try await Task.sleep(for: .seconds(60))
+        }
+    }
+
+    nonisolated static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
+    }
+
+    /// **A cancelled build asks what is installed** (M8): the service may hold a pack from before the build, and a
+    /// row set to absent by assumption hid it and offered a build over it. The download cache goes with the cancel.
+    @Test func aCancelledBuildRereadsWhatTheServiceHolds() async throws {
+        let tmp = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let folder = Self.container(tmp)
+        let body = Data("one".utf8)
+        let backend = await Self.backend { _ in Self.packaged(Self.pack) }
+        // The re-read must not be asked from inside the cancelled build: a backend may refuse a cancelled caller.
+        await backend.refuseCancelledCallers()
+        let model = WordDataModel(backend: backend, container: { folder }, manifest: { Self.manifest(body) },
+                                  transfer: StalledTransfer())
+        let build = Task { await model.buildFromSources() }
+        await Self.waitUntil("the download to start") {
+            if case .downloading = model.state { true } else { false }
+        }
+        model.cancelBuild()
+        await build.value
+        #expect(model.state == .installed(Self.pack), "the pack the service holds, not an assumed absence")
+        #expect(await backend.requests == [.wordPack])
+        #expect(!Self.exists(folder.appending(path: "sources")), "the download cache goes with the cancel")
+    }
+
+    /// **The download cache goes once the build has answered** (M8), installed or refused: it is about 185 MB that
+    /// only that build reads, and the next build downloads every file again.
+    @Test(arguments: [true, false])
+    func theDownloadCacheGoesWhenTheBuildAnswers(accepted: Bool) async throws {
+        let tmp = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let folder = Self.container(tmp)
+        let body = Data("one".utf8)
+        let backend = await Self.backend { _ in Self.packaged(nil) }
+        await backend.setProgressRequest { _, _ in
+            accepted ? Self.built(Self.pack) : .failure(.wire(.core(.malformed(detail: "a: line 1: refused"))))
+        }
+        let model = Self.buildingModel(folder, backend: backend, body: body, manifest: Self.manifest(body))
+        await model.buildFromSources()
+        #expect(model.state == (accepted ? .installed(Self.pack) : .refused(.build(detail: "a: line 1: refused"))))
+        #expect(!Self.exists(folder.appending(path: "sources")), "no source is left behind")
+    }
+
+    /// **A refused file leaves the installed pack named and removable** (M8): the core keeps the pack it held, so the
+    /// model asks for it after the refusal and keeps it beside the refusal's sentence.
+    @Test func aRefusedInstallStillKnowsThePackItKept() async throws {
+        let tmp = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let folder = Self.container(tmp, file: Data("installed\n".utf8))
+        let chosen = tmp.appending(path: "chosen.jsonl")
+        try Data("{}\n".utf8).write(to: chosen)
+        let backend = await Self.backend { operation in
+            guard case .setWordPack = operation else { return Self.packaged(Self.pack) }
+            return .failure(.wire(.core(.unsupported(feature: .formatVersion(version: "1"), detail: "old"))))
+        }
+        let model = WordDataModel(backend: backend, container: { folder })
+        await model.restore()
+        await model.install(chosen)
+        #expect(model.state == .refused(.version(found: "1")), "the refusal is what the row says")
+        #expect(model.held == Self.pack, "and the pack still attached is known beside it")
+        let staged = folder.appending(path: AppGroup.wordPackFile + ".incoming").path(percentEncoded: false)
+        #expect(await backend.requests == [.wordPack, .setWordPack(path: staged), .wordPack],
+                "the service is asked again after the refusal")
+    }
+
+    /// **An install waits for the operation before it** (M8): an attach started while a build was running answered
+    /// first and was then replaced by the build's pack, and a restore's question superseded an install's attach so
+    /// an accepted install deleted its own file. One at a time, the install runs after the build has answered.
+    @Test func anInstallWaitsForTheBuildBeforeIt() async throws {
+        let tmp = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let folder = Self.container(tmp)
+        let chosen = tmp.appending(path: "chosen.jsonl")
+        try Data("{}\n".utf8).write(to: chosen)
+        let body = Data("one".utf8)
+        let other = WordPackInfo(version: 2, language: "en", sources: ["chosen"], records: 1)
+        let backend = await Self.backend { _ in Self.packaged(other) }
+        let gate = Slot()
+        await backend.setProgressRequest { _, _ in await gate.value() }
+        let model = Self.buildingModel(folder, backend: backend, body: body, manifest: Self.manifest(body))
+        let build = Task { await model.buildFromSources() }
+        await Self.waitUntil("the build to start") {
+            if case .building = model.state { true } else { false }
+        }
+        let install = Task { await model.install(chosen) }
+        // Long enough for an install that does not wait to copy a two-byte file and ask the service.
+        for _ in 0..<50 {
+            if await !backend.requests.isEmpty { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(await backend.requests.isEmpty, "nothing is attached while the build is running")
+        gate.fulfil(Self.built(Self.pack))
+        await build.value
+        await install.value
+        let staged = folder.appending(path: AppGroup.wordPackFile + ".incoming").path(percentEncoded: false)
+        #expect(await backend.requests == [.setWordPack(path: staged)])
+        #expect(model.state == .installed(other), "the later operation's answer is the one shown")
+        #expect(Self.exists(folder.appending(path: AppGroup.wordPackFile)), "the accepted file is installed")
+    }
 }

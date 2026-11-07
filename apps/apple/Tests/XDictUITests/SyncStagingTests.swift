@@ -36,6 +36,29 @@ struct SyncStagingTests {
         #expect(try Self.names(inbox) == ["xdict-a.xdlog"])
     }
 
+    /// **One log that will not copy does not fail the pass** (audit 2026-11-05, M16): it is named, and the others are
+    /// still staged for the service to merge.
+    @Test func aLogThatWillNotCopyIsNamedAndTheOthersAreStaged() throws {
+        let root = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "reader"), inbox = root.appending(path: "in")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("a".utf8).write(to: folder.appending(path: "xdict-a.xdlog"))
+        let locked = folder.appending(path: "xdict-b.xdlog")
+        try Data("b".utf8).write(to: locked)
+        try Data("c".utf8).write(to: folder.appending(path: "xdict-c.xdlog"))
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path(percentEncoded: false))
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
+                                                   ofItemAtPath: locked.path(percentEncoded: false))
+        }
+
+        let staged = try SyncStaging.stage(from: folder, to: inbox, limit: 16)
+        #expect(staged.unreadable == ["xdict-b.xdlog"])
+        #expect(staged.copied == 2)
+        #expect(try Self.names(inbox) == ["xdict-a.xdlog", "xdict-c.xdlog"])
+    }
+
     @Test func collectingReplacesThisDevicesOwnLogFromTheLastPass() throws {
         let root = try Self.scratch()
         defer { try? FileManager.default.removeItem(at: root) }

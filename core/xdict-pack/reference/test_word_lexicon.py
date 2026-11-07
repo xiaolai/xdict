@@ -412,6 +412,17 @@ class EtymologyTests(Raises, unittest.TestCase):
         short = ety()[:1] + ["a,English,a\n"]
         self.assertLexicon("malformed", wl.parse_etymology_csv, short, "ety")
 
+    def test_the_field_limit_counts_characters(self):
+        # The same numbers as the Rust reader's `the_field_limit_counts_characters_not_bytes`: 30,000 CJK characters
+        # (90,000 bytes) are read; one character past the limit is a bound.
+        wide = "字" * 30_000
+        graph = wl.parse_etymology_csv(
+            ety(("a", "English", "a", "inherited_from", "b", "Latin", wide)), "ety")
+        self.assertIsNotNone(graph)
+        over = "字" * (wl.MAX_CSV_FIELD_BYTES + 1)
+        self.assertLexicon("bound", wl.parse_etymology_csv,
+                           ety(("a", "English", "a", "inherited_from", "b", "Latin", over)), "ety")
+
     def test_fable_has_root_is_written_as_root(self):
         # A stated root is a known relation, not an unknown one; it is still never a chain step.
         self.assertIn("root", wl.ETYMON_RELATIONS)

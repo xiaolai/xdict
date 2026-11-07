@@ -35,6 +35,31 @@ actor FakeBackend: LibraryBackend {
 
     var heldCount: Int { held.count }
 
+    /// Cancels taken but not answered until `answerCancels`: a removal and its Undo can land before the run ends.
+    private var slowCancels = false
+    private var unanswered: [Job] = []
+
+    func slowCancel() { slowCancels = true }
+
+    func answerCancels() {
+        slowCancels = false
+        for job in unanswered { job.waiting?.resume(returning: false); job.waiting = nil }
+        unanswered = []
+    }
+
+    /// Opens held until `releaseOpens`: a removal can land while one is in flight.
+    private var holdingOpens = false
+    private var heldOpens: [CheckedContinuation<Void, Never>] = []
+
+    func holdOpens() { holdingOpens = true }
+    var heldOpenCount: Int { heldOpens.count }
+
+    func releaseOpens() {
+        holdingOpens = false
+        for waiting in heldOpens { waiting.resume() }
+        heldOpens = []
+    }
+
     static func edition(_ package: DictionaryPackage) -> Edition? {
         guard let mdx = package.files.first(where: { $0.spec.role == .mdx }),
               let bytes = try? Data(contentsOf: mdx.locate()) else { return nil }
@@ -76,8 +101,9 @@ actor FakeBackend: LibraryBackend {
 
     private func cancel(_ job: Job) {
         guard let waiting = job.waiting else { return }
-        job.waiting = nil
         held.removeAll { $0 === job }
+        if slowCancels { return unanswered.append(job) }
+        job.waiting = nil
         waiting.resume(returning: false)
     }
 
@@ -85,6 +111,7 @@ actor FakeBackend: LibraryBackend {
         let name = Self.mdxName(package)
         opens.append(name)
         opened[name] = package
+        if holdingOpens { await withCheckedContinuation { heldOpens.append($0) } }
         for file in package.files where !FileManager.default.fileExists(atPath: file.locate().path) {
             return .failure(.fileUnavailable(file: file.spec.id, errno: ENOENT))
         }

@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
-import XDictAnywhere
+import SwiftUI
 import UniformTypeIdentifiers
+import XDictAnywhere
 import XDictCapture
 import XDictLibrary
 import XDictTokens
@@ -53,24 +54,22 @@ public enum DiagnosticsExport {
         case failed(String)
     }
 
-    /// Writes `text` where the reader said, and shows it in Finder.
+    /// **What SwiftUI's save panel came to** (L13: `fileExporter` writes the file, not this code): the file shown in
+    /// Finder and the export recorded, or the failure kept so the pane can say it.
     @MainActor
-    public static func save(_ text: String, name: String = fileName()) -> SaveResult {
-        let panel = NSSavePanel()
-        panel.title = String(localized: "Save Diagnostics")
-        panel.nameFieldStringValue = name
-        panel.allowedContentTypes = [.plainText]
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return .cancelled }
-        do {
-            try text.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
+    public static func saved(_ result: Result<URL, any Error>, bytes: Int) -> SaveResult {
+        switch result {
+        case .success(let url):
+            // AppKit: SwiftUI has no API that reveals a file in Finder.
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            Diagnostics.shared.record("diagnostics.exported", ["bytes": "\(bytes)"])
+            return .saved(url)
+        case .failure(let error as CocoaError) where error.code == .userCancelled:
+            return .cancelled
+        case .failure(let error):
             Diagnostics.shared.record("diagnostics.exportFailed", ["reason": String(describing: error)])
             return .failed(error.localizedDescription)
         }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-        Diagnostics.shared.record("diagnostics.exported", ["bytes": "\(text.utf8.count)"])
-        return .saved(url)
     }
 
     private static func bundle(_ key: String) -> String {
@@ -88,4 +87,25 @@ public protocol DiagnosticsLibrary {
 extension Library: DiagnosticsLibrary {
     public var total: Int { entries.count }
     public var enabled: Int { entries.filter(\.enabled).count }
+}
+
+/// **A text file for SwiftUI's save panel** (L13): the diagnostics and the learning export are written by `fileExporter`,
+/// as UTF-8, under the type each names.
+public struct ExportedText: FileDocument {
+    public static let readableContentTypes: [UTType] = [.plainText, .json]
+
+    public let text: String
+
+    public init(_ text: String) {
+        self.text = text
+    }
+
+    public init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+        text = String(decoding: data, as: UTF8.self)
+    }
+
+    public func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
 }

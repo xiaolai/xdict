@@ -117,7 +117,7 @@ fn follow(core: &Core, dict: &str, url: &str, origin: LinkOrigin, tally: &mut Ta
 
 #[test]
 fn entries_of_the_corpus() {
-    let Ok(dirs) = std::env::var("XDICT_MDX_CORPUS") else {
+    let Some(dirs) = xdict_mdx_writer::corpus::wanted("XDICT_MDX_CORPUS").unwrap_or_else(|why| panic!("{why}")) else {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };

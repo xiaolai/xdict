@@ -153,4 +153,60 @@ struct ServiceClientFileTests {
         #expect(!received.withLock { $0 }.contains(secretInode), "the file the link names was sent to the service")
         #expect(opens.current == 1, "the package was opened again through the link")
     }
+
+    /// The inode of the file at `url`, or nil.
+    static func inode(_ url: URL) -> UInt64? {
+        var facts = stat()
+        return lstat(url.path, &facts) == 0 ? UInt64(facts.st_ino) : nil
+    }
+
+    /// **A file replaced between its token and its open is tried again from the start, once** (audit 2026-11-05 L3): the
+    /// service refuses the handle as not the path's file, and the client observes the paths again, opens them again and
+    /// sends the open once more, so the reader's open succeeds. Red while nothing handled the refusal and it reached the
+    /// reader.
+    @Test func aPackageRefusedAsReplacedIsObservedAndOpenedAgainOnce() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let mdx = package.files[0]
+        let opens = Mutex<[Request]>([])
+        let service = FakeTransport { request, _ in
+            guard case .openPackage = request.operation else { return .reply(Fixture.versions, to: request) }
+            let count = opens.withLock { $0.append(request); return $0.count }
+            guard count == 1 else { return .reply(Self.ready(), to: request) }
+            // The file is replaced after the client observed and opened it: another inode at the same path.
+            try? FileManager.default.removeItem(at: mdx.locate())
+            try? Data("mdx, replaced".utf8).write(to: mdx.locate())
+            return .failure(.refused(.handleIsNotThePathsFile(file: mdx.spec.id)), to: request)
+        }
+        let client = ServiceClient(connect: service.connect)
+        #expect(await client.open(package)
+            == .success(.ready(dict: DictId(rawValue: "d"), edition: Fixture.edition, info: Fixture.info)))
+        let sent = opens.withLock { $0 }
+        #expect(sent.count == 2, "the open was not tried again: \(sent.count) sent")
+        let replaced = try #require(Self.inode(mdx.locate()))
+        guard let again = sent.last?.tokens.first(where: { $0.file == mdx.spec.id }),
+              case .present(let identity) = again.state else {
+            Issue.record("the second open carried no token for the replaced file")
+            return
+        }
+        #expect(identity.inode == replaced, "the second open was sent with the first observation, not a fresh one")
+        #expect(sent.first?.id != sent.last?.id)
+    }
+
+    /// **A second refusal is reported**, never tried a third time: a file replaced again and again is the reader's to
+    /// know about, and a loop would hide it.
+    @Test func aPackageRefusedAsReplacedTwiceIsReported() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let mdx = package.files[0]
+        let opens = Mutex(0)
+        let service = FakeTransport { request, _ in
+            guard case .openPackage = request.operation else { return .reply(Fixture.versions, to: request) }
+            opens.withLock { $0 += 1 }
+            return .failure(.refused(.handleIsNotThePathsFile(file: mdx.spec.id)), to: request)
+        }
+        let client = ServiceClient(connect: service.connect)
+        #expect(await client.open(package) == .failure(.wire(.refused(.handleIsNotThePathsFile(file: mdx.spec.id)))))
+        #expect(opens.withLock { $0 } == 2, "the open was tried \(opens.withLock { $0 }) times, not twice")
+    }
 }

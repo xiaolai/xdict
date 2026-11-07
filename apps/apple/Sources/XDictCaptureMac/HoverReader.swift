@@ -357,12 +357,10 @@ public final class HoverReader: HoverReading {
         return outcome
     }
 
-    /// **The first ordinary window of another app at the point** — the app the reader would see were XDict's window not
-    /// there. A window at a layer above the ordinary ones is not that app's content at the point: Notification Center
-    /// lists a full-screen layer-21 window on macOS 27.0.1 whose own hit test answers with its menu bar at any point
-    /// (measured 2026-10-24), so only layer 0 names the app behind.
+    /// **The first window of another app at the point** — the app the reader would see were XDict's window not there —
+    /// by the same level rule as the one in front (`PointerWindow.namesItsApp`).
     private func behindWindow(at point: CGPoint, in windows: [ListedWindow]) -> ListedWindow? {
-        windows.first { $0.pid != getpid() && $0.alpha > 0 && $0.layer == 0 && $0.bounds.contains(point) }
+        PointerWindow.behind(at: point, in: windows, ours: getpid())
     }
 
     /// **The frontmost visible window of XDict's at the point** — the surface its own pixels are read from.
@@ -566,8 +564,9 @@ public final class HoverReader: HoverReading {
             return outcome
         } catch RecognitionError.screenBusy {
             // **A screenshot set aside is still blocked in ScreenCaptureKit**: this one was refused, never started beside
-            // it (`ScreenshotGate`); asked again when the capture set aside ends.
-            return .quiet(.captureInFlight)
+            // it (`ScreenshotGate`); asked again when the capture set aside ends. A read cancelled meanwhile is the
+            // cancel's (audit 2026-11-05 M7): told as busy, its hover would be owed a re-ask nobody is waiting for.
+            return Task.isCancelled ? .quiet(.cancelled) : .quiet(.captureInFlight)
         } catch RecognitionError.screenRecordingNeeded {
             // A reader who moved on is not told anything.
             return Task.isCancelled ? .quiet(.cancelled) : .needsScreenRecording(request: request)

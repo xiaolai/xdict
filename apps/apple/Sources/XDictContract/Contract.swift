@@ -69,7 +69,15 @@ public enum Contract {
     /// 21 (2026-10-31): the operation `entryGloss` and its answer, the first sense of the recorded edition as one brief
     /// gloss for a history card (ADR-0037). The core resolves the edition itself and fixes the view; a dictionary whose
     /// markup gives nothing usable answers no text, never an error.
-    public static let version: UInt32 = 21
+    /// 22 (2026-11-05): the refusal `forbiddenPath` — a word-pack or sync path that leads into the service's own
+    /// container, or is not absolute, steps up or cannot be resolved (`PathConfinement`, audit L1); and `explore` and
+    /// `collocates` hold a bulk credit, so a third at once on one connection is refused `tooManyInFlight` (audit L2).
+    /// 23 (2026-11-05): `ledgerHistory` takes the reader's zone as its offsets and the instants they begin (L5d);
+    /// `studyReanchor` takes `after` and its report a `next`, a call doing a bounded amount, and an unclassifiable note
+    /// is its own `failed` result (M5); `SyncReport.refused` names the peer logs a pass left out, the rest still merged
+    /// (M16). The core opens and creates none of a request's paths through a symbolic link: a link is refused as
+    /// `permissionDenied` naming the path, so a link swapped in after the service confined a path is never followed.
+    public static let version: UInt32 = 23
 }
 
 // MARK: - The request
@@ -100,15 +108,20 @@ public struct Request: Codable, Hashable, Sendable {
     /// that came with the request, in the order received (`HandleFacts`); `filesOf` is what each dictionary it has open
     /// is made of, by the files' ids, as it recorded at `openPackage`. The client may ask the same before sending, so
     /// its own mistake costs no round trip. In order:
-    /// - handles against the operation: a package travels with one handle per file and never without (there is no path
-    ///   anywhere in this contract, and the service opens nothing by name); nothing else travels with any;
+    /// - handles against the operation: a package travels with one handle per file and never without (a dictionary's
+    ///   files are never named by path, and the service opens none by name); nothing else travels with any;
     /// - the package's rules, the render ceiling and the suggestion limit (`Limits`);
     /// - at most one token per file, and **a token for every file the operation may read** (Codex objection 4: without
     ///   one, the identity check falls back to `fstat`, which a swapped folder leaves untouched). A dictionary absent from
     ///   `filesOf` is not refused here: the core answers `staleHandle` for it;
     /// - each handle **a regular file opened read-only** (objection 7) and **the very file its token names**, by device
-    ///   and inode (objection 1): otherwise an import would hash one file and register it under another's identity.
-    public func refusal(handles: [HandleFacts], filesOf: [DictId: [UUID]], editions: [Edition: DictId] = [:]) -> Refusal? {
+    ///   and inode (objection 1): otherwise an import would hash one file and register it under another's identity;
+    /// - **every path the operation names outside the service's own folders** (`confinement`, audit 2026-11-05 L1): the
+    ///   word pack's and the ledger sync's paths are the only ones in the contract, and none may lead into the container.
+    ///   The check is of the path as given; the core then opens and creates none of them through a symbolic link (contract
+    ///   23), so a link swapped in between the check and the open is refused there, never followed.
+    public func refusal(handles: [HandleFacts], filesOf: [DictId: [UUID]], editions: [Edition: DictId] = [:],
+                        confinement: PathConfinement = .unconfined) -> Refusal? {
         let spec = operation.packageSpec
         if let spec {
             if handles.isEmpty { return .missingHandle }
@@ -146,6 +159,9 @@ public struct Request: Codable, Hashable, Sendable {
                   held.device == atPath.device, held.inode == atPath.inode
             else { return .handleIsNotThePathsFile(file: file.id) }
         }
+        for path in operation.paths {
+            if let refused = confinement.refusal(path) { return refused }
+        }
         return nil
     }
 
@@ -154,7 +170,8 @@ public struct Request: Codable, Hashable, Sendable {
     /// (that version's operations may be unknown here); then the whole request; then `refusal(handles:filesOf:)`.
     /// Whatever is wrong is answered at once, never thrown, never a crash.
     public static func receive(_ envelope: Data, handles: [HandleFacts], filesOf: [DictId: [UUID]],
-                               editions: [Edition: DictId] = [:], serviceContract: UInt32 = Contract.version) -> Admission {
+                               editions: [Edition: DictId] = [:], confinement: PathConfinement = .unconfined,
+                               serviceContract: UInt32 = Contract.version) -> Admission {
         if let refusal = Limits.envelopeRefusal(envelope) {
             return .answered(Response(contract: serviceContract, id: nil, outcome: .failure(.refused(refusal))))
         }
@@ -176,7 +193,7 @@ public struct Request: Codable, Hashable, Sendable {
             return .answered(Response(contract: serviceContract, id: header.id,
                                       outcome: .failure(.undecodable(detail: "\(error)"))))
         }
-        if let refusal = request.refusal(handles: handles, filesOf: filesOf, editions: editions) {
+        if let refusal = request.refusal(handles: handles, filesOf: filesOf, editions: editions, confinement: confinement) {
             return .answered(Response(contract: serviceContract, id: request.id, outcome: .failure(.refused(refusal))))
         }
         return .admitted(request)
@@ -297,8 +314,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// sentence travels here because the history stores it (D1); the core never sends it anywhere.
     case ledgerRecord(reading: LedgerReading, operation: String, targetLanguages: [String])
     /// The days the drawer shows, in the reader's own zone: `now` is the client's clock (whole epoch seconds) and
-    /// `utcOffsetSeconds` its offset east of UTC. The core groups, collapses repeats and labels; the shell draws.
-    case ledgerHistory(now: Double, utcOffsetSeconds: Int32)
+    /// `zone` its offsets east of UTC with the instants they begin (`ZoneOffset.zone`). The core groups, collapses
+    /// repeats and labels; the shell draws.
+    case ledgerHistory(now: Double, zone: [ZoneOffset])
 
     /// **Saves the reader's note on an entry** (plan §5.1): the core computes the definition's hash and resolves the
     /// lineage, so the note carries evidence and never the definition.
@@ -316,8 +334,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     case reviewSummary(now: Double)
     /// The hash a note records for an entry's definition; never the definition itself.
     case definitionHash(dict: DictId, entry: EntryRef)
-    /// **Re-anchors notes of one edition to another** under the same lineage (plan §5.1).
-    case studyReanchor(oldEdition: Edition, newEdition: Edition, stamp: StudyStamp, operationPrefix: String)
+    /// **Re-anchors notes of one edition to another** under the same lineage (plan §5.1), a bounded amount a call:
+    /// the report's `next`, sent back as `after`, starts the following call.
+    case studyReanchor(oldEdition: Edition, newEdition: Edition, stamp: StudyStamp, operationPrefix: String,
+                       after: String? = nil)
     /// **Saves a note named by the history card's facts** — an entry reference, not a handle — resolved to the open
     /// dictionary of its edition.
     case studyNoteAt(entry: EntryRef, text: String, name: String, stamp: StudyStamp, operation: String)
@@ -384,16 +404,19 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     }
 
     /// Which of a connection's credits this operation holds while it runs (`Credits`): bulk for an entry or a resource,
-    /// lookup for the calls that search an index or open a package; none for the rest.
+    /// and for exploration and collocations, whose first call builds a catalog or a store (3.2 s for 24 dictionaries;
+    /// audit 2026-11-05 L2: uncredited, any number of them ran at once on one connection); lookup for the calls that
+    /// search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource, .entryText, .entryGloss, .studyNote, .studyNoteAt, .definitionHash, .studyReanchor: .bulk
+        case .entry, .resource, .entryText, .entryGloss, .studyNote, .studyNoteAt, .definitionHash, .studyReanchor,
+             .explore, .collocates: .bulk
         case .openPackage, .lookup, .suggest, .words, .link, .examples, .phrases: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
              .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore,
-             .explore, .collocates, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: nil
+             .wordPack, .setWordPack, .clearWordPack, .buildWordPack: nil
         }
     }
 
@@ -404,7 +427,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .studyNoteAt(let entry, _, _, _, _): [entry.edition]
         case .entryGloss(let entry): [entry.edition]
-        case .studyReanchor(_, let newEdition, _, _): [newEdition]
+        case .studyReanchor(_, let newEdition, _, _, _): [newEdition]
         default: []
         }
     }

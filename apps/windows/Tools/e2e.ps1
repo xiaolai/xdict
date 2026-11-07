@@ -31,7 +31,7 @@ $stages = @(
     @{ Name = 'setup-225'; Script = 'settings-uia.ps1'; Args = @('-Scale', '225') }
 )
 
-# The release gate reads Get-XDictE2EStageNames; a table that drifts from it would demand evidence no run produces.
+# Get-XDictE2EStageNames is the one list of stages; a table that drifts from it runs a set nobody declared.
 $declared = Get-XDictE2EStageNames
 if (($stages.Name -join ',') -ne ($declared -join ',')) {
     throw 'the E2E stage table and Get-XDictE2EStageNames disagree'

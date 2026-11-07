@@ -21,8 +21,10 @@ public enum ShortcutProblem: Hashable, Sendable {
 /// **The lookup shortcut** (plan-macos-v1 WI-8; moved from XiaolaiDict's `ShortcutRegistrar`, its sentences left to the
 /// view layer): what is registered, what the reader is choosing, and what went wrong. Three states that look like two —
 /// registered; not registered because nothing claimed it; not registered *because the reader is recording a
-/// replacement* — so suspension is recorded, never inferred. Every way a recording ends puts the hot key back
-/// (`suspend(false)` is idempotent); a refused choice puts the old one back and **says so only if that worked**.
+/// replacement* — so suspension is recorded, never inferred, and **while suspended nothing registers** (audit
+/// 2026-11-05 L15): a registration asked meanwhile waits for the recording's end, and a choice made meanwhile is taken
+/// then. Every way a recording ends puts the hot key back (`suspend(false)` is idempotent); a refused choice puts the
+/// old one back and **says so only if that worked**.
 @Observable
 @MainActor
 public final class ShortcutRegistrar {
@@ -31,11 +33,23 @@ public final class ShortcutRegistrar {
     @ObservationIgnored private let hotkeys: HotkeyCenter
     @ObservationIgnored private let onPress: @MainActor () -> Void
 
-    private var hotkey: Hotkey?
+    /// Live, with the hot key registered or not; or suspended while the recorder is armed, with no hot key at all and
+    /// the choice to take when it ends. One state, so a hot key cannot exist while suspended.
+    private enum Standing {
+        case live(Hotkey?)
+        case suspended(pending: Shortcut?)
+    }
+
+    private var standing = Standing.live(nil)
+    private var hotkey: Hotkey? {
+        if case .live(let hotkey) = standing { hotkey } else { nil }
+    }
     /// Nil when all is well; otherwise what to tell the reader.
     public private(set) var problem: ShortcutProblem?
     /// Whether the recorder in Settings is armed.
-    public private(set) var isSuspended = false
+    public var isSuspended: Bool {
+        if case .suspended = standing { true } else { false }
+    }
 
     public init(defaults: UserDefaults, hotkeys: HotkeyCenter, onPress: @escaping @MainActor () -> Void) {
         store = ShortcutStore(defaults: defaults)
@@ -47,9 +61,11 @@ public final class ShortcutRegistrar {
     public var current: Shortcut { hotkey?.shortcut ?? store.load() }
     public var isRegistered: Bool { hotkey != nil }
 
-    /// Registers what is on disk; the refusal, if any, is also `problem`.
+    /// Registers what is on disk; the refusal, if any, is also `problem`. While suspended, nothing: the recording's end
+    /// registers.
     @discardableResult
     public func registerSaved() -> ShortcutProblem? {
+        guard !isSuspended else { return nil }
         let saved = store.load()
         if let refusal = register(saved) {
             problem = .unavailable(saved, refusal)
@@ -59,10 +75,11 @@ public final class ShortcutRegistrar {
         return nil
     }
 
+    /// Only while live: every caller checks `isSuspended` first.
     private func register(_ shortcut: Shortcut) -> RegistrationRefusal? {
-        hotkey = nil  // released first: registration is exclusive, and would collide with itself
+        standing = .live(nil)  // released first: registration is exclusive, and would collide with itself
         do {
-            hotkey = try hotkeys.register(shortcut) { [weak self] in self?.onPress() }
+            standing = .live(try hotkeys.register(shortcut) { [weak self] in self?.onPress() })
             return nil
         } catch {
             log.error("hotkey \(shortcut.label(), privacy: .public) unavailable: \(String(describing: error.reason), privacy: .public)")
@@ -73,11 +90,20 @@ public final class ShortcutRegistrar {
     /// Stands the hot key down while the recorder is armed — or pressing the shortcut in use would look a word up
     /// instead of reaching the field — and puts it back after, once.
     public func suspend(_ suspended: Bool) {
-        isSuspended = suspended
-        if suspended {
-            hotkey = nil
-        } else if hotkey == nil {
+        switch (standing, suspended) {
+        case (.live, true):
+            standing = .suspended(pending: nil)
+        case (.suspended(let pending), false):
+            standing = .live(nil)
+            if let pending {
+                take(pending, previous: store.load())
+            } else {
+                registerSaved()
+            }
+        case (.live(nil), false):
             registerSaved()
+        case (.live, false), (.suspended, true):
+            break
         }
     }
 
@@ -90,6 +116,17 @@ public final class ShortcutRegistrar {
         guard chosen != previous || hotkey == nil else { return nil }
         if !chosen.isUsable { return refuse(.unusable(chosen)) }
         if chosen.isReserved(keyName: keyName) { return refuse(.reserved(chosen)) }
+        // Refused by rule at once; registered only once the recorder is no longer armed.
+        if isSuspended {
+            standing = .suspended(pending: chosen)
+            return nil
+        }
+        return take(chosen, previous: previous)
+    }
+
+    /// Registers and saves a choice the rules allowed, putting `previous` back if it is refused.
+    @discardableResult
+    private func take(_ chosen: Shortcut, previous: Shortcut) -> ShortcutProblem? {
         if let refusal = register(chosen) {
             let restored = register(previous) == nil
             return refuse(.refused(chosen, refusal, stillUsing: restored ? previous : nil))

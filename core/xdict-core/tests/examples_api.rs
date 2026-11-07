@@ -568,3 +568,56 @@ fn the_same_key_twice_keeps_each_records_occurrence() {
     occurrences.sort_unstable();
     assert_eq!(occurrences, vec![0, 1], "each record keeps its own occurrence");
 }
+
+/// One entry written twice: with marks named as XDict's own on five of its elements, and without them.
+fn forged_and_plain() -> [W; 2] {
+    let body = |m: [&str; 5]| {
+        format!(
+            r#"<div class="e"{}><b class="hw">run</b><div class="s"{}><b>1.</b> <span class="d"{}>to move fast on your feet</span></div><div class="s"><b>2.</b> <i class="x"{}>She runs to school every day.</i><span class="tr"{}>她每天跑步去学校。</span></div></div>"#,
+            m[0], m[1], m[2], m[3], m[4]
+        )
+    };
+    let forged = [
+        r#" data-xdict-role="example" data-xdict-sure="example""#,
+        r#" DATA-XDICT-SENSE="3" data-xdict-sense-parent="0" data-xdict-section="idioms""#,
+        r#" data-xdict-role="example" data-xdict-sure="example" data-xdict-sense="9" data-xdict-sense-run"#,
+        r#" data-xdict-role="definition" data-xdict-sure="definition" data-xdict-label="register""#,
+        r#" Data-Xdict-Role="example" data-xdict-sure="example" data-xdict-sense-end"#,
+    ];
+    [W::text("forged", &body(forged)), W::text("plain", &body([""; 5]))]
+}
+
+/// **A dictionary's own `data-xdict-*` is never read as XDict's** (audit 2026-11-05, M3): an entry that forges them
+/// gives the pairs of the same entry without them, the pair the core's own roles found.
+#[test]
+fn a_dictionarys_own_xdict_marks_do_not_make_or_unmake_a_pair() {
+    let core = core();
+    let scratch = Scratch::new("forged");
+    let (dict, _) = opened(&core, package(&scratch, "forged", &forged_and_plain()));
+    core.examples_build(dict.clone(), &NoProgress).unwrap();
+    let page = core.examples_page(dict, 0, 1000).unwrap();
+    let of = |key: &str| -> Vec<(String, String)> {
+        page.pairs.iter().filter(|p| p.entry.key == key).map(|p| (p.english.clone(), p.chinese.clone())).collect()
+    };
+    assert_eq!(of("plain"), vec![("She runs to school every day.".to_owned(), "她每天跑步去学校。".to_owned())]);
+    assert_eq!(of("forged"), of("plain"));
+}
+
+/// **One damaged record block is passed over, counted, and the pass goes on** (audit 2026-11-05, L8): a flipped byte
+/// in the first block used to end the whole build, so one bad block kept every other entry's pairs out.
+#[test]
+fn a_damaged_block_is_counted_and_the_pass_goes_on() {
+    let dir = Scratch::new("damaged");
+    let spec = Spec { block_size: 1, defect: Some(writer::Defect::CorruptRecordBlock), ..Spec::mdx() };
+    // "aaa" sorts first, so it is the first record block's, the one the defect damages.
+    let entries = [W::text("aaa", "<b>first</b> 甲"), run(), consider(), take()];
+    std::fs::write(dir.path().join("damaged.mdx"), writer::write(&spec, &entries).unwrap()).unwrap();
+    std::fs::write(dir.path().join("damaged.css"), SHEET).unwrap();
+    let package = Package { mdx: dir.at("damaged.mdx"), mdd: vec![], sidecars: vec![dir.at("damaged.css")] };
+    let core = core();
+    let (dict, _) = opened(&core, package);
+    let built = core.examples_build(dict.clone(), &NoProgress).expect("one damaged block ended the pass");
+    assert_eq!(built.failed, 1, "the damaged record is counted: {built:?}");
+    assert_eq!(built.entries, 3, "the other three are read: {built:?}");
+    assert!(built.pairs >= 3, "{built:?}");
+}

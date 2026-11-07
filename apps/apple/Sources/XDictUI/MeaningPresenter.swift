@@ -170,12 +170,13 @@ public enum MeaningPresenter {
     /// **The note an explicit save writes** (plan-companion WI-9; owner, 2026-10-25): the explanation, each quote on its
     /// own line in the pane's quotation marks, then a provenance line naming the source, the model when one was named, and
     /// that a model wrote the wording. **Everything comes from the presentation's frozen facts** (audit round 4): a request
-    /// started while a save waits cannot pair its source with the old explanation. The sentence is never part of it; the day
-    /// is the UTC calendar day, so a test can read it.
-    public static func noteText(presentation: MeaningPresentation, date: Date,
+    /// started while a save waits cannot pair its source with the old explanation. The sentence is never part of it. The
+    /// day is the reader's own: a Gregorian date in `timeZone`, the Mac's by default. It was the UTC day, which put an
+    /// evening's note in Shanghai on the next day and a morning's in California on the day before.
+    public static func noteText(presentation: MeaningPresentation, date: Date, timeZone: TimeZone = .current,
                                 translate: (LocalizedStringResource) -> String = { String(localized: $0) }) -> String {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
+        calendar.timeZone = timeZone
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
         let source = presentation.facts.source ?? String(localized: MeaningSentences.anAISource)

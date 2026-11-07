@@ -15,7 +15,10 @@ use crate::Error;
 /// instruction, at the end of `input`, having produced exactly `expected` bytes; every copy must reach only
 /// what was already produced.
 pub(crate) fn decompress(input: &[u8], expected: usize, what: &str) -> Result<Vec<u8>, Error> {
-    let mut s = Stream { input, at: 0, out: Vec::with_capacity(expected), expected, what };
+    // **Reserved fallibly, as the zlib path is** (audit 2026-11-05, L6): `expected` is the file's word.
+    let mut out = Vec::new();
+    out.try_reserve_exact(expected).map_err(crate::out_of_memory)?;
+    let mut s = Stream { input, at: 0, out, expected, what };
     let first = s.byte()?;
     let mut state = if first > 17 {
         // A first run of literals: 1 to 3 leave that state, more leave state 4.

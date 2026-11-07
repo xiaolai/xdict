@@ -194,6 +194,70 @@ struct HoverSessionTests {
         #expect(driver.feed(.settled(Self.word, held: [.option])).isEmpty)
     }
 
+    // MARK: - A busy capture after an abandoned read (audit 2026-11-05 M7; lifecycle.md rule 2)
+
+    /// **A read the reader left, refused for a busy capture, still ends its request.** The pointer left the word, so the
+    /// read was dropped; it then came back refused because another capture was busy. Nothing will ask its request again
+    /// — a fresh rest is a fresh request — so the end must drop it. Red while the busy branch owed a fresh ask and
+    /// emitted no `.drop`, which left the request open until the next stop.
+    @Test func aBusyEndAfterThePointerLeftDropsTheRequest() throws {
+        let driver = Driver(Self.hold)
+        let intent = try #require(driver.rest(at: Self.word))
+        #expect(driver.feed(.pointer(Self.elsewhere, held: [.option])).contains(.cancelRead))
+        let ended = driver.feed(.readEnded(serial: intent.serial, .captureBusy, pointer: Self.elsewhere, held: [.option]))
+        #expect(ended == [.drop(intent, .cancelled)], "the abandoned read's request was left open: \(ended)")
+        // What it owes is a fresh request from where the pointer is, asked when the capture frees.
+        let released = try #require(Driver.asked(driver.feed(.captureReleased(Self.elsewhere, held: [.option]))))
+        #expect(released.origin != intent.origin, "a fresh rest re-used the dropped request's number")
+    }
+
+    /// **A read stopped mid-flight, refused for a busy capture, ends its request** — stopping leaves the read in flight
+    /// to end its own request (the watcher finishes every other origin). Red while the busy branch broke out on a stop.
+    @Test func aBusyEndAfterAStopDropsTheRequest() throws {
+        let driver = Driver(Self.hold)
+        let intent = try #require(driver.rest(at: Self.word))
+        _ = driver.feed(.stop)
+        let ended = driver.feed(.readEnded(serial: intent.serial, .captureBusy, pointer: Self.word, held: [.option]))
+        #expect(ended == [.drop(intent, .cancelled)], "the stopped read's request was left open: \(ended)")
+    }
+
+    /// **A read a newer tap replaced, refused for a busy capture, ends as superseded**; the tap waits for the capture.
+    @Test func aBusyEndAfterATapReplacedTheReadDropsIt() throws {
+        let driver = Driver(Self.tap)
+        let first = try #require(Driver.asked(driver.doubleTap(at: Self.word, from: 10)))
+        _ = driver.feed(.modifiers([], at: 10.3, pointer: Self.word))
+        let waiting = try #require(Driver.reserved(driver.doubleTap(at: Self.elsewhere, from: 11)))
+        let ended = driver.feed(.readEnded(serial: first.serial, .captureBusy, pointer: Self.elsewhere, held: []))
+        #expect(ended == [.drop(first, .superseded)], "the replaced read's request was left open: \(ended)")
+        let served = try #require(Driver.asked(driver.feed(.captureReleased(Self.elsewhere, held: []))))
+        #expect(served.origin == waiting.origin)
+    }
+
+    /// **A rest owed a re-ask is ended when a tap supersedes it**: it holds the number its first ask took, and clearing
+    /// what it was owed without `.drop` left that number open. Red while the tap cleared the owed origin silently.
+    @Test func aTapThatSupersedesAnOwedRestEndsIt() throws {
+        let driver = Driver(Self.tap)
+        _ = driver.feed(.pointer(Self.word, held: []))
+        let rest = try #require(Driver.asked(driver.feed(.settled(Self.word, held: []), after: .milliseconds(200))))
+        _ = driver.feed(.readEnded(serial: rest.serial, .captureBusy, pointer: Self.word, held: []))
+        let tapped = driver.doubleTap(at: Self.word, from: 10)
+        #expect(tapped.contains(.drop(rest, .superseded)), "the owed rest's request was left open: \(tapped)")
+        #expect(Driver.asked(tapped) != nil)
+    }
+
+    /// **A rest that asks what was owed spends it**: the capture freeing afterwards asks nothing more. Red while the
+    /// settle asked under the owed origin and left it owed, so the release asked the same request a second time.
+    @Test func aRestThatAsksWhatWasOwedSpendsIt() throws {
+        let driver = Driver(Self.hold)
+        let first = try #require(driver.rest(at: Self.word))
+        _ = driver.feed(.readEnded(serial: first.serial, .captureBusy, pointer: Self.word, held: [.option]))
+        let again = try #require(Driver.asked(driver.feed(.settled(Self.word, held: [.option]))))
+        #expect(again.origin == first.origin)
+        _ = driver.feed(.readEnded(serial: again.serial, .nothing, pointer: Self.word, held: [.option]))
+        let released = driver.feed(.captureReleased(Self.word, held: [.option]))
+        #expect(Driver.asked(released) == nil, "the owed ask was asked twice: \(released)")
+    }
+
     // MARK: - What is owed
 
     /// **A rest refused because a capture was busy is asked again when it is released**, from where
@@ -434,7 +498,8 @@ struct HoverSessionRoundTwoTests {
         _ = session.handle(.modifiers([.option], at: 10, pointer: Self.word), settings: Self.tap, now: Self.origin + .seconds(2))
         _ = session.handle(.modifiers([], at: 10.08, pointer: Self.word), settings: Self.tap, now: Self.origin + .seconds(2))
         let tapped = session.handle(.modifiers([.option], at: 10.2, pointer: Self.word), settings: Self.tap, now: Self.origin + .seconds(2))
-        guard case .ask(let tap)? = tapped.first else { Issue.record("the tap was not asked: \(tapped)"); return }
+        guard let tap = tapped.lazy.compactMap({ if case .ask(let asked) = $0 { asked } else { nil } }).first
+        else { Issue.record("the tap was not asked: \(tapped)"); return }
         _ = session.handle(.readEnded(serial: tap.serial, .word, pointer: Self.word, held: []), settings: Self.tap, now: Self.origin + .seconds(2))
         let released = session.handle(.captureReleased(Self.word, held: []), settings: Self.tap, now: Self.origin + .seconds(3))
         for case .ask(let stale) in released {

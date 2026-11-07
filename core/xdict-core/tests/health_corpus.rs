@@ -38,7 +38,7 @@ impl Progress for Counted {
 
 #[test]
 fn every_edition_is_checked_once_and_kept() {
-    let Ok(dirs) = std::env::var("XDICT_MDX_CORPUS") else {
+    let Some(dirs) = xdict_mdx_writer::corpus::wanted("XDICT_MDX_CORPUS").unwrap_or_else(|why| panic!("{why}")) else {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };

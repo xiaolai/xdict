@@ -95,7 +95,7 @@ public enum HoverSentences {
         case .screenRecordingNeeded:
             LocalizedStringResource(
                 "Hover needs Screen Recording here",
-                comment: "Shown briefly by the pointer; the Screen Recording row is in Settings > General")
+                comment: "Shown briefly by the pointer; the Screen Recording row is in Settings > Lookup")
         case .captureStuck:
             LocalizedStringResource(
                 "The screen is not answering yet", comment: "Shown briefly by the pointer when a screen capture is stuck")

@@ -50,7 +50,8 @@ enum Fixtures {
     ])
     static let reanchorReport = ReanchorReport(outcomes: [
         ReanchorOutcome(target: studyTarget, result: .reanchored),
-    ])
+        ReanchorOutcome(target: studyTarget, result: .failed(detail: "Malformed { detail: \"cut\" }")),
+    ], next: "word:" + studyTarget.key)
     static let ledgerReading = LedgerReading(
         surface: "hold", lemma: "hold", sentence: "They hold that view.", span: LedgerSpan(start: 5, len: 4),
         cut: 0, quality: "complete", edition: edition.rawValue, entryKey: "hold", occurrence: 0,
@@ -100,7 +101,8 @@ enum Fixtures {
         .cancelConversion,
         .displayOptions(dict: dict),
         .ledgerRecord(reading: ledgerReading, operation: "3E2D1C0B-9A87-4655-8433-221100FFEEDD", targetLanguages: ["en"]),
-        .ledgerHistory(now: 1_790_643_600, utcOffsetSeconds: 0),
+        .ledgerHistory(now: 1_790_643_600, zone: [ZoneOffset(from: 1_780_000_000, seconds: 7_200),
+                                                  ZoneOffset(from: 1_792_890_000, seconds: 3_600)]),
         .studyNote(dict: dict, entry: entryRef, text: "my own words", name: "Tiny", stamp: studyStamp,
                    operation: "op-study"),
         .studyNotes,
@@ -112,7 +114,7 @@ enum Fixtures {
         .definitionHash(dict: dict, entry: entryRef),
         .studyReanchor(oldEdition: edition,
                        newEdition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32)),
-                       stamp: studyStamp, operationPrefix: "reanchor"),
+                       stamp: studyStamp, operationPrefix: "reanchor", after: "word:hold"),
         .studyNoteAt(entry: entryRef, text: "my own words", name: "Tiny", stamp: studyStamp,
                      operation: "op-study-at"),
         .exportData,
@@ -264,7 +266,8 @@ enum Fixtures {
         .exported(#"{"version":1,"events":[]}"#),
         .erased(StudyEraseReport(clearedReadings: 0, clearedNotes: 0, clearedGrades: 0, recoverable: .freeBlocks)),
         .conflicts([cardConflict]),
-        .synced(SyncReport(exported: 4_096, peers: 1, added: 3, skipped: 41)),
+        .synced(SyncReport(exported: 4_096, peers: 1, added: 3, skipped: 41,
+                           refused: [SyncRefusal(file: "xdict-b.xdlog", detail: "Malformed")])),
         .words(words),
         .examples(Examples(hits: [
             ExampleHit(english: "Who could have considered such a possibility?", chinese: "谁居然会想到这种可能性？",
@@ -447,10 +450,10 @@ enum Fixtures {
         .textLimitOutOfRange(requested: 2 << 20, ceiling: 1 << 20), .duplicateToken(file: mdxID),
         .unsupportedOperation, .missingToken(file: volumeID), .handleIsNotThePathsFile(file: mdxID),
         .notARegularReadOnlyFile(file: sidecarID), .envelopeTooLarge(bytes: 5 << 20, limit: 4 << 20),
-        .suggestLimitOutOfRange(requested: 101, ceiling: 100),
+        .suggestLimitOutOfRange(requested: 101, ceiling: 100), .forbiddenPath,
     ]
 
-    static let refusalCases = 15
+    static let refusalCases = 16
     static func index(_ refusal: Refusal) -> Int {
         switch refusal {
         case .tooManyInFlight: 0
@@ -468,6 +471,7 @@ enum Fixtures {
         case .notARegularReadOnlyFile: 12
         case .envelopeTooLarge: 13
         case .suggestLimitOutOfRange: 14
+        case .forbiddenPath: 15
         }
     }
 

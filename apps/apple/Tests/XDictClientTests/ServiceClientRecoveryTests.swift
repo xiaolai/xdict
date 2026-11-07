@@ -395,6 +395,46 @@ struct ServiceClientRecoveryTests {
                 "the edition's files were not sent with the call")
     }
 
+    /// **A note saved across the service's idle exit** (audit 2026-11-05 G11): the dictionary is open, the service ends
+    /// itself when idle (ADR-0009 d.4) with nothing in flight, and the next `studyNoteAt` reaches the fresh process
+    /// launchd starts on the same connection, which has no dictionary open and answers `notFound(.edition)` once. The
+    /// client opens the dictionary again exactly once, on that connection, and the note is saved. Red with the edition
+    /// recovery removed.
+    @Test func aNoteSavedAcrossAnIdleExitReopensOnceAndIsAnswered() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let opens = Slot<Int>(), exited = Slot<Bool>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: DictId(rawValue: "handle-\(count)"), edition: Fixture.edition,
+                                            info: Fixture.info)), to: request)
+            case .studyNoteAt where exited.current == true && opens.current == 1:
+                // The fresh process: nothing open, so the edition is not found.
+                return .failure(.core(.notFound(what: .edition, detail: "not open")), to: request)
+            case .studyNoteAt:
+                return .reply(.studyNote(Fixture.studyNote), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let log = EventLog()
+        let client = ServiceClient(connect: service.connect, options: Fixture.options(), watch: log.record)
+        _ = await client.open(package)
+        exited.set(true)
+        service.interruptAll()
+        #expect(await log.wait { $0 == .interrupted(link: 1) }, "the idle exit was not heard")
+        let outcome = await client.call(Fixture.studyNoteAt())
+        #expect(outcome == .success(Delivered(answer: .studyNote(Fixture.studyNote), payload: nil)))
+        #expect(opens.current == 2, "the dictionary was opened \((opens.current ?? 0) - 1) times again, not once")
+        #expect(log.all.filter { if case .reopened = $0 { true } else { false } }.count == 1)
+        let notes = service.sent.filter { if case .studyNoteAt = $0.request.operation { true } else { false } }
+        #expect(notes.count == 2, "the note was sent \(notes.count) times, not twice")
+        #expect(service.sent.allSatisfy { $0.connection == 1 }, "the idle exit cost a new connection")
+    }
+
     /// **The history card's gloss recovers the same way** (ADR-0037): `entryGloss` names an edition too, so a card fetched
     /// after the service restarted is answered `notFound(.edition)`; the client opens the dictionary again and the card
     /// gets its gloss rather than silently none.

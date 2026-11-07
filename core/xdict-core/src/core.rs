@@ -12,15 +12,15 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use xdict_entry::{Style, StyleSheet};
 #[cfg(not(target_family = "wasm"))]
 use xdict_ledger::FileStore;
-/// **A sync pass is a native shell's** (plan §2.6): the Web has no folder to merge through, so the type is unused there.
-#[cfg(not(target_family = "wasm"))]
-use xdict_ledger::SyncReport;
 use xdict_ledger::{
     CardConflict, CardState, Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, GradeRecord,
     History, Ledger, MemoryStore, Note, Reading, ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult,
     RecordOutcome, Removal, ResolutionRecord, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp,
-    Store, StudyCard, StudyGrade, StudyPhase, StudyTarget, TargetKind, UndoRecord,
+    Store, StudyCard, StudyGrade, StudyPhase, StudyTarget, TargetKind, UndoRecord, ZoneOffset,
 };
+/// **A sync pass is a native shell's** (plan §2.6): the Web has no folder to merge through, so the type is unused there.
+#[cfg(not(target_family = "wasm"))]
+use xdict_ledger::{SyncRefusal, SyncReport};
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain, Region};
 use xdict_mdx::{Budget, File, Kind};
@@ -68,6 +68,16 @@ const GLOSS_TEXT_BYTES: usize = 256 * 1_024;
 /// words a day is far under it, and a stray file in the reader's sync folder must not exhaust the service.
 #[cfg(not(target_family = "wasm"))]
 pub const MAX_SYNC_BYTES: u64 = 256 * 1_024 * 1_024;
+
+/// **Occurrences one re-anchor call renders before it stops** (audit 2026-11-05, M5): the call stops before the next
+/// note once this many have rendered and names where the next call starts, so a dictionary with thousands of notes
+/// never runs one call past the service's deadline. A count, not a clock, so the same notes always split the same
+/// way. Not measured: at 50 ms for a large entry it is 6.4 s, under half the service's 15 s deadline.
+pub const MAX_REANCHOR_RENDERS: u32 = 128;
+
+/// **Offsets one zone may list** (audit 2026-11-05, L5d): the drawer reads fourteen days, which a zone crosses at most a
+/// few changes of; a shell sends the changes of a few weeks.
+pub const MAX_ZONE_OFFSETS: usize = 256;
 
 /// Candidates one lookup may read, redirect targets included. Larger than the reader's own
 /// [`xdict_mdx::limits::LOOKUP_RECORDS`], which bounds records it returns: the core reads each candidate only
@@ -480,11 +490,9 @@ impl Core {
             }
             // **Its collocation store goes with it** (audit, 2026-10-28): the store is keyed `<handle>:<edition>` and
             // nothing evicted it, so opening and closing a dictionary in a loop kept one whole store per round.
-            if removed.is_some()
-                && let Ok(mut held) = self.colloc.lock()
-            {
+            if removed.is_some() {
                 let prefix = format!("{handle}:");
-                held.retain(|key, _| !key.starts_with(&prefix));
+                slot(&self.colloc).retain(|key, _| !key.starts_with(&prefix));
             }
             drop(state);
             drop(removed);
@@ -599,7 +607,8 @@ impl Core {
         let handle = self.parse_handle(dict)?;
         let opened = self.dict(dict)?;
         let key = format!("{handle}:{}", opened.edition);
-        if let Some(held) = self.colloc.lock().ok().and_then(|held| held.get(&key).cloned()) {
+        let cached = slot(&self.colloc).get(&key).cloned();
+        if let Some(held) = cached {
             // **A store is answered only for the file it was built from** (audit, 2026-10-28): the key holds the handle
             // and the edition, and neither changes when the file behind them is rewritten in place.
             opened.mdx_source.unchanged()?;
@@ -609,9 +618,7 @@ impl Core {
             return Ok(None);
         }
         let store = Arc::new(crate::collocations::Store::build(&opened.mdx, dict, &opened.edition)?);
-        if let Ok(mut held) = self.colloc.lock() {
-            held.insert(key, Arc::clone(&store));
-        }
+        slot(&self.colloc).insert(key, Arc::clone(&store));
         Ok(Some(store))
     }
 
@@ -626,11 +633,10 @@ impl Core {
     pub fn attach_word_pack(&self, path: String) -> Result<crate::words::WordPackInfo, CoreError> {
         guard(|| {
             // **The kind is the file's own**: a pack that is not there is `NotFound` and one the service may not read is
-            // `PermissionDenied`; both used to arrive as an anonymous `Other` across the boundary.
-            let file = std::fs::File::open(&path).map_err(|error| match CoreError::io(&error) {
-                CoreError::Io { kind, detail } => {
-                    CoreError::Io { kind, detail: format!("the word pack {path}: {detail}") }
-                }
+            // `PermissionDenied`; both used to arrive as an anonymous `Other` across the boundary. A pack that is a
+            // link is refused (`refuse_link`).
+            let file = open_unlinked(Path::new(&path)).map_err(|error| match error {
+                CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("the word pack {detail}") },
                 other => other,
             })?;
             let lexicon =
@@ -642,13 +648,9 @@ impl Core {
                 sources: header.sources.iter().map(|source| source.id.clone()).collect(),
                 records: lexicon.records().len() as u64,
             };
-            if let Ok(mut held) = self.word_pack.lock() {
-                *held = Some(AttachedPack { info: info.clone(), lexicon: Arc::new(lexicon) });
-            }
+            *slot(&self.word_pack) = Some(AttachedPack { info: info.clone(), lexicon: Arc::new(lexicon) });
             self.pack_serial.fetch_add(1, Ordering::SeqCst);
-            if let Ok(mut held) = self.explore.lock() {
-                *held = None;
-            }
+            *slot(&self.explore) = None;
             Ok(info)
         })
     }
@@ -671,6 +673,13 @@ impl Core {
         progress: &dyn Progress,
     ) -> Result<crate::words::WordPackInfo, CoreError> {
         guard(|| {
+            // **The pack is written beside no link** (`refuse_link`): the output and its folder are checked; the files
+            // are then created anew and renamed into place, which follows no link at their names.
+            let target = Path::new(&output);
+            refuse_link(target)?;
+            if let Some(folder) = target.parent().filter(|folder| !folder.as_os_str().is_empty()) {
+                refuse_link(folder)?;
+            }
             let entries = xdict_pack::manifest::read_manifest(std::path::Path::new(&manifest)).map_err(pack_error)?;
             let total: u64 = entries.iter().filter(|entry| !entry.is_kaikki()).map(|entry| entry.bytes).sum();
             let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -739,16 +748,14 @@ impl Core {
 
     /// The pack held now, or `None`: what Settings says when it opens.
     pub fn word_pack(&self) -> Option<crate::words::WordPackInfo> {
-        self.word_pack.lock().ok().and_then(|held| held.as_ref().map(|pack| pack.info.clone()))
+        slot(&self.word_pack).as_ref().map(|pack| pack.info.clone())
     }
 
     /// **Removes the pack**: true when one was held. The modes that read it answer `NoData` from the next call, and
     /// the next exploration drops the pack's indexes.
     pub fn detach_word_pack(&self) -> bool {
-        let held = self.word_pack.lock().map(|mut held| held.take()).ok().flatten();
-        if let Ok(mut cached) = self.explore.lock() {
-            *cached = None;
-        }
+        let held = slot(&self.word_pack).take();
+        *slot(&self.explore) = None;
         self.pack_serial.fetch_add(1, Ordering::SeqCst);
         held.is_some()
     }
@@ -791,24 +798,20 @@ impl Core {
             key.push(';');
             sources.push(opened);
         }
-        if let Ok(held) = self.explore.lock()
-            && let Some(cached) = held.as_ref()
-            && cached.key == key
-        {
+        let cached = slot(&self.explore).as_ref().filter(|cached| cached.key == key).map(|c| Arc::clone(&c.explorer));
+        if let Some(cached) = cached {
             // **The files behind the cache are checked before it answers** (audit, 2026-10-28): the key names handles
             // and editions, and an edition is the hash of what was imported — a file rewritten in place since keeps its
             // key, so the cached catalog would answer for bytes no longer on disk.
             for opened in &sources {
                 opened.mdx_source.unchanged()?;
             }
-            return Ok(Arc::clone(&cached.explorer));
+            return Ok(cached);
         }
         // **Built outside the lock**: the build reads every key of every dictionary and takes seconds; a second call
         // meanwhile builds its own rather than waiting on this one, and the last to finish is what is kept.
         let explorer = Arc::new(self.word_explorer_within(dicts, &NoProgress, CatalogLimits::DEFAULT)?);
-        if let Ok(mut held) = self.explore.lock() {
-            *held = Some(CachedExplorer { key, explorer: Arc::clone(&explorer) });
-        }
+        *slot(&self.explore) = Some(CachedExplorer { key, explorer: Arc::clone(&explorer) });
         Ok(explorer)
     }
 
@@ -932,7 +935,7 @@ impl Core {
         }
         // The pack held now: a pack attached while this catalog was being read is not the one this build indexes, and
         // the call that attached it dropped the cached explorer, so the next call builds again with it.
-        let pack = self.word_pack.lock().ok().and_then(|held| held.as_ref().map(|pack| Arc::clone(&pack.lexicon)));
+        let pack = slot(&self.word_pack).as_ref().map(|pack| Arc::clone(&pack.lexicon));
         let explorer = WordExplorer::new(catalog, pack).map_err(word_error)?;
         // **The last report comes after the explorer's indexes are built**, so a caller that shows completion at the
         // callback does not show it before the explorer can answer; a cancel here discards it (audit, 2026-10-24).
@@ -1631,8 +1634,17 @@ impl Core {
                     return Err(CoreError::Cancelled { detail: "the examples pass was cancelled".into() });
                 }
                 let key = opened.mdx.key(i)?.into_owned();
-                let raw = opened.mdx.record(i)?;
-                if String::from_utf8_lossy(&raw.data).trim_start().starts_with("@@@LINK=") {
+                // **One damaged block is passed over and counted, not the end of the pass** (audit 2026-11-05, L8):
+                // its records are `failed`, and every other entry still gives its pairs.
+                let raw = match opened.mdx.record(i) {
+                    Ok(raw) => raw,
+                    Err(xdict_mdx::Error::Malformed(_)) => {
+                        failed += 1;
+                        continue;
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                if xdict_lookup::is_redirect(&String::from_utf8_lossy(&raw.data)) {
                     continue;
                 }
                 read += 1;
@@ -1731,7 +1743,8 @@ impl Core {
         let versions = crate::phrases::versions();
         if let Some(region) = self.indexes.get(&name)? {
             let bytes = region_to_vec(&*region)?;
-            if let Some(inventory) = xdict_phrase::Inventory::decode(&bytes, &edition, versions) {
+            let slots = crate::phrases::slots();
+            if let Ok(inventory) = xdict_phrase::Inventory::decode(&bytes, &edition, versions, &slots) {
                 let built = PhraseBuilt { edition, phrases: inventory.phrases().len() as u64, cached: true };
                 return Ok((built, Arc::new(inventory.matcher())));
             }
@@ -1897,8 +1910,12 @@ impl Core {
         }
         let Some(region) = self.indexes.get(&name)? else { return Ok(None) };
         let bytes = region_to_vec(&*region)?;
-        let Some(inventory) = xdict_phrase::Inventory::decode(&bytes, &opened.edition, crate::phrases::versions())
-        else {
+        let Ok(inventory) = xdict_phrase::Inventory::decode(
+            &bytes,
+            &opened.edition,
+            crate::phrases::versions(),
+            &crate::phrases::slots(),
+        ) else {
             return Ok(None);
         };
         let matcher = Arc::new(inventory.matcher());
@@ -2138,10 +2155,12 @@ impl Core {
         Ok(Arc::new(MemoryStore::default()))
     }
 
-    /// The days the drawer shows, in the reader's own zone.
-    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Result<History, CoreError> {
+    /// The days the drawer shows, in the reader's own zone: `zone` is its offsets from UTC and the instants each begins
+    /// (audit 2026-11-05, L5d), so a range across a daylight-saving change puts each reading on its own day.
+    pub fn ledger_history(&self, now: f64, zone: Vec<ZoneOffset>) -> Result<History, CoreError> {
+        checked_zone(&zone)?;
         let mut held = self.ledger()?;
-        Ok(self.opened(&mut held)?.history(now, utc_offset_seconds))
+        Ok(self.opened(&mut held)?.history(now, &zone))
     }
 
     /// Everything the log holds, in causal order: the reader's export (ADR-0023).
@@ -2176,9 +2195,10 @@ impl Core {
     }
 
     /// **Retention is compaction** (ADR-0024): readings past the drawer's bound leave the log itself.
-    pub fn ledger_compact(&self, now: f64, utc_offset_seconds: i32) -> Result<Compaction, CoreError> {
+    pub fn ledger_compact(&self, now: f64, zone: Vec<ZoneOffset>) -> Result<Compaction, CoreError> {
+        checked_zone(&zone)?;
         let mut held = self.ledger()?;
-        self.opened(&mut held)?.compact(now, utc_offset_seconds).map_err(ledger_error)
+        self.opened(&mut held)?.compact(now, &zone).map_err(ledger_error)
     }
 
     /// **Erase is a rewrite** (ADR-0024): the readings leave the log; the receipt says what may remain recoverable.
@@ -2427,37 +2447,46 @@ impl Core {
             }
             let source = std::path::PathBuf::from(&input);
             let sink = std::path::PathBuf::from(&output);
-            std::fs::create_dir_all(&sink)
-                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", sink.display()) })?;
+            // **Neither folder is a link** (audit 2026-11-05, the class of L1): see `refuse_link`.
+            refuse_link(&source)?;
+            refuse_link(&sink)?;
+            // **The reader's storage failing is I/O, not a malformed log** (audit 2026-11-05, M16): the shell reads the
+            // kind to say which, and the detail names the path.
+            std::fs::create_dir_all(&sink).map_err(io_at(&sink))?;
+            refuse_link(&sink)?;
             let ours = sink.join(format!("xdict-{device}.xdlog"));
-            let mut report = SyncReport { exported: 0, peers: 0, added: 0, skipped: 0 };
+            let mut report = SyncReport { exported: 0, peers: 0, added: 0, skipped: 0, refused: Vec::new() };
             let mut held = self.ledger()?;
             let ledger = self.opened(&mut held)?;
-            let listing = std::fs::read_dir(&source)
-                .map_err(|error| CoreError::Malformed { detail: format!("the sync folder: {error}") })?;
-            for entry in listing {
-                let path =
-                    entry.map_err(|error| CoreError::Malformed { detail: format!("the sync folder: {error}") })?.path();
-                let named =
-                    path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.ends_with(".xdlog"));
-                if path == ours || !named {
-                    continue;
+            let mut peers = Vec::new();
+            for entry in std::fs::read_dir(&source).map_err(io_at(&source))? {
+                let path = entry.map_err(io_at(&source))?.path();
+                let Some(name) = path.file_name().and_then(|name| name.to_str()).map(str::to_owned) else { continue };
+                if path != ours && name.ends_with(".xdlog") {
+                    peers.push((name, path));
                 }
+            }
+            peers.sort();
+            // **One bad peer log does not block sync** (audit 2026-11-05, M16): a file that cannot be read or merged is
+            // left out and named, the others still merge, and this device's log is written whatever a peer holds. A
+            // merge is atomic, so a refused file adds nothing.
+            for (name, path) in peers {
                 // **The bound is enforced on the bytes actually read** (audit rounds 1–4, 2026-10-26): a peer file that
                 // grows between a metadata check and an unbounded read could pass it, so one open reads at most the
                 // bound plus one byte, and one byte over is refused.
-                let bytes = read_within(&path, MAX_SYNC_BYTES)?;
-                let merged = ledger.merge(&bytes).map_err(ledger_error)?;
-                report.peers += 1;
-                report.added += merged.added;
-                report.skipped += merged.skipped;
+                let merged =
+                    read_within(&path, MAX_SYNC_BYTES).and_then(|bytes| ledger.merge(&bytes).map_err(ledger_error));
+                match merged {
+                    Ok(merged) => {
+                        report.peers += 1;
+                        report.added += merged.added;
+                        report.skipped += merged.skipped;
+                    }
+                    Err(error) => report.refused.push(SyncRefusal { file: name, detail: error.to_string() }),
+                }
             }
             let bytes = ledger.log_bytes().map_err(ledger_error)?;
-            let temporary = ours.with_extension("xdlog.tmp");
-            std::fs::write(&temporary, &bytes)
-                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", temporary.display()) })?;
-            std::fs::rename(&temporary, &ours)
-                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", ours.display()) })?;
+            write_unlinked(&ours, &bytes)?;
             report.exported = bytes.len() as u64;
             Ok(report)
         })
@@ -2516,61 +2545,105 @@ impl Core {
     /// **Re-anchors notes of `old_edition` to `new_edition`** (plan §5.1): the same occurrence holding the same
     /// definition hash moves; a moved definition, a reordered occurrence or a missing key leaves the note where it is
     /// and is reported, never silently bound to another record.
+    ///
+    /// **One call does a bounded amount of work** (audit 2026-11-05, M5): it stops before the next note once it has
+    /// rendered [`MAX_REANCHOR_RENDERS`] occurrences, and its report's `next` names where the following call starts
+    /// (`after`). Notes are taken in the ledger's own order, so a note left on the old edition is never classified twice
+    /// in one sweep. A note that cannot be classified is its own `Failed` outcome; none is dropped.
     pub fn study_reanchor(
         &self,
         old_edition: String,
         new_edition: String,
         stamp: Stamp,
         operation_prefix: String,
+        after: Option<String>,
     ) -> Result<ReanchorReport, CoreError> {
         guard(|| {
             let dict = self.dict_of_edition(&new_edition)?;
             let notes: Vec<Note> = {
                 let mut held = self.ledger()?;
-                self.opened(&mut held)?.notes().into_iter().filter(|note| note.target.edition == old_edition).collect()
+                self.opened(&mut held)?
+                    .notes()
+                    .into_iter()
+                    .filter(|note| note.target.edition == old_edition)
+                    .filter(|note| after.as_ref().is_none_or(|after| note.target.key() > *after))
+                    .collect()
             };
+            // Each (key, occurrence) renders once a call, however many notes share the key; `renders` counts the
+            // renders, the budget's unit.
+            let mut hashes: HashMap<(String, u32), Option<String>> = HashMap::new();
+            let mut renders = 0u32;
             let mut outcomes = Vec::with_capacity(notes.len());
+            let mut next = None;
             for note in notes {
-                let key = note.target.entry_key.clone();
-                let occurrence = note.target.occurrence;
-                let exact = self.occurrence_hash(&dict, &new_edition, &key, occurrence)?;
-                let at_the_occurrence = exact.is_some();
-                let result = match exact.as_deref() {
-                    Some(hash) if hash == note.target.definition_hash.as_str() => {
-                        self.record_reanchor(&note, &new_edition, hash, stamp.at, &stamp.device, &operation_prefix)?;
-                        ReanchorResult::Reanchored
-                    }
-                    _ => {
-                        // **The definition may have moved, and the original occurrence may be gone** (audit rounds 3–4,
-                        // 2026-10-26): every occurrence of the key is read, not the first 64 — a definition that moved to
-                        // occurrence 70 is still a reordering — and a key that exists nowhere is the only `Missing`.
-                        let mut matched = false;
-                        let mut present = at_the_occurrence;
-                        let mut other = 0u32;
-                        loop {
-                            if other != occurrence {
-                                match self.occurrence_hash(&dict, &new_edition, &key, other)? {
-                                    None => break,
-                                    Some(hash) => {
-                                        present = true;
-                                        matched |= hash == note.target.definition_hash;
-                                    }
-                                }
-                            }
-                            other = other.saturating_add(1);
-                        }
-                        if matched {
-                            ReanchorResult::Reordered
-                        } else if present {
-                            ReanchorResult::Changed
-                        } else {
-                            ReanchorResult::Missing
-                        }
-                    }
-                };
+                if renders >= MAX_REANCHOR_RENDERS {
+                    next = outcomes.last().map(|outcome: &ReanchorOutcome| outcome.target.key());
+                    break;
+                }
+                let result = self
+                    .reanchor_one(&note, &dict, &new_edition, &stamp, &operation_prefix, &mut hashes, &mut renders)
+                    .unwrap_or_else(|error| ReanchorResult::Failed { detail: error.to_string() });
                 outcomes.push(ReanchorOutcome { target: note.target, result });
             }
-            Ok(ReanchorReport { outcomes })
+            Ok(ReanchorReport { outcomes, next })
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn reanchor_one(
+        &self,
+        note: &Note,
+        dict: &str,
+        new_edition: &str,
+        stamp: &Stamp,
+        operation_prefix: &str,
+        hashes: &mut HashMap<(String, u32), Option<String>>,
+        renders: &mut u32,
+    ) -> Result<ReanchorResult, CoreError> {
+        let key = note.target.entry_key.as_str();
+        let occurrence = note.target.occurrence;
+        let mut hash_at = |at: u32| -> Result<Option<String>, CoreError> {
+            if let Some(known) = hashes.get(&(key.to_string(), at)) {
+                return Ok(known.clone());
+            }
+            *renders = renders.saturating_add(1);
+            let hash = self.occurrence_hash(dict, new_edition, key, at)?;
+            hashes.insert((key.to_string(), at), hash.clone());
+            Ok(hash)
+        };
+        let exact = hash_at(occurrence)?;
+        if let Some(hash) = exact.as_deref()
+            && hash == note.target.definition_hash.as_str()
+        {
+            self.record_reanchor(note, new_edition, hash, stamp.at, &stamp.device, operation_prefix)?;
+            return Ok(ReanchorResult::Reanchored);
+        }
+        // **The definition may have moved, and the original occurrence may be gone** (audit rounds 3–4, 2026-10-26):
+        // every occurrence of the key is read, not the first 64 — a definition that moved to occurrence 70 is still a
+        // reordering — and a key that exists nowhere is the only `Missing`.
+        let mut matched = false;
+        let mut present = exact.is_some();
+        let mut other = 0u32;
+        loop {
+            if other != occurrence {
+                match hash_at(other)? {
+                    None => break,
+                    Some(hash) => {
+                        present = true;
+                        matched |= hash == note.target.definition_hash;
+                    }
+                }
+            }
+            other = other
+                .checked_add(1)
+                .ok_or_else(|| CoreError::internal("a key has more occurrences than an occurrence can number"))?;
+        }
+        Ok(if matched {
+            ReanchorResult::Reordered
+        } else if present {
+            ReanchorResult::Changed
+        } else {
+            ReanchorResult::Missing
         })
     }
 
@@ -2633,7 +2706,7 @@ fn sample(opened: &Dict) -> Result<Vec<String>, CoreError> {
             && let Ok(record) = opened.mdx.record(i)
         {
             let text = String::from_utf8_lossy(&record.data);
-            if !text.trim_start().starts_with("@@@LINK=") {
+            if !xdict_lookup::is_redirect(&text) {
                 // **A compact style can expand a small record past any bound** (audit rounds 2–4, 2026-10-26): the
                 // sample is held to a per-entry expansion and an aggregate one, so calibration reads a sample, never a
                 // record a marker multiplied.
@@ -2650,20 +2723,121 @@ fn sample(opened: &Dict) -> Result<Vec<String>, CoreError> {
     Ok(entries)
 }
 
+/// **A cache slot, held even after a panic poisoned it** (audit 2026-11-05, L9): every slot's value is replaced or
+/// inserted whole, so a panic cannot leave one half-written, and skipping a poisoned slot answered `Ok` while nothing
+/// was kept — a word pack never installed. The core's state and ledger stay typed errors: those are mutated in place.
+fn slot<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// An I/O failure at `path`, its kind kept and the path named.
+#[cfg(not(target_family = "wasm"))]
+fn io_at(path: &Path) -> impl Fn(std::io::Error) -> CoreError + '_ {
+    move |error| match CoreError::io(&error) {
+        CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("{}: {detail}", path.display()) },
+        carried => carried,
+    }
+}
+
+/// **A zone the history can trust** (audit 2026-11-05, L5d): at least one offset and at most [`MAX_ZONE_OFFSETS`],
+/// each beginning at a finite instant after the one before, none further from UTC than any zone is. Anything else is a
+/// request that does not fit its call.
+fn checked_zone(zone: &[ZoneOffset]) -> Result<(), CoreError> {
+    const MAX_OFFSET_SECONDS: i32 = 18 * 3_600;
+    let malformed = |why: &str| Err(CoreError::Malformed { detail: format!("a zone {why}: {zone:?}") });
+    if zone.is_empty() || zone.len() > MAX_ZONE_OFFSETS {
+        return malformed(&format!("of 1 to {MAX_ZONE_OFFSETS} offsets"));
+    }
+    if zone.iter().any(|entry| !entry.from.is_finite() || entry.seconds.abs() > MAX_OFFSET_SECONDS) {
+        return malformed("with an instant that is not a number or an offset beyond 18 hours");
+    }
+    if zone.windows(2).any(|pair| matches!(pair, [earlier, later] if earlier.from >= later.from)) {
+        return malformed("whose offsets are not in ascending order");
+    }
+    Ok(())
+}
+
 /// **At most `max` bytes of a file, anything over refused** (audit rounds 1–4, 2026-10-26): one open reads the bound plus
-/// one byte, so a peer log that grows or is replaced after any metadata check cannot slip past it.
+/// one byte, so a peer log that grows or is replaced after any metadata check cannot slip past it. Over the bound is a
+/// limit, not damage (audit 2026-11-05, M16): `TooLarge`, with the bound in its detail.
 #[cfg(not(target_family = "wasm"))]
 fn read_within(path: &Path, max: u64) -> Result<Vec<u8>, CoreError> {
     use std::io::Read;
-    let detail =
-        |error: &dyn std::fmt::Display| CoreError::Malformed { detail: format!("{}: {error}", path.display()) };
-    let file = std::fs::File::open(path).map_err(|error| detail(&error))?;
+    let over = || CoreError::TooLarge {
+        limit: Limit::File,
+        detail: format!("{} is over the {max}-byte sync bound", path.display()),
+    };
+    let file = open_unlinked(path)?;
+    if file.metadata().map_err(io_at(path))?.len() > max {
+        return Err(over());
+    }
     let mut bytes = Vec::new();
-    file.take(max.saturating_add(1)).read_to_end(&mut bytes).map_err(|error| detail(&error))?;
+    file.take(max.saturating_add(1)).read_to_end(&mut bytes).map_err(io_at(path))?;
     if bytes.len() as u64 > max {
-        return Err(CoreError::Malformed { detail: format!("{} is over the {max}-byte sync bound", path.display()) });
+        return Err(over());
     }
     Ok(bytes)
+}
+
+/// **A path the core opens or creates for a shell is never a symbolic link** (audit 2026-11-05, the class of L1): the
+/// service confines a path when it admits the request and the core opens it later, so a link swapped in between would
+/// be followed out of the place the service checked. The last component is held to it, as `O_NOFOLLOW` would hold
+/// it; the folders above are the service's, and a system's own (`/var` on macOS) may be links. A link is refused as
+/// `PermissionDenied`, naming the path; a path that is not there yet is not a link.
+#[cfg(not(target_family = "wasm"))]
+fn refuse_link(path: &Path) -> Result<(), CoreError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(found) if found.file_type().is_symlink() => Err(linked(path)),
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(io_at(path)(error)),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn linked(path: &Path) -> CoreError {
+    CoreError::Io {
+        kind: crate::error::IoKind::PermissionDenied,
+        detail: format!("{} is a symbolic link, not followed", path.display()),
+    }
+}
+
+/// Opens `path` for reading only if it is not a link, and (on Unix) only if the file opened is the one checked: a link
+/// swapped in between the check and the open is caught by the file's identity.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn open_unlinked(path: &Path) -> Result<std::fs::File, CoreError> {
+    let checked = std::fs::symlink_metadata(path).map_err(io_at(path))?;
+    if checked.file_type().is_symlink() {
+        return Err(linked(path));
+    }
+    let file = std::fs::File::open(path).map_err(io_at(path))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let opened = file.metadata().map_err(io_at(path))?;
+        if (opened.dev(), opened.ino()) != (checked.dev(), checked.ino()) {
+            return Err(linked(path));
+        }
+    }
+    Ok(file)
+}
+
+/// Writes `bytes` to `path` through a temporary created anew beside it: a link left at the temporary's name is removed,
+/// not written through, and the rename replaces a link at `path` rather than following it.
+#[cfg(not(target_family = "wasm"))]
+fn write_unlinked(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
+    use std::io::Write;
+    let mut name = path.as_os_str().to_owned();
+    name.push(".tmp");
+    let temporary = std::path::PathBuf::from(name);
+    match std::fs::remove_file(&temporary) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(io_at(&temporary)(error)),
+        _ => {}
+    }
+    let mut file =
+        std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(io_at(&temporary))?;
+    file.write_all(bytes).map_err(io_at(&temporary))?;
+    drop(file);
+    std::fs::rename(&temporary, path).map_err(io_at(path))
 }
 
 /// **A record's text with numeric character references spelled out** (`&#20013;`, `&#x4E2D;`, the `;` optional as HTML
@@ -2870,9 +3044,14 @@ fn examples_name(edition: &str) -> String {
 /// Whether one record's raw bytes carry Chinese and are not a cross-reference. Read decoded, never rendered: the
 /// sample and its confirmation only decide whether the edition is worth the render pass (ADR-0031 d.6).
 fn has_chinese_record(opened: &Dict, i: usize) -> Result<bool, CoreError> {
-    let record = opened.mdx.record(i)?;
+    // A record in a damaged block carries nothing to find: the pass over it counts it (`examples_build`).
+    let record = match opened.mdx.record(i) {
+        Ok(record) => record,
+        Err(xdict_mdx::Error::Malformed(_)) => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
     let text = String::from_utf8_lossy(&record.data);
-    if text.trim_start().starts_with("@@@LINK=") {
+    if xdict_lookup::is_redirect(&text) {
         return Ok(false);
     }
     // **A bilingual record can hide its Chinese behind a compact style or a character reference** (audit round 2,
@@ -3390,7 +3569,11 @@ mod tests {
         let path = dir.join("peer.xdlog");
         std::fs::write(&path, b"12345").unwrap();
         assert_eq!(read_within(&path, 5).unwrap(), b"12345");
-        assert!(read_within(&path, 4).is_err(), "one byte over the bound is refused");
+        match read_within(&path, 4) {
+            // **A size refusal, not damage** (audit 2026-11-05, M16): the sentence carries the bound.
+            Err(CoreError::TooLarge { limit: Limit::File, detail }) => assert!(detail.contains("4-byte"), "{detail}"),
+            other => panic!("one byte over the bound is refused as too large: {other:?}"),
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -4419,5 +4602,142 @@ mod tests {
         assert!(matches!(error, CoreError::Cancelled { .. }), "{error:?}");
         assert!(!refused.exists(), "a cancelled build writes nothing");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// **A word pack's path is never followed through a link** (audit 2026-11-05, the class of L1): a pack that is a link
+    /// is refused naming the path, and so is a build whose output, or the output's folder, is one; the file the link
+    /// points at is neither read as the pack nor written.
+    #[cfg(unix)]
+    #[test]
+    fn a_word_pack_path_that_is_a_link_is_refused() {
+        let dir = std::env::temp_dir().join(format!("xdict-word-pack-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pack = dir.join("pack.jsonl");
+        std::fs::write(&pack, "{}\n").unwrap();
+        let link = dir.join("link.jsonl");
+        std::os::unix::fs::symlink(&pack, &link).unwrap();
+        let path = |p: &std::path::Path| p.to_string_lossy().into_owned();
+        let refused = |error: CoreError, named: &std::path::Path| match error {
+            CoreError::Io { kind: crate::IoKind::PermissionDenied, detail } => {
+                assert!(detail.contains(&path(named)) && detail.contains("symbolic link"), "{detail}")
+            }
+            other => panic!("{other:?}"),
+        };
+
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        refused(core.attach_word_pack(path(&link)).unwrap_err(), &link);
+        let none = dir.join("none");
+        refused(core.build_word_pack(path(&none), path(&none), path(&link), &NoProgress).unwrap_err(), &link);
+        let folder = dir.join("folder");
+        std::os::unix::fs::symlink(&dir, &folder).unwrap();
+        let inside = folder.join("xdict-words-en.jsonl");
+        refused(core.build_word_pack(path(&none), path(&none), path(&inside), &NoProgress).unwrap_err(), &folder);
+        assert_eq!(std::fs::read_to_string(&pack).unwrap(), "{}\n", "the file behind the link is untouched");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// **A cache slot poisoned by an earlier panic still caches** (audit 2026-11-05, L9): the slots hold whole values,
+    /// replaced at once, so a panic cannot leave one half-written; skipping them on poison returned `Ok` while nothing was
+    /// kept — a word pack never installed, an explorer rebuilt on every keystroke.
+    #[test]
+    fn a_poisoned_cache_slot_still_caches() {
+        use crate::words::WordMode;
+        use xdict_mdx_writer::Entry as W;
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let dict = added(&core, "Poisoned", &[W::text("bake", "<b>bake</b>"), W::text("cake", "<b>cake</b>")]);
+        std::thread::scope(|scope| {
+            let poisoned = scope.spawn(|| {
+                let _held = core.explore.lock();
+                panic!("poisons the slot");
+            });
+            assert!(poisoned.join().is_err());
+        });
+        assert!(core.explore.is_poisoned());
+        core.explore(vec![dict], WordMode::EndsWith, "ake".into(), 0, 20).unwrap();
+        let held = core.explore.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert!(held.is_some(), "the explorer was kept");
+    }
+
+    /// A file whose bytes go bad after it was imported and opened, under the same identity: a damaged disk block, which
+    /// no import check can foresee.
+    struct Decaying {
+        good: Vec<u8>,
+        bad: Vec<u8>,
+        decayed: std::sync::atomic::AtomicBool,
+    }
+
+    impl crate::ByteSource for Decaying {
+        fn size(&self) -> u64 {
+            self.good.len() as u64
+        }
+        fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+            let bytes = if self.decayed.load(Ordering::SeqCst) { &self.bad } else { &self.good };
+            let start = offset as usize;
+            Ok(bytes.get(start..start.saturating_add(len as usize)).unwrap_or_default().to_vec())
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            Some(FileIdentity { device: 1, inode: 99, size: self.good.len() as u64, mtime_ns: 0, ctime_ns: 0 })
+        }
+    }
+
+    /// **One record that will not render costs its own note, not the pass** (audit 2026-11-05, M5): the new edition's
+    /// first record block goes bad, so `apple` cannot be read there and is reported `Failed`, never dropped; `run`, in a
+    /// later block, still moves.
+    #[test]
+    fn a_record_that_will_not_render_costs_only_its_own_note() {
+        use xdict_mdx_writer::{Defect, Entry as W, Spec, write};
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        // `apple` sorts first and its record fills the first 64-byte block alone, so the damage reaches only it.
+        let apple = format!("<div><b>apple</b> {}</div>", "a fruit ".repeat(12));
+        let run = "<div><b>run</b> move fast</div>";
+        let entries = [W::text("apple", &apple), W::text("run", run)];
+        let old = added(&core, "First", &entries);
+        let old_edition = core.dict(&old).unwrap().edition.clone();
+        let stamp = |at: f64| Stamp { at, device: "device".into() };
+        let note = |key: &str, at: f64, op: &str| {
+            let entry = EntryRef { edition: old_edition.clone(), key: key.into(), occurrence: 0 };
+            core.study_note(old.clone(), entry, "mine".into(), "First".into(), stamp(at), op.into()).unwrap();
+        };
+        note("apple", 1_790_640_000.0, "n1");
+
+        let spec = Spec { title: "Second".into(), ..Spec::mdx() };
+        let source = Arc::new(Decaying {
+            good: write(&spec, &entries).unwrap(),
+            bad: write(&Spec { defect: Some(Defect::CorruptRecordBlock), ..spec }, &entries).unwrap(),
+            decayed: std::sync::atomic::AtomicBool::new(false),
+        });
+        let mdx = Location::Source { name: "Second.mdx".into(), source: source.clone() };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+        let new_edition = core.import(package.clone(), &NoProgress).unwrap().edition;
+        assert!(matches!(core.open(package).unwrap(), Opened::Ready { .. }));
+        let lineage = core.lineage_of(old_edition.clone()).unwrap().unwrap();
+        core.join_lineage(new_edition.clone(), lineage).unwrap();
+        source.decayed.store(true, Ordering::SeqCst);
+
+        let alone = core
+            .study_reanchor(old_edition.clone(), new_edition.clone(), stamp(1_790_640_060.0), "p1".into(), None)
+            .unwrap();
+        assert!(
+            matches!(alone.outcomes.as_slice(), [ReanchorOutcome { result: ReanchorResult::Failed { .. }, .. }]),
+            "the one note that failed is reported as failed: {alone:?}"
+        );
+
+        note("run", 1_790_640_001.0, "n2");
+        let report = core
+            .study_reanchor(old_edition.clone(), new_edition.clone(), stamp(1_790_640_120.0), "p2".into(), None)
+            .unwrap();
+        let results: Vec<(&str, bool)> = report
+            .outcomes
+            .iter()
+            .map(|outcome| (outcome.target.entry_key.as_str(), matches!(outcome.result, ReanchorResult::Failed { .. })))
+            .collect();
+        assert_eq!(results, [("apple", true), ("run", false)], "the unreadable note is named, not dropped");
+        assert_eq!(report.outcomes.get(1).map(|outcome| &outcome.result), Some(&ReanchorResult::Reanchored));
+        assert_eq!(report.next, None);
+        let editions: Vec<(String, String)> =
+            core.study_notes().unwrap().into_iter().map(|note| (note.target.entry_key, note.target.edition)).collect();
+        assert!(editions.contains(&("apple".into(), old_edition.clone())), "the unreadable note keeps its evidence");
+        assert!(editions.contains(&("run".into(), new_edition)));
     }
 }

@@ -12,7 +12,8 @@ public final class SyncPass {
     public enum Phase: Equatable, Sendable {
         /// Nothing said yet: no pass since the pane opened, or the folder was just chosen or disconnected.
         case idle
-        case synced(added: UInt64, peers: UInt64)
+        /// `refused` names the peer logs the pass left out (audit 2026-11-05, M16); the others merged.
+        case synced(added: UInt64, peers: UInt64, refused: [String] = [])
         case failed
         /// The bookmark no longer opens: the folder was deleted, unmounted, or its permission withdrawn.
         case folderUnavailable
@@ -68,7 +69,7 @@ public final class SyncPass {
         let at = now()
         lastSuccess = at
         defaults.set(at, forKey: Self.lastSuccessKey)
-        phase = .synced(added: report.added, peers: report.peers)
+        phase = .synced(added: report.added, peers: report.peers, refused: report.refused.map(\.file))
     }
 
     /// **Disconnect** stops future passes: the bookmark and the last success are forgotten. The folder's files and this

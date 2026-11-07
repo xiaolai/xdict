@@ -201,10 +201,12 @@ struct LibraryDetail: View {
     }
 
     /// **Where the reader's notes went** (plan §5.1): the count that followed this edition, and the count that could not
-    /// be found in it — a changed, reordered or missing definition never binds another record.
+    /// be found in it — a changed, reordered or missing definition never binds another record. A note the core could
+    /// not read, and a sweep that stopped early, are said too (audit 2026-11-05, M5), never folded into the others.
     private func notesFollowed(_ summary: StudyModel.ReanchorSummary) -> some View {
         let moved = summary.report.outcomes.filter { $0.result == .reanchored }.count
-        let left = summary.report.outcomes.count - moved
+        let failed = summary.failed
+        let left = summary.report.outcomes.count - moved - failed
         return Section {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 if moved > 0 {
@@ -212,6 +214,12 @@ struct LibraryDetail: View {
                 }
                 if left > 0 {
                     Text("\(left) notes could not be found in this edition and stay on the old one.")
+                }
+                if failed > 0 {
+                    Text("\(failed) notes could not be read and stay on the old one.")
+                }
+                if summary.unfinished {
+                    Text("Some notes were not checked and stay on the old edition.")
                 }
             }
             .font(.callout)

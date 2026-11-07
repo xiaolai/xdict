@@ -588,9 +588,19 @@ impl Core {
         watched_reply(|| self.0.definition_hash_of(dict.into(), entry))
     }
 
-    pub fn study_reanchor(&self, old_edition: &str, new_edition: &str, stamp: &str, operation_prefix: &str) -> Reply {
+    /// A bounded amount a call: the report's `next`, given back as `after`, starts the following call.
+    pub fn study_reanchor(
+        &self,
+        old_edition: &str,
+        new_edition: &str,
+        stamp: &str,
+        operation_prefix: &str,
+        after: Option<String>,
+    ) -> Reply {
         let stamp = from_json(stamp)?;
-        watched_reply(|| self.0.study_reanchor(old_edition.into(), new_edition.into(), stamp, operation_prefix.into()))
+        watched_reply(|| {
+            self.0.study_reanchor(old_edition.into(), new_edition.into(), stamp, operation_prefix.into(), after)
+        })
     }
 
     /// **The cards two devices left conflicted** (ADR-0027); sync itself is a native shell's (no folder on the Web).
@@ -613,9 +623,11 @@ impl Core {
         watched_reply(|| self.0.ledger_restore(restore, operation.into()))
     }
 
-    /// The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock.
-    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Reply {
-        watched_reply(|| self.0.ledger_history(now, utc_offset_seconds))
+    /// The days the drawer shows, in the reader's own zone: `zone` is a JSON list of its offsets east of UTC, each
+    /// `{ from, seconds }` from the instant it begins, ascending; the first also covers every earlier instant.
+    pub fn ledger_history(&self, now: f64, zone: &str) -> Reply {
+        let zone = from_json(zone)?;
+        watched_reply(|| self.0.ledger_history(now, zone))
     }
 
     pub fn link(&self, dict: &str, url: &str, origin: &str, view: &str) -> Reply {

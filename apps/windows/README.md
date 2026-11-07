@@ -61,6 +61,11 @@ Control is on (`VerifiedAndReputablePolicyState = 1`), because that host refuses
 `Tools\bundle.ps1` stages the release bundle under `out\release`; `-CertificateThumbprint` signs it with `signtool`
 (the certificate is the owner's purchase, and nothing signs without one).
 
+`Tools\release.ps1` cuts a release from a committed tree: it refuses a tree with uncommitted changes (and one whose
+regenerated notices differ from the committed file) with a sentence, runs the build gates (`build`, `test`,
+`contract`, `conformance`), then the bundle, the installer and the MSI validation, and prints what it ran. E2E never
+gates it (AGENTS.md, 2026-10-24): `Tools\e2e.ps1` runs on demand.
+
 ## CI
 
 `.github/workflows/windows.yml` builds the service and the solution, and runs the unit, contract and IPC-conformance

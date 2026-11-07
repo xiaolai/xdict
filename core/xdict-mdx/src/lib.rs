@@ -528,7 +528,8 @@ impl File {
     /// within [`Kept`]'s bound.
     fn records(&self, start: u64, end: u64, cache: &mut Kept) -> Result<Vec<u8>, Error> {
         let len = length(end.saturating_sub(start), limits::BLOCK_BYTES, "record")?;
-        let mut out = Vec::with_capacity(len);
+        let mut out = Vec::new();
+        out.try_reserve_exact(len).map_err(out_of_memory)?;
         let mut previous = std::mem::take(&mut cache.blocks);
         let mut touched = Vec::new();
         let blocks = &self.index.blocks;

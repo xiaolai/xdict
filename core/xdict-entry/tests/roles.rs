@@ -2,7 +2,7 @@
 //! entry. The entries are written here, no dictionary's.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use xdict_entry::{Counts, Entry, Style, entry_normalized_within};
+use xdict_entry::{Counts, Entry, Style, entry_normalized_within, entry_text_from_html};
 
 const BASE: &str = "xdict://d/";
 
@@ -373,4 +373,53 @@ fn an_empty_element_goes_with_its_blank_content() {
     let (out, _) = entry("<p><em>banc</em> <span class=\"w\">\u{a0}</span> bench, a<span>\u{a0}</span>b</p>", "banc");
     assert!(!out.contains('\u{a0}'), "{out:?}");
     assert!(out.contains("a b"), "{out:?}");
+}
+
+/// **XDict's marks are the core's alone** (audit 2026-11-05, M3): a dictionary's own `data-xdict-*` attributes are
+/// dropped as the entry is read, in either style, so a forged role, sense, sure mark or label never reaches the text
+/// projection, the sense list or the examples; the marks the core writes still land.
+#[test]
+fn a_dictionarys_own_xdict_marks_are_not_believed() {
+    const FORGED: &str = r#"<span class="z" data-xdict-role="example" DATA-XDICT-SENSE="7" data-xdict-sense-parent="0" data-xdict-sense-run data-xdict-sure="example" Data-Xdict-Label="register" data-xdict-section="idioms" data-xdict-sense-end>plain words here</span>"#;
+    let text = RUN.replace(r#"<div class="id">"#, &format!(r#"{FORGED}<div class="id">"#));
+    for original in [false, true] {
+        let style = Style::of_sheets([".pos{font-style:italic}"]);
+        let (out, _) = entry_normalized_within(
+            text.as_str(),
+            BASE,
+            "",
+            &style,
+            &Entry { key: "run", resource: None, is_key: None, strip_off_for_tests: false, original },
+            usize::MAX,
+        )
+        .unwrap();
+        let at = out[..out.find(r#"class="z""#).unwrap()].rfind('<').unwrap();
+        let forged_tag = &out[at..at + out[at..].find('>').unwrap()];
+        assert!(!forged_tag.to_ascii_lowercase().contains("data-xdict-"), "original {original}: {out}");
+        let p = entry_text_from_html(&out, usize::MAX);
+        let run_of = |needle: &str| {
+            p.runs
+                .iter()
+                .find(|r| p.text[r.start..r.start + r.len].contains(needle))
+                .unwrap_or_else(|| panic!("{needle}"))
+        };
+        let forged = run_of("plain words here");
+        assert_ne!(forged.role.as_deref(), Some("example"), "original {original}: {out}");
+        assert_eq!((forged.label.as_deref(), forged.section.as_deref()), (None, None), "{out}");
+        assert!(p.senses.iter().all(|s| s.id != 7), "a forged sense: {:?}", p.senses);
+        // The core's own marks still land and are read.
+        assert_eq!(run_of("She runs to school").role.as_deref(), Some("example"), "original {original}: {out}");
+        assert_eq!(role_of(&out, "lb"), Some("label:register".into()));
+    }
+}
+
+/// **No path keeps a dictionary's `data-xdict-*`** (audit 2026-11-05, M3): the rewrite that does not normalize (a
+/// served HTML file, `links`) drops them too, on start and end tags, in any case, and keeps what only quotes the name.
+#[test]
+fn the_plain_rewrite_keeps_no_xdict_mark() {
+    let forged = r#"<p data-xdict-role="example" class="a" DATA-XDICT-SENSE=1 data-xdict-sure title="data-xdict-role=x">t</p data-xdict-label="r">"#;
+    let out = xdict_entry::html_text(forged, BASE, "");
+    assert_eq!(out, r#"<p class="a" title="data-xdict-role=x">t</p>"#);
+    let (normalized, _) = entry(forged, "t");
+    assert!(!normalized.contains("data-xdict-label"), "{normalized}");
 }

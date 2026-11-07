@@ -26,8 +26,9 @@ impl Codec {
             "gbk" | "gb2312" | "gb18030" => Self::Legacy(encoding_rs::GB18030),
             "big5" => Self::Legacy(encoding_rs::BIG5),
             // Latin-1 read as windows-1252, its superset, which is what the Encoding Standard does with the
-            // label: the 0x80–0x9F range becomes punctuation rather than control characters.
-            "iso88591" | "latin1" => Self::Legacy(encoding_rs::WINDOWS_1252),
+            // label: the 0x80–0x9F range becomes punctuation rather than control characters. windows-1252 by its
+            // own names too (audit 2026-11-05, L6).
+            "iso88591" | "latin1" | "windows1252" | "cp1252" => Self::Legacy(encoding_rs::WINDOWS_1252),
             _ => return Err(Error::Unsupported(Unsupported::Encoding(declared.to_owned()))),
         })
     }
@@ -381,7 +382,8 @@ mod tests {
     /// 12 of freemdict's 3,394 MDX files declare Latin-1 (census, 2026-10-13).
     #[test]
     fn latin_1_is_read_as_the_web_reads_it() {
-        for name in ["ISO8859-1", "iso-8859-1", "Latin1"] {
+        // windows-1252's own labels name the decoder Latin-1 is read with (audit 2026-11-05, L6).
+        for name in ["ISO8859-1", "iso-8859-1", "Latin1", "windows-1252", "Windows1252", "CP1252", "cp-1252"] {
             let codec = Codec::for_file(Kind::Mdx, name).unwrap();
             assert_eq!(codec.decode(&[0x63, 0x61, 0x66, 0xE9]), "café", "{name}");
             // Where windows-1252 and strict Latin-1 differ: punctuation, not C1 control characters.

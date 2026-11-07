@@ -473,7 +473,7 @@ public actor ServiceClient {
         } else if let package = call.package {
             operation = call.operation
             // Each path observed, then opened: a file replaced between the two is refused by the service as not the
-            // path's file, and the client tries again from the start. Both without following a link and only to a
+            // path's file, and the client tries again from the start, once (`deliver`). Both without following a link and only to a
             // regular file (`FileAccess`): this open is also the one after a restart, which no resolution precedes.
             tokens = package.files.map(observer.token)
             var opened: [FileHandle] = []
@@ -575,6 +575,15 @@ public actor ServiceClient {
     }
 
     private func deliver(_ call: Call, _ outcome: ClientOutcome) {
+        // **A file replaced between observing and opening is observed and opened again, once** (audit 2026-11-05 L3):
+        // the comment in `send` said so and nothing did, so a dictionary saved over at that moment failed to open. The
+        // retry re-observes every file and re-opens it; a second refusal is reported.
+        if case .failure(.wire(.refused(.handleIsNotThePathsFile))) = outcome, call.package != nil, call.unchecked == nil,
+           call.reopens == nil, !call.retried {
+            call.retried = true
+            queue.append(call)
+            return pump()
+        }
         if case .failure(.wire(.core(.staleHandle))) = outcome, call.unchecked == nil, call.reopens == nil, !call.retried {
             let named = call.operation.namedDicts.filter { registry[$0] != nil }
             if !named.isEmpty {

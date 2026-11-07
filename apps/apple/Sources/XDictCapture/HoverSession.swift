@@ -125,8 +125,8 @@ public struct HoverSession: Sendable {
     /// A fresh ask from the current pointer is owed when the read in flight ends.
     private var owed = false
     /// Where what is owed is the same request asked again — a rest refused for a busy capture — the
-    /// request it continues.
-    private var owedOrigin: Int?
+    /// read whose request it continues. Kept whole, so a newer request that replaces it can end it.
+    private var owedRest: HoverIntent?
     /// The last read was refused for a busy capture, and waits for it.
     private var waitingForCapture = false
     private var serials = 0
@@ -181,8 +181,11 @@ public struct HoverSession: Sendable {
                 owed = true
                 return []
             }
-            // A rest while a blocked hold waits for the capture continues that hold, not a new one.
-            let origin = waitingForCapture ? owedOrigin : nil
+            // A rest while a blocked hold waits for the capture continues that hold, not a new one — and **spends what
+            // was owed**: left owed, the capture freeing would ask the same request a second time.
+            let origin = owedRest?.origin
+            owed = false
+            owedRest = nil
             return ask(intent(tapped: false, at: pointer, held: held, settings: settings, now: now, origin: origin))
         }
     }
@@ -199,8 +202,7 @@ public struct HoverSession: Sendable {
             // rest owed an ask, which would otherwise be asked after it under its older number.
             var effects: [HoverEffect] = []
             replacePendingTap(nil, why: .superseded, &effects)
-            owed = false
-            owedOrigin = nil
+            endOwedRest(why: .superseded, &effects)
             return effects + ask(tap)
         }
         // **The newest request wins.** The read in flight is stopped and this tap waits for it.
@@ -217,6 +219,14 @@ public struct HoverSession: Sendable {
     private mutating func replacePendingTap(_ tap: HoverIntent?, why: HoverRefusal, _ effects: inout [HoverEffect]) {
         if let replaced = pendingTap, replaced != tap { effects.append(.drop(replaced, why)) }
         pendingTap = tap
+    }
+
+    /// Clears what is owed, ending the rest it would have asked again (audit 2026-11-05 M7): that rest holds the number its
+    /// first ask took, and clearing it without `.drop` left the request open.
+    private mutating func endOwedRest(why: HoverRefusal, _ effects: inout [HoverEffect]) {
+        if let rest = owedRest { effects.append(.drop(rest, why)) }
+        owed = false
+        owedRest = nil
     }
 
     private mutating func pointerMoved(to pointer: UpPoint, held: Set<HoverModifier>, now: ContinuousClock.Instant) -> [HoverEffect] {
@@ -267,8 +277,10 @@ public struct HoverSession: Sendable {
         var effects: [HoverEffect] = [.cancelSettle]
         // A tap still waiting is ended here too: stopping is a cancellation, and its numbered request must not stay open.
         replacePendingTap(nil, why: .cancelled, &effects)
+        // The rest owed a re-ask is not dropped here: its request is ended by the shell's stop with every other origin
+        // not in flight.
         owed = false
-        owedOrigin = nil
+        owedRest = nil
         waitingForCapture = false
         if var current = reading {
             if current.dropped == nil { current.dropped = .cancelled }
@@ -301,6 +313,9 @@ public struct HoverSession: Sendable {
         case .nothing:
             break
         case .captureBusy:
+            // **A read already dropped ends here, busy or not** (audit 2026-11-05 M7): the pointer left, a newer request
+            // replaced it, or watching stopped, so nothing will ask its request again — a fresh rest is a fresh request.
+            if let reason = ended.dropped { effects.append(.drop(ended.intent, reason)) }
             // **Nothing is owed by a read that ended after a stop**: what it would owe is exactly
             // what stopping cleared, and a capture freed after a restart would serve it.
             guard watching, !ended.stopped else { break }
@@ -311,7 +326,7 @@ public struct HoverSession: Sendable {
                     replacePendingTap(ended.intent, why: .superseded, &effects)
                 } else {
                     owed = true
-                    owedOrigin = ended.intent.origin
+                    owedRest = ended.intent
                 }
             }
         }
@@ -327,18 +342,19 @@ public struct HoverSession: Sendable {
         guard watching else { return [] }
         if let tap = pendingTap {
             pendingTap = nil
-            owed = false
-            owedOrigin = nil
-            guard now - tap.acceptedAt <= Self.tapPatience else { return [.drop(tap, .cancelled)] }
+            // The tap is newer than any rest still owed, which ends with it.
+            var effects: [HoverEffect] = []
+            endOwedRest(why: .superseded, &effects)
+            guard now - tap.acceptedAt <= Self.tapPatience else { return effects + [.drop(tap, .cancelled)] }
             // Asked again under a serial of its own, from the point where it was made.
-            return ask(HoverIntent(
+            return effects + ask(HoverIntent(
                 serial: nextSerial(), origin: tap.origin, tapped: true, gesture: tap.gesture, modifier: tap.modifier,
                 point: tap.point, held: tap.held, stillFor: tap.stillFor, acceptedAt: tap.acceptedAt))
         }
         guard owed else { return [] }
         owed = false
-        let origin = owedOrigin
-        owedOrigin = nil
+        let origin = owedRest?.origin
+        owedRest = nil
         return ask(intent(tapped: false, at: pointer, held: held, settings: settings, now: now, origin: origin))
     }
 

@@ -19,6 +19,6 @@ mod resolve;
 pub use distance::osa;
 pub use policy::{NORMALIZATION, Policy, internal, unmark};
 pub use resolve::{
-    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, STEPS, matches, nearest, occurrences, redirect_targets, resolve,
-    suggest,
+    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, STEPS, Walked, follow_known, is_redirect, matches, nearest,
+    occurrences, redirect_targets, resolve, suggest,
 };

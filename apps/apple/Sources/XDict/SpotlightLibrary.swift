@@ -82,9 +82,9 @@ final class SpotlightLibrary {
                 // **A changed edition replaces its own domain**: the old edition's words never outlive it.
                 try await indexer.delete(domains: [update.domain])
                 let client = self.client
-                let edition = EditionBox()
+                let planned = update.edition
                 let run = try await indexer.index(domain: update.domain) { @Sendable from in
-                    try await Self.nextPage(client: client, dict: dict, from: from, edition: edition)
+                    try await Self.nextPage(client: client, dict: dict, from: from, planned: planned)
                 }
                 ledger.record(domain: update.domain, edition: update.edition)
                 words += run.stored
@@ -102,30 +102,24 @@ final class SpotlightLibrary {
     /// **One page, or nil at the end — and a refusal is a refusal.** A service that does not answer throws, so a run
     /// cannot report "indexed" over a half-read library (audit-fix 2026-10-22).
     private static func nextPage(client: ServiceClient, dict: DictId, from: UInt64,
-                                 edition: EditionBox) async throws -> SpotlightIndexer.Page? {
+                                 planned: String) async throws -> SpotlightIndexer.Page? {
         let outcome = await client.call(.words(dict: dict, from: from, limit: page))
         guard case .success(let delivered) = outcome, case .words(let words) = delivered.answer else {
             throw SpotlightFailure.service
         }
-        // **A page from another edition is not continued**: the dictionary was reopened or replaced under the run, and
-        // its words are indexed again from the start by the next run rather than mixed here.
-        guard await edition.holds(words.edition.rawValue) else { throw SpotlightFailure.editionChanged }
-        guard !words.words.isEmpty else { return nil }
-        return SpotlightIndexer.Page(words: words.words, next: words.next)
+        return try checkedPage(edition: words.edition.rawValue, words: words.words, next: words.next, planned: planned)
+            .map { SpotlightIndexer.Page(words: $0.words, next: $0.next) }
     }
 
-    /// **The edition one dictionary's run belongs to**: the first page sets it, and a page from another edition is
-    /// refused rather than mixed into the same domain.
-    actor EditionBox {
-        private var value: String?
-
-        func holds(_ edition: String) -> Bool {
-            guard let value else {
-                self.value = edition
-                return true
-            }
-            return value == edition
-        }
+    /// **Every page must be of the edition the plan names, the first included**: the ledger records the run under that
+    /// edition, so a page from another — the dictionary reopened or replaced under the run — is refused and indexed again
+    /// by the next run. The first page used to set the edition, so a replacement before it was indexed and recorded
+    /// under the old edition's name.
+    nonisolated static func checkedPage(edition: String, words: [String], next: UInt64,
+                                        planned: String) throws -> (words: [String], next: UInt64)? {
+        guard edition == planned else { throw SpotlightFailure.editionChanged }
+        guard !words.isEmpty else { return nil }
+        return (words, next)
     }
 
     /// Refusals a run can meet, as kinds.

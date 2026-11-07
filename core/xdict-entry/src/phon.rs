@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::normalize::{KeptReason, Style};
+use crate::normalize::Style;
 
 /// The most characters of text an element may hold and still be a transcription.
 const TEXT_CHARS: usize = 160;
@@ -99,14 +99,14 @@ pub(crate) struct Marker {
 impl Marker {
     pub(crate) fn new(style: &Style, key: Option<&str>) -> Self {
         let mut fonts = Vec::new();
-        for kept in style.kept().iter().filter(|k| k.reason == KeptReason::Phonetic) {
-            for selector in kept.selector.split(',') {
+        for (family, selectors) in style.phonetic() {
+            for selector in selectors.split(',') {
                 let subject = selector.rsplit(|c: char| c.is_whitespace() || matches!(c, '>' | '+' | '~')).next();
                 let class = subject
                     .and_then(|s| s.split('.').nth(1))
                     .map(|c| c.split([':', '[', '#']).next().unwrap_or("").to_ascii_lowercase());
                 if let Some(class) = class.filter(|c| !c.is_empty()) {
-                    fonts.push((class, kept.family.clone()));
+                    fonts.push((class, family.to_owned()));
                 }
             }
         }
@@ -399,31 +399,7 @@ fn attribute_text(text: &str) -> String {
 
 /// A start tag's `class`, as written.
 fn class_of(tag: &str) -> Option<&str> {
-    attribute_of(tag, "class")
-}
-
-/// A start tag's attribute `name` (ASCII, lower case), its value as written; `None` without one.
-pub(crate) fn attribute_of<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
-    let lower = tag.to_ascii_lowercase();
-    let mut from = 0;
-    while let Some(at) = lower.get(from..).and_then(|r| r.find(name)).map(|a| a + from) {
-        from = at + name.len();
-        let before = lower.as_bytes().get(at.wrapping_sub(1)).copied().unwrap_or(b' ');
-        if !before.is_ascii_whitespace() {
-            continue;
-        }
-        let rest = tag.get(from..)?.trim_start();
-        let Some(value) = rest.strip_prefix('=') else { continue };
-        let value = value.trim_start();
-        return Some(match value.chars().next() {
-            Some(q @ ('"' | '\'')) => {
-                let body = value.get(1..)?;
-                body.get(..body.find(q).unwrap_or(body.len()))?
-            }
-            _ => value.get(..value.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(value.len()))?,
-        });
-    }
-    None
+    crate::tag::value_of(tag, "class")
 }
 
 /// Whether a character is specific to phonetic transcription: IPA Extensions, spacing modifier letters (ˈ ˌ ː),
@@ -530,5 +506,9 @@ mod tests {
         assert_eq!(class_of("<span class=\"a phon\">"), Some("a phon"));
         assert_eq!(class_of("<span data-class=x class=b>"), Some("b"));
         assert_eq!(class_of("<span id=c>"), None);
+        // A value is not an attribute: one quoting `class=` or `>` holds them as text.
+        assert_eq!(class_of(r#"<span title="x class=phon" class=b>"#), Some("b"));
+        assert_eq!(class_of(r#"<span title='a>b' class="c">"#), Some("c"));
+        assert_eq!(class_of(r#"<span title="x class=phon">"#), None);
     }
 }

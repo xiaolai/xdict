@@ -151,7 +151,7 @@
   ],
   "history": {
     "now": 1790730000,
-    "utcOffsetSeconds": 0,
+    "zone": [{ "from": 0, "seconds": 0 }, { "from": 1893456000, "seconds": 3600 }],
     "expect": {
       "days": [
         {

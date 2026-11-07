@@ -204,8 +204,10 @@ fn placements_covering(
     starts: &mut Vec<usize>,
     visit: &mut impl FnMut(&[usize]),
 ) {
-    let Some(run) = runs.first() else { return };
-    let rest = runs.get(1..).unwrap_or(&[]);
+    // **`starts` holds one start for each run before this one, so this run is `runs[starts.len()]`** (audit
+    // 2026-11-05, M1): the coverage test pairs every placed start with its own run, never with the runs still to come.
+    let Some(run) = runs.get(starts.len()) else { return };
+    let is_last = starts.len() + 1 == runs.len();
     let first_run = starts.is_empty();
     let last =
         if first_run { word.min(words.len().saturating_sub(run.len())) } else { words.len().saturating_sub(run.len()) };
@@ -216,8 +218,7 @@ fn placements_covering(
             break;
         }
         // **Past the word with nothing covering it, no later start can**: the runs are in order.
-        let covered = starts.iter().zip(runs).any(|(start, run)| (*start..start + run.len()).contains(&word));
-        if !first_run && !covered && start > word {
+        if !first_run && start > word && !covers(starts, runs, word) {
             break;
         }
         let matches = words.get(start..start + run.len()).is_some_and(|slice| {
@@ -226,15 +227,24 @@ fn placements_covering(
         if matches {
             starts.push(start);
             let end = start + run.len();
-            if rest.is_empty() {
-                visit(starts);
+            if is_last {
+                // **A placement is the word's only if one of its placed words is the word** (M1): a word inside a
+                // slot, or past the phrase, is not part of it.
+                if covers(starts, runs, word) {
+                    visit(starts);
+                }
             } else if let Some(next_budget) = budget.checked_sub(gap) {
-                placements_covering(rest, words, end + 1, next_budget, word, starts, visit);
+                placements_covering(runs, words, end + 1, next_budget, word, starts, visit);
             }
             starts.pop();
         }
         start += 1;
     }
+}
+
+/// Whether a placed run is over the word: each start paired with the run it placed, from the first.
+fn covers(starts: &[usize], runs: &[Vec<String>], word: usize) -> bool {
+    starts.iter().zip(runs).any(|(start, run)| (*start..start + run.len()).contains(&word))
 }
 
 /// How many positions matched a form the reader did not write; zero when the key is spelled exactly as the sentence

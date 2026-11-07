@@ -154,3 +154,78 @@ fn the_check_is_linear_on_hostile_records() {
         assert!(large < small * 8.0 * 3.0, "{shape:?}: 8x the input took {:.1}x the time", large / small);
     }
 }
+
+/// **A redirect is classed as the lookup follows it** (audit 2026-11-05, L8): the same walk `resolve` makes, with
+/// its hop limit, so a chain a reader's click reaches is not reported too deep, and one past the lookup's limit is.
+#[test]
+fn redirect_chains_are_classed_by_the_lookups_own_walk() {
+    let chain = |n: usize| -> Vec<(String, String)> {
+        let mut entries: Vec<(String, String)> =
+            (0..n).map(|i| (format!("r{i:02}"), format!("@@@LINK=r{:02}", i + 1))).collect();
+        entries.push((format!("r{n:02}"), "the entry".into()));
+        entries
+    };
+    let borrowed = |entries: &[(String, String)]| -> Report {
+        let entries: Vec<(&str, &str)> = entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        report(&entries)
+    };
+    let six = borrowed(&chain(6));
+    assert_eq!(six.count("redirect.chain_too_deep"), 0, "six hops reach the entry by lookup's walk: {six:?}");
+    assert_eq!(six.count("redirect.chained_ok"), 5, "every redirect but the last passes through another");
+    let long = borrowed(&chain(xdict_lookup::HOPS + 2));
+    assert!(long.count("redirect.chain_too_deep") > 0, "past the lookup's hops: {long:?}");
+    // Broken is what a reader's lookup reaches nothing through; a dead end or a loop beside an entry reached is not.
+    let mixed = report(&[
+        ("a", "@@@LINK=gone\r\n@@@LINK=b"),
+        ("b", "an entry"),
+        ("gone2", "@@@LINK=nowhere"),
+        ("p", "@@@LINK=q"),
+        ("q", "@@@LINK=p"),
+        ("self", "@@@LINK=self"),
+        ("x", "@@@LINK=y"),
+        ("y", "@@@LINK=x\r\n@@@LINK=b"),
+    ]);
+    assert_eq!(mixed.count("redirect.missing_target"), 1, "only gone2 reaches nothing: {mixed:?}");
+    assert_eq!(mixed.count("redirect.loop"), 2, "p and q reach nothing but each other: {mixed:?}");
+    assert_eq!(mixed.count("redirect.to_itself"), 1, "{mixed:?}");
+    assert_eq!(mixed.count("redirect.chained_ok"), 1, "x reaches b through y, past y's loop back: {mixed:?}");
+}
+
+/// **The chain pass reports progress and stops when told to** (audit 2026-11-05, L8): it runs after every record is
+/// read, and may follow a million redirects; a cancel then was ignored and a report returned.
+#[test]
+fn the_chain_pass_can_be_cancelled() {
+    let f = file(&[("a", "@@@LINK=b"), ("b", "an entry")]);
+    let mut calls = 0;
+    let got = check(&f, &|_| false, &mut |done, total| {
+        calls += 1;
+        assert!(done <= total, "{done} of {total}");
+        calls == 1
+    });
+    assert!(matches!(got, Err(Stop::Cancelled)), "a cancel during the chains gave {got:?}");
+}
+
+/// **The walk is counted on after the records** (2026-11-05, found by the macOS service's health test on the merged
+/// tree): the record pass reports records done of all; the walk then reports records plus redirects walked, of records
+/// plus redirects, after each of its chunks and after the last partial one, never before any work; with no redirect it
+/// reports nothing, so the record pass's last report stands and a reader's bar never sits at the end while the walk runs.
+#[test]
+fn the_walk_is_counted_after_the_records() {
+    let f = file(&[("a", "@@@LINK=b"), ("b", "an entry"), ("c", "@@@LINK=nowhere")]);
+    let mut heard = Vec::new();
+    let report = check(&f, &|_| false, &mut |done, total| {
+        heard.push((done, total));
+        true
+    })
+    .unwrap_or_else(|stop| panic!("{stop:?}"));
+    assert_eq!(heard, vec![(3, 3), (5, 5)], "the records, then the walk of two redirects: {heard:?}");
+    assert_eq!(report.count("redirect.missing_target"), 1, "{report:?}");
+    let plain = file(&[("a", "an entry"), ("b", "another")]);
+    let mut heard = Vec::new();
+    check(&plain, &|_| false, &mut |done, total| {
+        heard.push((done, total));
+        true
+    })
+    .unwrap_or_else(|stop| panic!("{stop:?}"));
+    assert_eq!(heard, vec![(2, 2)], "no redirect, no walk report: {heard:?}");
+}

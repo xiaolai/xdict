@@ -141,23 +141,21 @@ fn is_void(tag: &str) -> bool {
 /// `<span class="ocd_co">a <b>sin</b></span>` — otherwise came out as `a`, which an audit of 118 pairs found once in
 /// the whole dictionary and could not tell from a real one-word collocate.
 fn spans(html: &str, class: &str) -> Vec<(usize, String)> {
-    let needle = format!("class=\"{class}\"");
     let mut out = Vec::new();
     let mut from = 0;
-    while let Some(at) = html[from..].find(&needle) {
-        let at = from + at;
-        let Some(open) = html[at..].find('>') else { break };
-        let body = at + open + 1;
+    while let Some(at) = start_with_class(html, from, class) {
+        let body = at + crate::tag::source_len(html.get(at..).unwrap_or(""));
         // Walk the element: every opening tag deepens it, every closing tag shallows it, text is kept.
         let mut depth = 1usize;
         let mut cursor = body;
         let mut text = String::new();
         while depth > 0 {
-            let Some(next) = html[cursor..].find('<') else { break };
-            text.push_str(&html[cursor..cursor + next]);
+            let rest = html.get(cursor..).unwrap_or("");
+            let Some(next) = rest.find('<') else { break };
+            text.push_str(rest.get(..next).unwrap_or(""));
             let tag_at = cursor + next;
-            let Some(tag_end) = html[tag_at..].find('>') else { break };
-            let tag = &html[tag_at..tag_at + tag_end + 1];
+            let Some(tag_end) = crate::tag::end(html.get(tag_at..).unwrap_or("")) else { break };
+            let tag = html.get(tag_at..tag_at + tag_end + 1).unwrap_or("");
             // **A void element never closes, so it never deepens the walk** (audit, 2026-10-28): counting `<br>` as
             // nesting made the span run past its own close tag and swallow the next collocate's text into this one.
             if tag.starts_with("</") {
@@ -171,6 +169,25 @@ fn spans(html: &str, class: &str) -> Vec<(usize, String)> {
         from = cursor.max(body);
     }
     out
+}
+
+/// The next start tag from `from` whose `class` is exactly `class`, read as HTML reads it ([`crate::tag`]): a
+/// `class="…"` quoted inside another attribute's value is that value's text (audit 2026-11-05).
+fn start_with_class(html: &str, mut from: usize, class: &str) -> Option<usize> {
+    loop {
+        let rest = html.get(from..)?;
+        let at = from + rest.find('<')?;
+        let from_lt = html.get(at..)?;
+        if !from_lt.as_bytes().get(1).is_some_and(u8::is_ascii_alphabetic) {
+            from = at + 1;
+            continue;
+        }
+        let tag = crate::tag::source(from_lt);
+        if crate::tag::value_of(tag, "class") == Some(class) {
+            return Some(at);
+        }
+        from = at + tag.len();
+    }
 }
 
 #[cfg(test)]
@@ -208,6 +225,17 @@ mod tests {
             "the phrase frame's list is a plural the vocabulary does not name, so it is dropped and counted"
         );
         assert_eq!(found.dropped, 1, "the elided plural frame is counted, not coerced");
+    }
+
+    /// **A class is an attribute, not text that looks like one** (audit 2026-11-05): a `class="ocd_co"` quoted in a
+    /// title is no collocate, and a `>` quoted in a value does not end the tag that holds the real one.
+    #[test]
+    fn a_span_is_found_by_its_own_class() {
+        let html = r#"<span class="ocd_hw">blood vessel</span> 1 < 2
+<span class="ocd_m2"><span class="ocd_ps">ADJECTIVE</span></span>
+<span title='class="ocd_co"'>forged</span>
+<span title="a>b" class="ocd_co">major</span>"#;
+        assert_eq!(extract(html).pairs, vec![(Frame::Adjective, "major".to_string())]);
     }
 
     /// **The comparison is the spelling after case, hyphens and spaces**: the dictionary writes `ELECTRIC-SHOCK` for

@@ -11,7 +11,9 @@ struct DisplayOptionsContractTests {
     /// antonym modes, 17 `explore` and `collocates`, 16 `explore`; 15 raised `phrases`, 14 `examples`, 13 `words`
     /// (ADR-0031, ADR-0028, ADR-0029).
     @Test func theContractIsVersion19() {
-        #expect(Contract.version == 21, "21 adds `entryGloss` and `EntryGloss` (ADR-0037)")
+        // 22: the refusal `forbiddenPath`, exploration as bulk; 23: the zone's offsets, the re-anchor cursor, the sync
+        // refusals (both 2026-11-05, the audit). A `Comment` is one literal, so the reasons sit here.
+        #expect(Contract.version == 23, "22 confines paths and credits exploration; 23 zones, cursor, refusals")
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

@@ -364,7 +364,10 @@ fun main(args: Array<String>) {
     }
     val when0 = obj(ledgerCases["history"])
     check("ledger.history", when0["expect"], outcome {
-        j(ledgerCore.ledgerHistory((when0["now"] as java.math.BigDecimal).toDouble(), (when0["utcOffsetSeconds"] as java.math.BigDecimal).toInt()))
+        val zone = list(when0["zone"]).map {
+            ZoneOffset((it["from"] as java.math.BigDecimal).toDouble(), (it["seconds"] as java.math.BigDecimal).toInt())
+        }
+        j(ledgerCore.ledgerHistory((when0["now"] as java.math.BigDecimal).toDouble(), zone))
     })
 
     // Phrase recognition (conformance/phrase/CONTRACT.md; plan-phrase-recognition WI-6).

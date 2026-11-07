@@ -153,7 +153,7 @@ fn a_note_reanchors_when_the_definition_is_still_there() {
     let (_, new) = import_open(&core, &dir, "b.mdx", "Second", &[W::text("run", RUN)]);
     let lineage = core.lineage_of(old.clone()).unwrap().expect("the old edition's lineage");
     core.join_lineage(new.clone(), lineage).unwrap();
-    let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into()).unwrap();
+    let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into(), None).unwrap();
     assert_eq!(report.outcomes.len(), 1);
     assert_eq!(report.outcomes[0].result, ReanchorResult::Reanchored);
     let notes = core.study_notes().unwrap();
@@ -175,10 +175,60 @@ fn a_changed_or_missing_definition_leaves_the_note_where_it_is() {
         let (_, new) = import_open(&core, &dir, "b.mdx", "Second", &entries);
         let lineage = core.lineage_of(old.clone()).unwrap().expect("lineage");
         core.join_lineage(new.clone(), lineage).unwrap();
-        let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into()).unwrap();
+        let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into(), None).unwrap();
         assert_eq!(report.outcomes[0].result, expected, "{name}");
         assert_eq!(core.study_notes().unwrap()[0].target.edition, old, "{name} keeps its evidence");
     }
+}
+
+/// **A pass fits its deadline, and the next call goes on where it stopped** (audit 2026-11-05, M5): more notes than one
+/// call's render budget take two calls; every note is classified exactly once, the moved and the left alike. A sweep
+/// started again from the beginning finds only the notes that stayed — which is why the call takes a cursor: the notes
+/// left on the old edition are still there, and without one a large set of them would be classified again for ever.
+#[test]
+fn a_note_set_larger_than_the_budget_converges_across_calls_and_none_is_lost() {
+    let dir = Scratch::new("reanchor-budget");
+    // A moved note costs one render and a changed one two (its occurrence, then the next, which is not there): 150
+    // notes are about 225 renders, over one call's budget and under two.
+    let count = MAX_REANCHOR_RENDERS as usize + 22;
+    let words: Vec<String> = (0..count).map(|n| format!("w{n:04}")).collect();
+    let body = |word: &str, sense: &str| {
+        format!(r#"<div class="entry"><span class="hw">{word}</span><span class="sense">{sense}</span></div>"#)
+    };
+    let first: Vec<W> = words.iter().map(|word| W::text(word, &body(word, "the same"))).collect();
+    // Every other definition changed in the new edition: half the notes move, half stay.
+    let second: Vec<W> = words
+        .iter()
+        .enumerate()
+        .map(|(n, word)| W::text(word, &body(word, if n % 2 == 0 { "the same" } else { "another" })))
+        .collect();
+    let (core, dict, old) = opened(&dir, "a.mdx", "First", &first);
+    let at = 1_790_640_000.0;
+    for word in &words {
+        core.study_note(dict.clone(), reference(&old, word, 0), "mine".into(), "First".into(), stamp(at), word.clone())
+            .unwrap();
+    }
+    let (_, new) = import_open(&core, &dir, "b.mdx", "Second", &second);
+    let lineage = core.lineage_of(old.clone()).unwrap().expect("lineage");
+    core.join_lineage(new.clone(), lineage).unwrap();
+
+    let one = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "join".into(), None).unwrap();
+    let cursor = one.next.clone().expect("the budget stopped the first call before the last note");
+    assert!(one.outcomes.len() < count, "a call classifies no more than its budget lets it");
+    let two = core.study_reanchor(old.clone(), new.clone(), stamp(at + 61.0), "join".into(), Some(cursor)).unwrap();
+    assert_eq!(two.next, None, "the second call reached the last note");
+
+    let mut keys: Vec<String> = one.outcomes.iter().chain(&two.outcomes).map(|o| o.target.entry_key.clone()).collect();
+    keys.sort();
+    assert_eq!(keys, words, "every note classified exactly once, none lost");
+    let moved = one.outcomes.iter().chain(&two.outcomes).filter(|o| o.result == ReanchorResult::Reanchored).count();
+    assert_eq!(moved, count / 2);
+    let left: Vec<Note> = core.study_notes().unwrap().into_iter().filter(|note| note.target.edition == old).collect();
+    assert_eq!(left.len(), count - count / 2, "the changed notes stay on the old edition");
+
+    // From the beginning again, only the notes that stayed are classified: the moved ones left the old edition.
+    let again = core.study_reanchor(old.clone(), new, stamp(at + 62.0), "again".into(), None).unwrap();
+    assert!(again.outcomes.iter().all(|o| o.result == ReanchorResult::Changed));
 }
 
 /// The same definition under another occurrence: reordering is not re-anchoring.
@@ -191,7 +241,7 @@ fn a_reordered_definition_leaves_the_note_where_it_is() {
     let (_, new) = import_open(&core, &dir, "b.mdx", "Second", &[W::text("run", RUN_CHANGED), W::text("run", RUN)]);
     let lineage = core.lineage_of(old.clone()).unwrap().expect("lineage");
     core.join_lineage(new.clone(), lineage).unwrap();
-    let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into()).unwrap();
+    let report = core.study_reanchor(old.clone(), new.clone(), stamp(at + 60.0), "reanchor".into(), None).unwrap();
     assert_eq!(report.outcomes[0].result, ReanchorResult::Reordered);
     assert_eq!(core.study_notes().unwrap()[0].target.edition, old);
 }

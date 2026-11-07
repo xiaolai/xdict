@@ -26,6 +26,9 @@ fn reading(surface: &str, sentence: &str, at: f64, language: &str) -> Reading {
     }
 }
 
+/// A zone with one offset, UTC: the old single-offset call as a special case.
+const UTC: &[ZoneOffset] = &[ZoneOffset { from: 0.0, seconds: 0 }];
+
 fn ledger() -> Ledger {
     Ledger::open(Arc::new(MemoryStore::default())).unwrap()
 }
@@ -44,7 +47,7 @@ fn a_reading_round_trips_and_retries_are_one_event() {
     other.occurrence = 1;
     assert_eq!(ledger.record(other, "op-3", &[]), Ok(RecordOutcome::Recorded));
     assert_eq!(ledger.event_count(), 3);
-    let history = ledger.history(1_790_640_000.0, 0);
+    let history = ledger.history(1_790_640_000.0, UTC);
     assert_eq!(history.days.len(), 1);
     // Same second, recorded later: the occurrence 1 card fronts the day, then the collapsed occurrence 0 card.
     assert_eq!(history.days[0].cards[0].reading.occurrence, 1);
@@ -76,15 +79,44 @@ fn repeats_on_one_day_collapse_and_days_are_calendar_days_in_the_readers_zone() 
     ledger.record(reading("hold", "They hold that view.", late, "en"), "a", &[]).unwrap();
     ledger.record(reading("hold", "They hold that view.", late + 60.0, "en"), "b", &[]).unwrap();
     ledger.record(reading("keep", "They keep that view.", early, "en"), "c", &[]).unwrap();
-    let history = ledger.history(early + 3_600.0, 0);
+    let history = ledger.history(early + 3_600.0, UTC);
     assert_eq!(history.days.len(), 2, "two calendar days, not a 24-hour window");
     assert_eq!(history.days[0].cards[0].reading.surface, "keep");
     assert_eq!(history.days[1].cards[0].times, 2, "the repeat is one card with ×2");
     assert_eq!(history.days[0].label, DayLabel::Today);
     assert_eq!(history.days[1].label, DayLabel::Yesterday);
     // Eight hours west, both readings share a local day.
-    let history = ledger.history(early + 3_600.0, -8 * 3_600);
+    let history = ledger.history(early + 3_600.0, &[ZoneOffset::fixed(-8 * 3_600)]);
     assert_eq!(history.days.len(), 1);
+}
+
+/// **Each instant takes the offset in force at it** (audit 2026-11-05, L5d): Berlin leaves summer time at 01:00 UTC on
+/// 2026-10-25. A reading at 22:30 UTC the evening before is 00:30 on the 25th in summer time; one offset (the query's
+/// winter time) put it on the 24th. A reading after the change lands on the day winter time gives.
+#[test]
+fn a_range_across_a_daylight_saving_change_buckets_each_instant_by_its_own_offset() {
+    let mut ledger = ledger();
+    let change = 1_792_890_000.0;
+    let berlin =
+        [ZoneOffset { from: change - 30.0 * 86_400.0, seconds: 7_200 }, ZoneOffset { from: change, seconds: 3_600 }];
+    let before = 1_792_881_000.0; // 2026-10-24 22:30 UTC: 00:30 on the 25th, summer time
+    let after = 1_792_971_000.0; // 2026-10-25 23:30 UTC: 00:30 on the 26th, winter time
+    ledger.record(reading("hold", "They hold that view.", before, "en"), "a", &[]).unwrap();
+    ledger.record(reading("keep", "They keep that view.", after, "en"), "b", &[]).unwrap();
+    let now = 1_793_016_000.0; // 2026-10-26 12:00 UTC
+    let history = ledger.history(now, &berlin);
+    let days: Vec<(&str, f64, &str)> =
+        history.days.iter().map(|day| (day.id.as_str(), day.start, day.cards[0].reading.surface.as_str())).collect();
+    assert_eq!(
+        days,
+        [("2026-10-26", 1_792_969_200.0, "keep"), ("2026-10-25", 1_792_879_200.0, "hold")],
+        "each day starts at its own local midnight: 23:00 UTC in winter time, 22:00 UTC in summer time"
+    );
+    // A zone listed only by the offset in force now is the old single-offset answer, and puts the first on the 24th.
+    let single = ledger.history(now, &[ZoneOffset::fixed(3_600)]);
+    assert_eq!(single.days.last().map(|day| day.id.as_str()), Some("2026-10-24"));
+    // Compaction keeps by the same days: both readings are inside the drawer's bound.
+    assert_eq!(ledger.compact(now, &berlin).unwrap(), Compaction { kept: 2, removed: 0 });
 }
 
 #[test]
@@ -104,10 +136,22 @@ fn a_torn_tail_is_truncated_and_the_whole_frames_survive() {
     assert_eq!(store.load().unwrap().len(), whole, "the tail is cut at the last whole frame");
 }
 
-/// A store whose sync can be made to fail: the uncertain commit's test.
+/// A store whose sync can be made to fail (the uncertain commit's test), or whose append writes half its bytes and then
+/// fails, as a full disk does.
 struct FlakyStore {
     inner: MemoryStore,
     fail_sync: std::sync::atomic::AtomicBool,
+    fail_append: std::sync::atomic::AtomicBool,
+}
+
+impl FlakyStore {
+    fn new(fail_sync: bool) -> Self {
+        FlakyStore {
+            inner: MemoryStore::default(),
+            fail_sync: std::sync::atomic::AtomicBool::new(fail_sync),
+            fail_append: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
 }
 
 impl Store for FlakyStore {
@@ -115,6 +159,10 @@ impl Store for FlakyStore {
         self.inner.load()
     }
     fn append(&self, bytes: &[u8]) -> Result<(), LedgerError> {
+        if self.fail_append.load(std::sync::atomic::Ordering::SeqCst) {
+            self.inner.append(bytes.get(..bytes.len() / 2).unwrap_or_default())?;
+            return Err(LedgerError::Storage("the disk is full".into()));
+        }
         self.inner.append(bytes)
     }
     fn sync(&self) -> Result<(), LedgerError> {
@@ -140,8 +188,7 @@ impl Store for FlakyStore {
 
 #[test]
 fn an_uncertain_commit_answers_so_and_a_retry_settles_it_to_one_event() {
-    let store =
-        Arc::new(FlakyStore { inner: MemoryStore::default(), fail_sync: std::sync::atomic::AtomicBool::new(true) });
+    let store = Arc::new(FlakyStore::new(true));
     let one = reading("hold", "They hold that view.", 1_790_640_000.0, "en");
     let mut ledger = Ledger::open(store.clone()).unwrap();
     assert_eq!(ledger.record(one.clone(), "op-1", &[]), Ok(RecordOutcome::Uncertain));
@@ -159,6 +206,55 @@ fn an_uncertain_commit_answers_so_and_a_retry_settles_it_to_one_event() {
     assert_eq!(reopened.event_count(), 0);
     assert_eq!(reopened.record(one, "op-1", &[]), Ok(RecordOutcome::Recorded));
     assert_eq!(Ledger::open(store).unwrap().event_count(), 1);
+}
+
+/// **A failed write leaves the log as it was** (audit 2026-11-05, L5b): a merge whose flush fails and an append that
+/// wrote half a frame are cut back, so a retry neither doubles a peer's events nor lands behind a torn frame that the
+/// next open would truncate it with.
+#[test]
+fn a_failed_write_leaves_the_log_as_it_was_and_a_retry_lands_once() {
+    let peer = Arc::new(MemoryStore::default());
+    let mut source = Ledger::open(peer.clone()).unwrap();
+    source.record(reading("hold", "They hold that view.", 1_790_640_000.0, "en"), "p1", &[]).unwrap();
+    source.record(reading("keep", "They keep that view.", 1_790_640_060.0, "en"), "p2", &[]).unwrap();
+    let theirs = peer.load().unwrap();
+
+    let store = Arc::new(FlakyStore::new(true));
+    let mut ledger = Ledger::open(store.clone()).unwrap();
+    assert!(ledger.merge(&theirs).is_err(), "a merge that could not be flushed says so");
+    assert_eq!(store.load().unwrap().len(), 0, "and leaves no bytes behind");
+    store.fail_sync.store(false, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(ledger.merge(&theirs).unwrap().added, 2);
+    assert_eq!(store.load().unwrap(), theirs, "each event once");
+
+    let whole = store.load().unwrap().len();
+    store.fail_append.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(ledger.record(reading("walk", "They walk.", 1_790_640_120.0, "en"), "a1", &[]).is_err());
+    assert_eq!(store.load().unwrap().len(), whole, "half a frame is cut back");
+    store.fail_append.store(false, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(
+        ledger.record(reading("walk", "They walk.", 1_790_640_120.0, "en"), "a1", &[]),
+        Ok(RecordOutcome::Recorded)
+    );
+    assert_eq!(Ledger::open(store).unwrap().event_count(), 3, "the retry survives a reopen");
+}
+
+/// **An operation id is never empty** (audit 2026-11-05, L5a): the writer refuses one — a second empty id would answer
+/// `Duplicate` for an event never written — and a log that already holds one answers `recorded` the same after a merge
+/// as after an open.
+#[test]
+fn an_empty_operation_id_is_refused_and_tracked_alike_everywhere() {
+    let mut ledger = ledger();
+    let one = reading("hold", "They hold that view.", 1_790_640_000.0, "en");
+    assert_eq!(ledger.record(one.clone(), "", &[]), Err(LedgerError::InvalidEvent));
+    assert_eq!(ledger.event_count(), 0);
+
+    let stored = StoredEvent { operation_id: String::new(), parent: None, event: Event::Reading(one) };
+    let theirs = frame_bytes(&serde_json::to_vec(&stored).unwrap());
+    let store = Arc::new(MemoryStore::default());
+    let mut merged = Ledger::open(store.clone()).unwrap();
+    merged.merge(&theirs).unwrap();
+    assert_eq!(merged.recorded(""), Ledger::open(store).unwrap().recorded(""), "a merge tracks what an open tracks");
 }
 
 #[test]
@@ -214,14 +310,14 @@ fn a_removal_hides_a_reading_and_a_restore_shows_it_again() {
     let one = reading("hold", "They hold that view.", 1_790_640_000.0, "en");
     ledger.record(one.clone(), "a", &[]).unwrap();
     ledger.record(reading("keep", "They keep that view.", 1_790_640_060.0, "en"), "b", &[]).unwrap();
-    let history = ledger.history(1_790_640_000.0, 0);
+    let history = ledger.history(1_790_640_000.0, UTC);
     let card = history.days[0].cards.iter().find(|card| card.reading.surface == "hold").unwrap();
     let events = card.events.clone();
     assert_eq!(events.len(), 1, "one reading, one event");
 
     let removal = Removal { event_ids: events.clone(), at: 1_790_640_100.0, device: "test".into() };
     assert_eq!(ledger.remove(removal.clone(), "remove-1"), Ok(RecordOutcome::Recorded));
-    let after = ledger.history(1_790_640_000.0, 0);
+    let after = ledger.history(1_790_640_000.0, UTC);
     assert_eq!(after.days[0].cards.len(), 1);
     assert_eq!(after.days[0].cards[0].reading.surface, "keep");
     // The event is still in the log: a tombstone hides content, it does not drop it locally.
@@ -229,7 +325,7 @@ fn a_removal_hides_a_reading_and_a_restore_shows_it_again() {
 
     let restore = Removal { event_ids: events, at: 1_790_640_120.0, device: "test".into() };
     assert_eq!(ledger.restore(restore, "restore-1"), Ok(RecordOutcome::Recorded));
-    let back = ledger.history(1_790_640_000.0, 0);
+    let back = ledger.history(1_790_640_000.0, UTC);
     assert_eq!(back.days[0].cards.len(), 2);
 }
 
@@ -246,7 +342,7 @@ fn retention_compaction_removes_bytes_and_keeps_every_kept_id() {
     let before = store.load().unwrap().len();
     let ids_before: Vec<String> = ledger.entries.iter().map(|entry| entry.id.clone()).collect();
 
-    let compaction = ledger.compact(now, 0).unwrap();
+    let compaction = ledger.compact(now, UTC).unwrap();
     assert_eq!(compaction.removed, 2, "one card past the bound and the old day");
     assert_eq!(compaction.kept, MAX_CARDS as u64);
     assert!(store.load().unwrap().len() < before, "retention removes bytes, not just query results");
@@ -257,7 +353,7 @@ fn retention_compaction_removes_bytes_and_keeps_every_kept_id() {
     let kept: Vec<&String> = ledger.entries.iter().map(|entry| &entry.id).collect();
     assert!(kept.iter().all(|id| ids_before.contains(id)));
     // The oldest kept is the first of the newest 400, not the old day.
-    let history = ledger.history(now, 0);
+    let history = ledger.history(now, UTC);
     assert_eq!(history.days.len(), 1);
     assert_eq!(history.days[0].cards.len(), MAX_CARDS);
 }
@@ -285,7 +381,7 @@ fn erase_rewrites_the_log_and_states_what_stays_recoverable() {
     let report = ledger.erase("erase-1", 1_790_640_120.0, "test").unwrap();
     assert_eq!(report.cleared_readings, 2);
     assert_eq!(report.recoverable, Recoverability::FreeBlocks);
-    assert_eq!(ledger.history(1_790_640_000.0, 0).days.len(), 0);
+    assert_eq!(ledger.history(1_790_640_000.0, UTC).days.len(), 0);
     // The receipt carries no content, and the reader's dictionary is still associated: erasing a history does not unpair.
     let bytes = store.load().unwrap();
     let text = String::from_utf8_lossy(&bytes);
@@ -303,7 +399,7 @@ fn erase_rewrites_the_log_and_states_what_stays_recoverable() {
     }
     // A reopened log holds the same: the receipt and the association.
     let reopened = Ledger::open(store).unwrap();
-    assert_eq!(reopened.history(1_790_640_000.0, 0).days.len(), 0);
+    assert_eq!(reopened.history(1_790_640_000.0, UTC).days.len(), 0);
     assert_eq!(reopened.association("e1"), Some("l1"));
 }
 
@@ -320,7 +416,7 @@ fn a_snapshot_matching_its_frontier_projects_the_same_days() {
 
     let at = day + 3_600.0;
     let replayed = Ledger::open(store.clone()).unwrap();
-    assert_eq!(replayed.history(at, 0), ledger.history(at, 0));
+    assert_eq!(replayed.history(at, UTC), ledger.history(at, UTC));
 
     // The snapshot is what the reopen read: a snapshot whose surface was changed changes the days, until the log moves.
     let bytes = store.load_snapshot().unwrap().unwrap();
@@ -331,7 +427,7 @@ fn a_snapshot_matching_its_frontier_projects_the_same_days() {
     store.save_snapshot(&mutated).unwrap();
     let cached = Ledger::open(store.clone()).unwrap();
     assert!(
-        cached.history(at, 0).days[1].cards.iter().any(|card| card.reading.surface == "changed"),
+        cached.history(at, UTC).days[1].cards.iter().any(|card| card.reading.surface == "changed"),
         "the snapshot's projection was used"
     );
 
@@ -340,7 +436,7 @@ fn a_snapshot_matching_its_frontier_projects_the_same_days() {
     writer.record(reading("walk", "They walk home.", day + 40.0, "en"), "e", &[]).unwrap();
     let fresh = Ledger::open(store).unwrap();
     assert!(
-        !fresh.history(at, 0).days[1].cards.iter().any(|card| card.reading.surface == "changed"),
+        !fresh.history(at, UTC).days[1].cards.iter().any(|card| card.reading.surface == "changed"),
         "a stale snapshot is discarded, whatever its checksum says"
     );
     assert_eq!(fresh.event_count(), 5);
@@ -655,7 +751,7 @@ fn history_sync_is_the_union_of_content_addressed_events() {
 
     let merged = a.merge(&b.log_bytes().unwrap()).unwrap();
     assert_eq!(merged, MergeReport { added: 2, skipped: 0 });
-    assert_eq!(a.history(at + 1.0, 0).days[0].cards.len(), 2, "both devices' readings are here");
+    assert_eq!(a.history(at + 1.0, UTC).days[0].cards.len(), 2, "both devices' readings are here");
 
     // The other direction converges: the same events, the same ids, nothing counted twice.
     let merged = b.merge(&a.log_bytes().unwrap()).unwrap();
@@ -783,12 +879,12 @@ fn a_merge_after_an_erase_brings_the_other_devices_events_back() {
     a.record(reading("hold", "They hold that view.", at, "en"), "a-1", &[]).unwrap();
     let untouched = peer(&a);
     a.erase("erase", at + 60.0, "test").unwrap();
-    assert!(a.history(at, 0).days.is_empty(), "the erase rewrote this device's log");
+    assert!(a.history(at, UTC).days.is_empty(), "the erase rewrote this device's log");
 
     // ADR-0024: erasure is this device's. Another device's readings are its own, and a sync brings them — the reader is
     // told so where they erase, never silently.
     a.merge(&untouched.log_bytes().unwrap()).unwrap();
-    assert_eq!(a.history(at, 0).days[0].cards.len(), 1);
+    assert_eq!(a.history(at, UTC).days[0].cards.len(), 1);
 }
 
 // **A kept phrase is a note** (plan-context-tools WI-5; ADR-0034 d.1): these three tests hold the record's promises to the
@@ -806,7 +902,7 @@ fn a_kept_phrase_survives_compaction_past_the_reading_bound() {
 
     // Fifteen days on, the reading is past MAX_DAYS and leaves the log; the note is not a reading and stays.
     let later = at + 15.0 * 86_400.0;
-    let report = ledger.compact(later, 0).unwrap();
+    let report = ledger.compact(later, UTC).unwrap();
     assert!(report.removed >= 1, "the old reading is compacted away");
     assert!(
         ledger.notes().iter().any(|held| held.target.entry_key == "take something into account"),

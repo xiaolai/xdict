@@ -19,8 +19,9 @@ use crate::sampling::{SIGNATURE_RECORD_BYTES, SIGNATURE_SAMPLES, any_sampled_rec
 use crate::types::EntryRef;
 
 /// **The extractor and frame vocabulary together**, stored in every store built under them: raised by any change to
-/// either, so a store built before is rebuilt rather than read under rules it was not built with.
-pub const COLLOCATION_VERSION: u32 = 1;
+/// either, so a store built before is rebuilt rather than read under rules it was not built with. 2 (2026-11-05): a
+/// span's `class` and its tags are read as HTML reads them, not by a text match.
+pub const COLLOCATION_VERSION: u32 = 2;
 
 /// **The most one store may hold and read** (audit, 2026-10-28): the build walks every record of the file with no
 /// other bound, so a huge or pathological dictionary would hold the calling thread for as long as it takes. The pair

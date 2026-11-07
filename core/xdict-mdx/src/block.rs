@@ -212,4 +212,15 @@ mod tests {
         assert!(matches!(refused, Err(Error::TooLarge(_))), "{:?}", refused.map(|(b, _)| b.len()));
         assert_eq!(read, 0, "the table was read before it was weighed");
     }
+
+    /// **A block table exactly at the budget is taken, one byte under it is refused with its sentence** (audit
+    /// 2026-11-05, L6): a 3.0 file's record blocks are weighed once, and what they cost is what the keys lose.
+    #[test]
+    fn a_block_table_at_the_budget_is_taken_and_one_past_is_refused() {
+        let cost = 5 * crate::keys::BLOCK_COST;
+        assert_eq!(weigh(5, cost).ok(), Some(cost));
+        let refused = weigh(5, cost - 1);
+        let sentence = "5 record blocks would take the key index past its memory";
+        assert!(matches!(&refused, Err(Error::TooLarge(said)) if said == sentence), "one byte over was {refused:?}");
+    }
 }

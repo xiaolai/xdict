@@ -76,6 +76,12 @@ function Invoke-XDictGate {
     $global:LASTEXITCODE = 0
     & $Action
     if ($LASTEXITCODE -ne 0) { throw ("{0} failed: exit {1}" -f $Name, $LASTEXITCODE) }
+    # The key names the tree the run started on. An input edited during the run (an editor, a generator, another
+    # checkout's sync) means no single tree passed, and recording the old key would skip the new one next time.
+    if ((Get-XDictTreeHash -Roots $Inputs -Extra $Extra) -ne $key) {
+        Write-Host ("{0}: passed; NOT cached: the inputs changed during the run" -f $Name)
+        return
+    }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file) | Out-Null
     Set-Content -LiteralPath $file -Value $key -Encoding Ascii
     Save-XDictOutputs -Evidence $evidence -Paths $Outputs
@@ -268,7 +274,26 @@ function Get-XDictConformanceExe {
     return Join-Path $Layout.AppRoot 'XDict.Conformance\bin\Debug\net10.0\XDict.Conformance.exe'
 }
 
-# The Windows E2E stages whose passing evidence a release requires; e2e.ps1 and release.ps1 read this one list.
+# A release is cut from a committed tree: what ships is what one commit names. Refuses with a sentence when git lists
+# any change (untracked files included), or when the folder is not a git checkout at all, so nothing names the tree.
+function Assert-XDictCommittedTree {
+    param([Parameter(Mandatory)][string]$Root, [string]$After = '')
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $status = @(& git -C $Root status --porcelain 2>$null | Where-Object { $_ })
+        $code = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $previous }
+    if ($code -ne 0) { throw ('the release refuses: {0} is not a git checkout, so no commit names the tree it would ship' -f $Root) }
+    if ($status.Count -gt 0) {
+        $when = if ($After) { ' after ' + $After } else { '' }
+        throw ('the release refuses: the tree has {0} uncommitted change(s){1} ({2}); a release ships only a committed tree' -f
+            $status.Count, $when, (($status | Select-Object -First 5) -join '; '))
+    }
+}
+
+# The Windows E2E stages, in order; e2e.ps1 checks its table against this one list. A release reads no E2E evidence.
 function Get-XDictE2EStageNames {
     return @('build', 'unit', 'contract', 'ipc', 'capture', 'library', 'launch', 'lookup', 'scope', 'trail',
         'find', 'tabs', 'all', 'explore', 'hover', 'sound', 'sound-links', 'review', 'selection', 'setup', 'setup-225')

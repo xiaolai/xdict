@@ -36,7 +36,29 @@ struct LimitsTests {
                               // holds a bulk credit rather than none.
                               Fixtures.index(.studyReanchor(oldEdition: Fixtures.entryRef.edition,
                                                             newEdition: Fixtures.entryRef.edition,
-                                                            stamp: Fixtures.studyStamp, operationPrefix: "move"))])
+                                                            stamp: Fixtures.studyStamp, operationPrefix: "move")),
+                              // **Exploration builds before it answers** (audit 2026-11-05 L2): its first page builds a
+                              // 1.37 M-headword catalog (3.2 s), a collocation query a per-edition store, so both hold
+                              // a bulk credit rather than none.
+                              Fixtures.index(.explore(dicts: [Fixtures.dict], mode: .endsWith, text: "ab", offset: 0,
+                                                      limit: 10)),
+                              Fixtures.index(.collocates(query: "a", dicts: [Fixtures.dict], limit: 10))])
+    }
+
+    /// **A third exploration on one connection is refused while two run** (audit 2026-11-05 L2): before, nothing bounded
+    /// how many catalog builds one connection could start at once. A collocation query shares the same two credits.
+    @Test func aThirdConcurrentExplorationIsRefused() throws {
+        var credits = Credits()
+        let explore = ServiceOperation.explore(dicts: [Fixtures.dict], mode: .endsWith, text: "ab", offset: 0, limit: 10)
+        let running = try (0..<Limits.bulkCallsInFlight).map { _ in try credits.take(for: explore).get() }
+        #expect(credits.take(for: explore) == .failure(.tooManyInFlight), "a third exploration was admitted")
+        #expect(credits.take(for: .collocates(query: "a", dicts: [Fixtures.dict], limit: 10)) == .failure(.tooManyInFlight))
+        credits.release(running[0])
+        #expect((try? credits.take(for: explore).get()) != nil, "a released credit admits the next")
+        // The measured build (3.2 s) with one bulk call ahead of it in the service, inside the short-call ceiling; and
+        // since the call now holds a credit, passing it costs the connection like any credited call.
+        #expect(Deadlines.deadline(for: explore, onFreshConnection: false) == .seconds(15))
+        #expect(Deadlines.abandonsConnectionOnExpiry(explore))
     }
 
     /// Only an answer that carries a payload has a ceiling: an entry's is the view's, a resource's by its type.
@@ -224,5 +246,20 @@ struct LimitsTests {
             return
         }
         #expect(response.id == 7)
+    }
+}
+
+/// **A release with nothing taken is reported** (audit 2026-11-05 L17): the counts of `Credits` and the service's
+/// `WorkGate` clamp at zero, and that clamp hid a double release. The pure count says whether a release was balanced, so
+/// the two callers can stop a debug build on it while a release build keeps the clamp.
+struct ReleasedTests {
+    @Test func aReleaseOfATakenCountIsBalanced() {
+        #expect(Released(from: 2) == Released(count: 1, balanced: true))
+        #expect(Released(from: 1) == Released(count: 0, balanced: true))
+    }
+
+    @Test func aReleaseWithNothingTakenIsUnbalancedAndStaysAtZero() {
+        #expect(Released(from: 0) == Released(count: 0, balanced: false))
+        #expect(Released(from: -1) == Released(count: 0, balanced: false))
     }
 }

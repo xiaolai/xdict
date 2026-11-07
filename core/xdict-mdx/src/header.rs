@@ -9,16 +9,18 @@ pub(crate) fn parse(bytes: &[u8], checksum: u32) -> Result<Header, Error> {
     if adler32(bytes) != checksum {
         return Err(Error::Malformed("the header's checksum does not match".into()));
     }
-    // UTF-16 text starting with an ASCII `<` has a zero second byte; UTF-8 text never does.
-    let text = if bytes.get(1) == Some(&0) {
-        let (pairs, odd) = bytes.as_chunks::<2>();
-        if !odd.is_empty() {
-            return Err(Error::Malformed("the header is not whole UTF-16".into()));
-        }
-        let units: Vec<u16> = pairs.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
-        String::from_utf16(&units).map_err(|_| Error::Malformed("the header is not valid UTF-16".into()))?
+    // **A byte-order mark decides first** (audit 2026-11-05, L6): `FF FE` is UTF-16LE, `FE FF` UTF-16BE, `EF BB BF`
+    // UTF-8, each read past its mark. Unmarked, UTF-16 text starting with an ASCII `<` has a zero second byte; UTF-8
+    // text never does.
+    let text = if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        utf16(rest, u16::from_le_bytes)?
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        utf16(rest, u16::from_be_bytes)?
+    } else if bytes.get(1) == Some(&0) {
+        utf16(bytes, u16::from_le_bytes)?
     } else {
-        String::from_utf8(bytes.to_vec()).map_err(|_| Error::Malformed("the header is not valid UTF-8".into()))?
+        let rest = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+        String::from_utf8(rest.to_vec()).map_err(|_| Error::Malformed("the header is not valid UTF-8".into()))?
     };
     let text = text.trim_end_matches(['\0', '\r', '\n', ' ']).trim_start();
 
@@ -136,6 +138,16 @@ pub(crate) fn attributes(mut rest: &str) -> Result<Vec<(String, String)>, Error>
     }
 }
 
+/// The header's UTF-16 text, its code units read by `unit` (little- or big-endian).
+fn utf16(bytes: &[u8], unit: fn([u8; 2]) -> u16) -> Result<String, Error> {
+    let (pairs, odd) = bytes.as_chunks::<2>();
+    if !odd.is_empty() {
+        return Err(Error::Malformed("the header is not whole UTF-16".into()));
+    }
+    let units: Vec<u16> = pairs.iter().map(|pair| unit(*pair)).collect();
+    String::from_utf16(&units).map_err(|_| Error::Malformed("the header is not valid UTF-16".into()))
+}
+
 /// Where the reference that `after` starts with ends: the index of its `;`. The search stops at the next
 /// `&`, so each stretch of text is searched once, and a run of bare ampersands costs linear time rather
 /// than a search to the end of the text from every one of them.
@@ -209,6 +221,26 @@ mod tests {
     fn parse_utf16(text: &str) -> Result<Header, Error> {
         let bytes: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
         parse(&bytes, adler32(&bytes))
+    }
+
+    /// **A header that opens with a byte-order mark is read in the encoding the mark names** (audit 2026-11-05, L6):
+    /// the mark is not part of the element, and a UTF-16 one used to send the text down the UTF-8 path, to be refused
+    /// as "not valid UTF-8".
+    #[test]
+    fn a_header_with_a_byte_order_mark_is_read() {
+        let text = r#"<Dictionary GeneratedByEngineVersion="2.0" Title="Marked"/>"#;
+        let mut little = vec![0xFF, 0xFE];
+        little.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+        let mut big = vec![0xFE, 0xFF];
+        big.extend(text.encode_utf16().flat_map(u16::to_be_bytes));
+        let mut eight = vec![0xEF, 0xBB, 0xBF];
+        eight.extend_from_slice(text.as_bytes());
+        for (name, bytes) in [("UTF-16LE", little), ("UTF-16BE", big), ("UTF-8", eight)] {
+            let header = parse(&bytes, adler32(&bytes));
+            assert!(matches!(&header, Ok(header) if header.title == "Marked"), "{name} with its mark: {header:?}");
+        }
+        let unmarked = parse_utf16(text);
+        assert!(matches!(&unmarked, Ok(header) if header.title == "Marked"), "{unmarked:?}");
     }
 
     #[test]

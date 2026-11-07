@@ -1,7 +1,8 @@
 #!/bin/bash
 # Tests of Tools/e2e-run.sh: what `make e2e` selects (only what has no pass for its key in the E2E ledger, FULL=1,
-# STAGES=) and how a run is split over the two E2E Macs. Reaches no host: `select` reads this checkout, a scratch ledger
-# and facts given by the environment; `split` is pure.
+# STAGES=), and that a run refuses, running nothing, when another project's XCTest holds the E2E Mac past the wait
+# (XDICT_HOST_LOCK_WAIT; 2026-11-05). Reaches no host: `select` reads this checkout, a scratch ledger and facts given by
+# the environment; `run`'s ssh and sleep are stand-ins, and E2E stays refused (CLAUDECODE=1, no E2E_REQUESTED).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 run=Tools/e2e-run.sh
@@ -48,20 +49,24 @@ got=$(bash $run select 2>"$scratch/err" | sort | tr '\n' ' ')
 [ "$got" = "$defaults" ] && grep -q corrupt "$scratch/err" && ok "a corrupt cache selects all, loudly" \
     || bad "corrupt: [$got] $(head -2 "$scratch/err")"
 
-# The split: what needs the front stays on the first host; a group stays whole; the rest is balanced.
-plan=$(bash $run split launch reader lookup.core lookup.a11y lookup.paging hostile.controls hostile.production \
-    entries.full service.idle selection.hosts services.menu library.generated hostile.app)
-one=" $(sed -n 1p <<<"$plan" | cut -f1) "; two=" $(sed -n 2p <<<"$plan" | cut -f1) "
-front=true
-for sub in reader lookup.core lookup.a11y lookup.paging selection.hosts services.menu library.generated; do
-    case $one in *" $sub "*) ;; *) front=false ;; esac
-done
-$front && ok "front and Accessibility sub-stages go to the first host" || bad "front on the second: [$two]"
-case $two in *" hostile.controls "*) ok "the longest free sub-stage goes to the lighter host" ;;
-    *) bad "hostile.controls not on the second: [$one] [$two]" ;; esac
-n=$(( $(wc -w <<<"$one") + $(wc -w <<<"$two") ))
-[ "$n" = 13 ] && ok "every sub-stage is placed once" || bad "placed $n of 13"
-plan=$(bash $run split reader lookup.core)
-[ -z "$(sed -n 2p <<<"$plan" | cut -f1)" ] && ok "front-only work leaves the second host idle" || bad "split [$plan]"
+# A busy E2E Mac: ssh always answers with another project's XCTest, sleep returns at once. Given no time to wait, the
+# run refuses after one look and never reaches Tools/e2e.sh (whose own refusal under CLAUDECODE=1 would say so).
+mkdir -p "$scratch/busy"
+printf '#!/bin/bash\necho "ssh $*" >>"%s/busy/called"\necho "4242 xctest"\n' "$scratch" >"$scratch/busy/ssh"
+printf '#!/bin/bash\nexit 0\n' >"$scratch/busy/sleep"
+chmod +x "$scratch/busy/ssh" "$scratch/busy/sleep"
+out=$(unset E2E_REQUESTED; PATH=$scratch/busy:$PATH CLAUDECODE=1 XDICT_HOST_LOCK_WAIT=0 XDICT_E2E_HOST=busy-host \
+    bash $run run launch 2>&1); status=$?
+if [ "$status" != 0 ] && grep -q 'still runs XCTest after 0 s .*nothing was run' <<<"$out"; then
+    ok "a Mac busy past the wait is refused, loudly"
+else bad "busy Mac: exit $status: $(tail -2 <<<"$out")"; fi
+grep -q 'E2E is off by default' <<<"$out" && bad "it went ahead to Tools/e2e.sh" || ok "nothing was run after the wait"
+[ "$(grep -c . "$scratch/busy/called" 2>/dev/null)" = 1 ] && ok "no time to wait: one look, no loop" \
+    || bad "ssh called $(grep -c . "$scratch/busy/called" 2>/dev/null) times"
+out=$(XDICT_HOST_LOCK_WAIT=soon XDICT_E2E_HOST=busy-host PATH=$scratch/busy:$PATH bash $run run launch 2>&1) \
+    && bad "a wait that is not a number was taken" || { grep -q 'not a number' <<<"$out" && ok "a wait that is not a number is refused" \
+    || bad "bad wait: $out"; }
+grep -nE 'XDICT_E2E_SPLIT|XDICT_E2E_HOST_2|E2E_HOST_MACOS_2|^split\(\)|split\) shift' "$run" Makefile \
+    && bad "split mode is still there" || ok "no split mode is left"
 
 [ "$failures" -eq 0 ] && echo "e2e-run: all passed" || { echo "e2e-run: $failures failed"; exit 1; }

@@ -3,7 +3,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use xdict_entry::{
-    BaseFrom, Counts, KeptReason, Style, TOKENS, Transcriptions, css_normalized_within, html_normalized_within,
+    BaseFrom, Counts, KeptReason, Style, TOKENS, Transcriptions, css_normalized_within, css_styled_within,
+    html_normalized_within,
 };
 
 const BASE: &str = "xdict://d/";
@@ -904,4 +905,167 @@ fn a_coloured_run_is_the_accent_not_dropped() {
     assert_eq!(html(r#"<span style="color:teal">x</span>"#, &s), format!(r#"<span style="color:{accent}">x</span>"#));
     assert_eq!(html(r#"<font color="purple">x</font>"#, &s), format!(r#"<font style="color:{accent}">x</font>"#));
     assert!(TOKENS.contains(&"--xdict-accent"));
+}
+
+/// **A nested block never switches its rule's normalization off** (audit 2026-11-05, M2): a `{` inside a rule (CSS
+/// nesting, or a stray one) once left the rule's own declarations as written, so `zoom`, a background and an
+/// off-palette colour reached the page. The nested block is a rule of its own, normalized on its own terms; one nested
+/// past the depth followed is dropped, never copied as written.
+#[test]
+fn a_nested_block_leaves_its_rules_declarations_normalized() {
+    let s = plain();
+    assert_eq!(css(".a{zoom:2;display:block; &{} }", &s), ".a{display:block; &{} }");
+    let out = css(".d{zoom:4;background:#000;color:#0f0; &{} }", &s);
+    assert!(!out.contains("zoom") && !out.contains("background") && !out.contains("#0f0"), "{out}");
+    assert!(out.contains("color:var(--xdict-"), "the colour is a token: {out}");
+    // A declaration after a nested rule is the outer rule's own; the nested rule is normalized as a rule.
+    let out = css(".a{ & .x{zoom:3;color:#0f0} zoom:2;display:block }", &s);
+    assert!(!out.contains("zoom") && !out.contains("#0f0"), "{out}");
+    assert!(out.contains("& .x{") && out.contains("display:block"), "{out}");
+    // A nested rule whose prelude reads like a declaration is never taken for one.
+    assert_eq!(css(".a{zoom:hover{display:block}}", &s), ".a{zoom:hover{display:block}}");
+    // A `style=""` holding a block.
+    let out = html(r#"<p style="zoom:4;color:#0f0;{}">x</p>"#, &s);
+    assert!(!out.contains("zoom") && !out.contains("#0f0"), "{out}");
+    // Past the depth followed, and left open at the end.
+    for deep in [format!("{}zoom:9{}", ".a{".repeat(80), "}".repeat(80)), format!("{}zoom:9", ".a{".repeat(80))] {
+        let out = css(&deep, &s);
+        assert!(!out.contains("zoom"), "{out}");
+    }
+    // Original style drops what XDict's marks replace in a nested rule's outer declarations too.
+    let (out, _) = css_styled_within(".b::before{content:url(x.png); &{} }", BASE, "", &s, true, usize::MAX).unwrap();
+    assert!(!out.contains("content"), "{out}");
+}
+
+/// **A vendor prefix is its property** (audit 2026-11-05, M2): `-webkit-animation` is an animation, `-webkit-box-shadow`
+/// a shadow, `-webkit-mask` a mask that can hide the text it covers. And every colour-valued property is on the palette
+/// or gone, not only `color`.
+#[test]
+fn vendor_prefixes_and_every_colour_property_are_normalized() {
+    let s = plain();
+    assert_eq!(
+        css(
+            ".a{-webkit-animation:spin 1s;-moz-animation-name:x;-webkit-box-shadow:0 0 1px red;-webkit-mask:url(m.svg);-webkit-mask-image:url(m.svg);mask:url(m.svg);-webkit-text-size-adjust:200%;text-size-adjust:200%;-ms-zoom:3;display:block}",
+            &s
+        ),
+        ".a{display:block}"
+    );
+    for property in [
+        "fill",
+        "stroke",
+        "-webkit-text-stroke",
+        "-webkit-text-stroke-color",
+        "-webkit-text-fill-color",
+        "accent-color",
+        "caret-color",
+        "stop-color",
+        "flood-color",
+        "lighting-color",
+        "text-emphasis",
+        "text-emphasis-color",
+        "-webkit-text-emphasis-color",
+        "-webkit-tap-highlight-color",
+        "column-rule-color",
+        "-webkit-column-rule-color",
+        "outline-color",
+        "border-left-color",
+        "border-block-start-color",
+        "text-decoration-color",
+        "-webkit-text-decoration-color",
+        "scrollbar-color",
+    ] {
+        let out = css(&format!(".a{{{property}:#123456}}"), &s);
+        assert!(!out.contains("#123456"), "{property}: {out}");
+    }
+    assert_eq!(css(".a{fill:none;stroke:currentcolor}", &s), ".a{fill:none;stroke:currentcolor}");
+}
+
+/// **A CSS image drawn as content is dropped however its function is spelled** (audit 2026-11-05, M2): `u\72l(` is
+/// `url(` to a browser, and an image set is an image.
+#[test]
+fn an_escaped_image_function_is_still_an_image() {
+    let s = plain();
+    for written in
+        [r"u\72l(x.png)", r"U\52L(x.png)", r"\75 rl(x.png)", "image-set('x.png' 1x)", "-webkit-image-set('x.png' 1x)"]
+    {
+        let sheet = format!(".b::before{{content:{written};margin-left:2px}}");
+        assert_eq!(css(&sheet, &s), ".b::before{margin-left:2px}", "{written}");
+        let (out, _) = css_styled_within(&sheet, BASE, "", &s, true, usize::MAX).unwrap();
+        assert_eq!(out, ".b::before{margin-left:2px}", "original style: {written}");
+    }
+}
+
+/// **A phonetic class is read off the whole selector** (audit 2026-11-05, L10): the report's 160 characters once
+/// decided which elements a kept phonetic face marks, so a class past them was never marked and one cut mid-name could
+/// mark another.
+#[test]
+fn a_phonetic_class_past_the_reported_selector_is_marked() {
+    let mut selector = String::new();
+    while selector.len() < 150 {
+        selector.push_str(".filler,");
+    }
+    assert!(selector.len() < 160 && selector.len() + ".pinyinlong".len() > 160, "the cut falls inside .pinyinlong");
+    selector.push_str(".pinyinlong,.target");
+    let s = Style::of_sheets([format!(
+        r#"@font-face{{font-family:"Kingsoft Phonetic";src:url(k.ttf)}} {selector}{{font-family:"Kingsoft Phonetic"}}"#
+    )
+    .as_str()]);
+    let marked =
+        |class: &str| html(&format!(r#"<span class="{class}">[5pl]</span>"#), &s).contains("font:Kingsoft Phonetic");
+    assert!(marked("target"), "a class past the report's cut");
+    assert!(marked("pinyinlong"), "the class the cut fell in");
+    assert!(!marked("pinyinl"), "the cut's fragment names no class");
+    assert!(marked("filler"), "positive control");
+}
+
+/// **A dictionary's own phonetic marks are not believed** (audit 2026-11-05, M3): the marker's are the only ones.
+#[test]
+fn a_forged_phonetic_mark_is_dropped_and_the_markers_own_written() {
+    let s = plain();
+    let (out, counts) = html_normalized_within(
+        r#"<span class="z" data-xdict-phon data-xdict-phon-system="slash">hello</span> <span class="phon" DATA-XDICT-PHON-SYSTEM="font:Forged">/ˈæp(ə)l/</span>"#,
+        BASE,
+        "",
+        &s,
+        usize::MAX,
+    )
+    .unwrap();
+    assert_eq!(
+        out,
+        r#"<span class="z">hello</span> <span data-xdict-phon data-xdict-phon-system="slash" class="phon">/ˈæp(ə)l/</span>"#
+    );
+    assert_eq!(counts.transcriptions.marked, 1);
+}
+
+/// **A dictionary's rule never selects by XDict's marks** (audit 2026-11-05, M3): one naming a `data-xdict-*`
+/// attribute anywhere in its selector, in any case or escaped, in `:is()`, `:where()` or `:not()` too, is emptied in
+/// either style and its declarations counted as dropped; a name that only resembles one, or is quoted, is kept.
+#[test]
+fn a_rule_selecting_by_xdicts_marks_is_dropped() {
+    let s = plain();
+    assert_eq!(
+        css("[data-xdict-role=sense]{display:none} .a{display:none}", &s),
+        "[data-xdict-role=sense]{} .a{display:none}"
+    );
+    assert_eq!(counts("[data-xdict-role=sense]{display:none}", &s).dropped, 1);
+    assert_eq!(css(".a:is(.b, [DATA-XDICT-SENSE]) .c{display:none}", &s), ".a:is(.b, [DATA-XDICT-SENSE]) .c{}");
+    for forged in [
+        ".a :where(.b [ data-xdict-sure ~= x ]){display:none}",
+        ".a:not([*|Data-Xdict-Label]){display:none}",
+        r"[data\-xdict-role]{display:none}",
+        r"[\64 ata-xdict-role]{display:none}",
+        "@media screen{.a, .b > [data-xdict-section|=i]{display:none}}",
+        ".a{&[data-xdict-role]{display:none}}",
+    ] {
+        assert!(!css(forged, &s).contains("display"), "{forged}");
+        let (original, _) = css_styled_within(forged, BASE, "", &s, true, usize::MAX).unwrap();
+        assert!(!original.contains("display"), "original style: {forged}");
+    }
+    for kept in [
+        ".data-xdict-role{display:none}",
+        "[data-xdictx]{display:none}",
+        r#"[title="[data-xdict-role]"]{display:none}"#,
+    ] {
+        assert_eq!(css(kept, &s), kept);
+    }
 }

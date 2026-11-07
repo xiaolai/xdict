@@ -62,8 +62,8 @@ public final class SettingsRoute {
         open?()
     }
 
-    /// **Any pane, by name** (plan-setup-v2 WI-2): the setup board's rows open General (hover's key, settle time, the
-    /// apps hover never reads) and AI, and neither is a dictionary, so neither goes through `show(_:)`.
+    /// **Any pane, by name** (plan-setup-v2 WI-2): the setup board's rows open Lookup (hover's switch and key, settle
+    /// time, the apps hover never reads) and AI, and neither is a dictionary, so neither goes through `show(_:)`.
     public func showPane(_ pane: SettingsTab) {
         self.pane = pane
         open?()

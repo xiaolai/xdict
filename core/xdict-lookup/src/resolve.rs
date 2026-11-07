@@ -202,7 +202,7 @@ fn follow(
     from: usize,
     named: &[String],
     budget: &mut Budget,
-    read: &mut Read,
+    read: &mut impl Records,
     steps: &mut usize,
 ) -> Result<Followed, Error> {
     let mut walk = Walk::new(from, named);
@@ -304,7 +304,7 @@ impl Walk {
 
     /// Key `j`, landed on along `chain`: a loop if the chain has it already, else its targets queued (no more
     /// than could still be tried) if it is a redirect, else an entry reached, given once.
-    fn arrive(&mut self, j: usize, chain: &[usize], read: &Read) {
+    fn arrive(&mut self, j: usize, chain: &[usize], read: &impl Records) {
         let mut next = chain.to_vec();
         next.push(j);
         if chain.contains(&j) {
@@ -346,6 +346,58 @@ fn land(file: &File, target: &str) -> Result<Vec<usize>, Error> {
 /// What a record is to a lookup: `None` for an entry, else the targets its redirect names (perhaps none).
 type Targets = Option<Vec<String>>;
 
+/// Where a walk learns what each key's record is: read as it goes (a lookup's), or known beforehand (the health
+/// check's, which has read every record).
+trait Records {
+    /// Makes `keys`' records known, reading what is not yet.
+    fn add(&mut self, file: &File, keys: &[usize], budget: &mut Budget) -> Result<(), Error>;
+    /// The targets of key `i`'s record, if it is a redirect.
+    fn targets(&self, i: usize) -> Option<&[String]>;
+}
+
+impl Records for Read {
+    fn add(&mut self, file: &File, keys: &[usize], budget: &mut Budget) -> Result<(), Error> {
+        Read::add(self, file, keys, budget)
+    }
+
+    fn targets(&self, i: usize) -> Option<&[String]> {
+        Read::targets(self, i)
+    }
+}
+
+/// Every redirect of a file, by key, its targets as [`redirect_targets`] gives them; any other key is an entry.
+struct Known<'a>(&'a HashMap<usize, Vec<String>>);
+
+impl Records for Known<'_> {
+    fn add(&mut self, _: &File, _: &[usize], _: &mut Budget) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn targets(&self, i: usize) -> Option<&[String]> {
+        self.0.get(&i).map(Vec::as_slice)
+    }
+}
+
+/// Where one redirect's walk led: each entry reached, once, with its chain (the redirect first), and what stopped
+/// any way short, in the order met.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Walked {
+    pub reached: Vec<(usize, Vec<usize>)>,
+    pub problems: Vec<Problem>,
+}
+
+/// **The walk [`resolve`] makes from redirect `from`**, over records already known (`redirects`: every redirect of
+/// the file, by key, with its targets): the same landing, hops, fan-out and loop rules, so the health check counts a
+/// redirect broken exactly when a lookup would meet it broken (audit 2026-11-05, L8). An entry is `Walked` empty.
+pub fn follow_known(file: &File, from: usize, redirects: &HashMap<usize, Vec<String>>) -> Result<Walked, Error> {
+    let Some(named) = redirects.get(&from) else { return Ok(Walked::default()) };
+    // Nothing is read, so nothing is taken from a budget; the walk's own FAN_OUT bounds it before STEPS can.
+    let mut budget = Budget::new(u64::MAX, usize::MAX);
+    let mut steps = 0usize;
+    let Followed { reached, problems } = follow(file, from, named, &mut budget, &mut Known(redirects), &mut steps)?;
+    Ok(Walked { reached, problems })
+}
+
 /// Every record a lookup has read, by key, each read and taken from the budget once, and the blocks kept
 /// between reads, so a block several targets share is decompressed once while it is kept.
 #[derive(Default)]
@@ -383,9 +435,15 @@ pub fn redirect_targets(text: &str) -> Vec<String> {
     targets(text).unwrap_or_default()
 }
 
+/// Whether a record's text is an `@@@LINK=` redirect, as every lookup reads it: the one predicate for each caller
+/// that tells a redirect from an entry.
+pub fn is_redirect(text: &str) -> bool {
+    text.trim_start().starts_with("@@@LINK=")
+}
+
 /// `None` for an entry; for an `@@@LINK=` record, the targets its lines name, which may be none.
 fn targets(text: &str) -> Targets {
-    if !text.trim_start().starts_with("@@@LINK=") {
+    if !is_redirect(text) {
         return None;
     }
     Some(
@@ -418,6 +476,13 @@ pub fn occurrences(file: &File, keys: &[usize]) -> Result<HashMap<usize, u32>, E
     Ok(out)
 }
 
+/// The longest query a nearest-spelling pass will align: a "misspelling" of a longer one is not a spelling miss, and
+/// every cell it would add is 64 times the work of one character of a normal word.
+const MAX_NEAREST_QUERY_CHARS: usize = 64;
+/// The distance cells one pass may spend — about 40 ms of alignment on the build host — so a full scan of a 700,000-key
+/// file stops after a few thousand candidates instead of running to the end of it.
+const CELL_BUDGET: u64 = 64 * 1024 * 1024;
+
 /// **The public keys nearest a spelling the reader typed** (owner, 2026-10-27: fuzzy is not a mode, it is what a miss
 /// does), added to `out` until it holds `limit`: restricted Damerau–Levenshtein over the file's tier-2 form, nearest
 /// first and then in the file's own order, each spelling once.
@@ -426,13 +491,6 @@ pub fn occurrences(file: &File, keys: &[usize]) -> Result<HashMap<usize, u32>, E
 /// scan runs only when that band held nothing — measured on the 24-dictionary corpus at 34 ms against 439 ms for the
 /// full scan (`examples/nearest_bench.rs`). Length is filtered before anything is folded, and an ASCII key is lowered
 /// without normalisation.
-/// The longest query a nearest-spelling pass will align: a "misspelling" of a longer one is not a spelling miss, and
-/// every cell it would add is 64 times the work of one character of a normal word.
-const MAX_NEAREST_QUERY_CHARS: usize = 64;
-/// The distance cells one pass may spend — about 40 ms of alignment on the build host — so a full scan of a 700,000-key
-/// file stops after a few thousand candidates instead of running to the end of it.
-const CELL_BUDGET: u64 = 64 * 1024 * 1024;
-
 pub fn nearest(file: &File, query: &str, max_distance: u8, limit: usize, out: &mut Vec<String>) -> Result<(), Error> {
     if max_distance == 0 || out.len() >= limit {
         return Ok(());

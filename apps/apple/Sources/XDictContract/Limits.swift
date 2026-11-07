@@ -137,10 +137,34 @@ public struct Credits: Hashable, Sendable {
     /// Gives `credit` back. Once per credit taken; a count never goes below zero.
     public mutating func release(_ credit: Credit) {
         switch credit.creditClass {
-        case .bulk: bulk = max(0, bulk - 1)
-        case .lookup: lookups = max(0, lookups - 1)
+        case .bulk: bulk = Self.counted(Released(from: bulk))
+        case .lookup: lookups = Self.counted(Released(from: lookups))
         case .none: break
         }
+    }
+
+    private static func counted(_ released: Released) -> Int {
+        if !released.balanced { assertionFailure("a credit released that was never taken") }
+        return released.count
+    }
+}
+
+/// **One count given back** (audit 2026-11-05 L17): a release with nothing taken is a defect in whoever released, so
+/// it is reported as unbalanced; the count still stays at zero, never below. `Credits.release` and the service's
+/// `WorkGate.leave` both count through it, and both stop a debug build on an unbalanced one (`assertionFailure`) while a
+/// release build keeps the clamp.
+public struct Released: Hashable, Sendable {
+    public let count: Int
+    public let balanced: Bool
+
+    public init(from count: Int) {
+        self.count = max(0, count - 1)
+        balanced = count > 0
+    }
+
+    init(count: Int, balanced: Bool) {
+        self.count = count
+        self.balanced = balanced
     }
 }
 
@@ -193,7 +217,8 @@ public enum Deadlines {
         // `entryText` is that render plus a pass over its text: the same budget, the projection is linear in the body.
         // **The first of either builds something**: exploration's catalog takes 3.2 s for the reader's 24
         // dictionaries (1.37 M headwords), a collocation store one pass over that edition's records. Both sit under the
-        // house ceiling for a short call; later pages read what the first built.
+        // house ceiling for a short call; later pages read what the first built. Both hold a bulk credit (audit
+        // 2026-11-05 L2), so a connection runs two at once and a stalled one ends its connection like an entry.
         case .explore, .collocates: .seconds(15)
         // **Installing the pack reads and validates the whole 183 MB file** (plan-word-exploration WI-5): the loader's own
         // parse, with no index and no hash; seconds on the build host, and `installDeadline` leaves room for a slow

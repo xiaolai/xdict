@@ -6,7 +6,8 @@
 #   Tools/clean-dev.sh [--apply] [--air] [--build-host] [--into <branch>] [--min-age-hours <n>] [--repo <checkout>]
 #
 # --air         this Mac: git worktrees under <main checkout>/.claude/worktrees. One is removed when its HEAD is an
-#               ancestor of --into (default capture-port) or of main; no commit in its HEAD's reflog (or its
+#               ancestor of --into (default main, where every branch lands; until 2026-11-05 it was capture-port, a
+#               branch deleted once merged, so the default failed) or of main; no commit in its HEAD's reflog (or its
 #               worktree-agent-* branch's) is on no branch, tag or remote; `git status --ignored` shows no change, no
 #               untracked file and no ignored file other than build products (.build, target, node_modules,
 #               __pycache__, .DS_Store: dev-docs/, AGENTS.md, .env or local.mk are ignored but precious); no process has
@@ -28,9 +29,9 @@
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 say() { echo "clean-dev: $*" >&2; }
-usage() { sed -n '2,29s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,/^set -/{s/^# \{0,1\}//p;}' "$0"; } # the header, up to the first line of code: it grows
 
-apply=0 do_air=0 do_host=0 into=capture-port age=24 repo=""
+apply=0 do_air=0 do_host=0 into=main age=24 repo=""
 while [ $# -gt 0 ]; do
     case $1 in
         --apply) apply=1 ;;

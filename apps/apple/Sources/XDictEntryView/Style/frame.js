@@ -94,12 +94,13 @@
     var body = document.body;
     // R13's containment, observed: a fixed probe at `right:0` ends at the body's padding box when the body
     // contains it, at the viewport's right edge otherwise; undecided (null) where the two coincide, as in a
-    // window no wider than the column. (`top:0` cannot tell: the body starts at the viewport's top; nor can
+    // window no wider than the column. The probe has no size: only its right edge is read, and a box of none has one.
+    // (`top:0` cannot tell: the body starts at the viewport's top; nor can
     // `bottom:0`: a dictionary's `body{height:100%}` ends it at the viewport's bottom.)
     var contained = null;
     if (body) {
       var probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;right:0;top:0;width:1px;height:1px';
+      probe.style.cssText = 'position:fixed;right:0;top:0;width:0;height:0';
       body.appendChild(probe);
       var bs = getComputedStyle(body), box = body.getBoundingClientRect();
       var inner = box.right - parseFloat(bs.borderRightWidth || '0'), view = root.clientWidth;

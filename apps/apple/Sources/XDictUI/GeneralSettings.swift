@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import XDictAnywhere
 import XDictCapture
 import XDictTokens
@@ -26,6 +27,8 @@ public struct GeneralSettings: View {
     @AppStorage(Diagnostics.includeTextKey) private var includeWordsInDiagnostics = false
     /// Why the last save failed, said in an alert that offers to try again; nil after a save or a cancellation.
     @State private var diagnosticsFailure: String?
+    /// The export SwiftUI's save panel is writing, while it is open (L13).
+    @State private var diagnosticsExport: ExportedText?
 
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String,
                 hover: HoverControl? = nil, library: (any DiagnosticsLibrary)? = nil) {
@@ -128,15 +131,24 @@ public struct GeneralSettings: View {
         } message: { reason in
             Text(verbatim: reason)
         }
+        .fileExporter(isPresented: Binding(get: { diagnosticsExport != nil },
+                                           set: { if !$0 { diagnosticsExport = nil } }),
+                      document: diagnosticsExport, contentType: .plainText,
+                      defaultFilename: DiagnosticsExport.fileName()) { result in
+            let bytes = diagnosticsExport?.text.utf8.count ?? 0
+            diagnosticsExport = nil
+            switch DiagnosticsExport.saved(result, bytes: bytes) {
+            case .saved, .cancelled:
+                diagnosticsFailure = nil
+            case .failed(let reason):
+                diagnosticsFailure = reason
+            }
+        }
+        .fileDialogMessage("Save Diagnostics")
     }
 
-    /// Writes the export, and keeps why it failed so the alert can say so.
+    /// Opens the save panel on the export as it is now; the panel's answer is kept so the alert can say a failure.
     private func saveDiagnostics() {
-        switch DiagnosticsExport.save(DiagnosticsExport.text(hover: hover, library: library)) {
-        case .saved, .cancelled:
-            diagnosticsFailure = nil
-        case .failed(let reason):
-            diagnosticsFailure = reason
-        }
+        diagnosticsExport = ExportedText(DiagnosticsExport.text(hover: hover, library: library))
     }
 }

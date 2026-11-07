@@ -56,7 +56,7 @@ impl Controls {
         base: &str,
         dir: &str,
     ) {
-        let Some(href) = crate::phon::attribute_of(tag, "href") else { return };
+        let Some(href) = crate::tag::value_of(tag, "href") else { return };
         if !matches!(crate::url::classify(href, base, dir), Link::Sound { .. } | Link::Speak { .. }) {
             return;
         }
@@ -153,7 +153,7 @@ fn icon_only(inner: &str) -> Option<bool> {
     while let Some(at) = rest.find('<') {
         text.push_str(rest.get(..at).unwrap_or(""));
         let from = rest.get(at + 1..).unwrap_or("");
-        let close = from.find('>').map_or(from.len(), |e| e + 1);
+        let close = crate::tag::end(from).map_or(from.len(), |e| e + 1);
         let name: String = from
             .trim_start_matches('/')
             .chars()
@@ -178,7 +178,7 @@ fn accent(tag: &str, inner: &str, href: &str) -> Option<&'static str> {
     let mut icon = String::new();
     for source in std::iter::once(tag).chain(tags(inner)) {
         for name in ["class", "src"] {
-            if let Some(v) = crate::phon::attribute_of(source, name) {
+            if let Some(v) = crate::tag::value_of(source, name) {
                 let v = v.rsplit('/').next().unwrap_or(v);
                 icon.push_str(v.split('.').next().unwrap_or(v));
                 icon.push(' ');
@@ -195,7 +195,7 @@ fn accent(tag: &str, inner: &str, href: &str) -> Option<&'static str> {
     let mut titles = String::new();
     for source in std::iter::once(tag).chain(tags(inner)) {
         for name in ["title", "alt"] {
-            if let Some(v) = crate::phon::attribute_of(source, name) {
+            if let Some(v) = crate::tag::value_of(source, name) {
                 titles.push_str(v);
                 titles.push(' ');
             }
@@ -239,20 +239,21 @@ fn told(text: &str) -> Told {
     }
 }
 
-/// The start tags in `inner`, as written: each ends at its `>` or the next `<`, so they never overlap and reading
-/// them all costs `inner`'s length once (a run of `<` without `>` cost its square when each ran to the end). At most
-/// `SIGNAL_TAGS` are read.
+/// The start tags in `inner`, as written, each through its `>` as HTML finds it ([`crate::tag`]) and the next read
+/// after it, so reading them all costs `inner`'s length once. At most `SIGNAL_TAGS` are read.
 fn tags(inner: &str) -> impl Iterator<Item = &str> {
-    inner
-        .match_indices('<')
-        .filter_map(move |(at, _)| {
-            let from = inner.get(at..)?;
+    let mut rest = inner;
+    std::iter::from_fn(move || {
+        loop {
+            let from = rest.get(rest.find('<')?..)?;
             if !from.as_bytes().get(1).is_some_and(u8::is_ascii_alphabetic) {
-                return None;
+                rest = from.get(1..)?;
+                continue;
             }
-            let body = from.get(1..)?;
-            let end = body.find(['>', '<']).map_or(body.len(), |e| e + 1);
-            from.get(..end + 1)
-        })
-        .take(SIGNAL_TAGS)
+            let tag = crate::tag::source(from);
+            rest = from.get(tag.len()..)?;
+            return Some(tag);
+        }
+    })
+    .take(SIGNAL_TAGS)
 }

@@ -6,7 +6,9 @@ param([switch]$Full)
 $layout = Get-XDictLayout
 
 Invoke-XDictGate -Name 'contract' -Full:$Full -Action {
-    cargo test --manifest-path (Join-Path $layout.AppRoot 'contract\tests\rust\Cargo.toml')
+    # --locked: the lock is committed. A lock the run wrote changed the gate's own inputs, so it never cached, and an
+    # untracked one left the tree that release.ps1 refuses.
+    cargo test --locked --manifest-path (Join-Path $layout.AppRoot 'contract\tests\rust\Cargo.toml')
     if ($LASTEXITCODE -ne 0) { throw 'the Rust fixture test failed' }
     dotnet test (Join-Path $layout.AppRoot 'contract\tests\cs\ContractTests.csproj') -c Debug
     if ($LASTEXITCODE -ne 0) { throw 'the C# fixture test failed' }

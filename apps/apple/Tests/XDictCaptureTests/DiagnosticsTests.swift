@@ -74,3 +74,75 @@ struct DiagnosticsTests {
         #expect(diagnostics.exportText().contains("n=39"))
     }
 }
+
+/// **A value is one field of one line, whatever it holds** (audit 2026-11-05 L15): a line is `key=value` fields
+/// separated by spaces, so a value may hold no line break of any kind, no control character, and no bare space, quote or
+/// `=` that would end the field or start another; and what was escaped reads back as what was written.
+struct DiagnosticsEscapingTests {
+    /// Every control character (C0, DEL, C1), the two Unicode line breaks, the quote, the backslash, the space and `=`.
+    static let hostile: [Unicode.Scalar] = (0x00...0x1F).compactMap(Unicode.Scalar.init) + [Unicode.Scalar(0x7F)]
+        + (0x80...0x9F).compactMap(Unicode.Scalar.init) + ["\u{2028}", "\u{2029}", "\"", "\\", " ", "="]
+
+    @Test func everyHostileCharacterStaysInsideItsField() {
+        for scalar in Self.hostile {
+            let value = "a\(Character(scalar))b"
+            let field = Diagnostics.escaped(value)
+            let line = "key=\(field) next=1"
+            #expect(!field.unicodeScalars.contains { $0.properties.generalCategory == .control
+                        || $0 == "\u{2028}" || $0 == "\u{2029}" },
+                    "U+\(String(scalar.value, radix: 16)) was written raw: \(field.debugDescription)")
+            #expect(Self.fields(line)?.first == ["key", value],
+                    "U+\(String(scalar.value, radix: 16)) did not read back: \(field.debugDescription)")
+            #expect(Self.fields(line)?.last == ["next", "1"], "U+\(String(scalar.value, radix: 16)) ended its field early")
+        }
+    }
+
+    @Test func anOrdinaryValueIsWrittenAsItIs() {
+        #expect(Diagnostics.escaped("notTapped") == "notTapped")
+        #expect(Diagnostics.escaped("词") == "词")
+    }
+
+    /// The reader of the format this test holds the writer to: fields split on spaces outside quotes, a quoted value
+    /// read up to its closing quote, and `\\`, `\"`, `\n`, `\r`, `\t` and `\u{…}` undone. Nil for a malformed line.
+    static func fields(_ line: String) -> [[String]]? {
+        var fields: [[String]] = []
+        var scalars = line.unicodeScalars.makeIterator()
+        var key = "", value = "", inKey = true, quoted = false, started = false
+        func flush() {
+            fields.append([key, value])
+            (key, value, inKey, quoted, started) = ("", "", true, false, false)
+        }
+        while let scalar = scalars.next() {
+            if inKey {
+                if scalar == "=" { inKey = false } else { key.unicodeScalars.append(scalar) }
+                continue
+            }
+            if !started, scalar == "\"" { quoted = true; started = true; continue }
+            started = true
+            if quoted, scalar == "\"" {
+                quoted = false
+                continue
+            }
+            if !quoted, scalar == " " { flush(); continue }
+            if !quoted, scalar == "\"" || scalar == "=" { return nil }
+            guard scalar == "\\" else { value.unicodeScalars.append(scalar); continue }
+            guard let escape = scalars.next() else { return nil }
+            switch escape {
+            case "\\": value += "\\"
+            case "\"": value += "\""
+            case "n": value += "\n"
+            case "r": value += "\r"
+            case "t": value += "\t"
+            case "u":
+                guard scalars.next() == "{" else { return nil }
+                var hex = ""
+                while let digit = scalars.next(), digit != "}" { hex.unicodeScalars.append(digit) }
+                guard let code = UInt32(hex, radix: 16), let decoded = Unicode.Scalar(code) else { return nil }
+                value.unicodeScalars.append(decoded)
+            default: return nil
+            }
+        }
+        if !inKey { flush() }
+        return fields
+    }
+}

@@ -23,7 +23,7 @@ use xdict_core::{
     PhraseAnswer, PhraseBuilt, PhraseMatch, PhraseState, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome,
     ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy,
     ReviewSummary, Sense, Separation, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget,
-    StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
+    StyleChanges, SyncRefusal, SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words, ZoneOffset,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -305,6 +305,7 @@ pub enum ReanchorResult {
     Reordered,
     Changed,
     Missing,
+    Failed { detail: String },
 }
 
 #[uniffi::remote(Record)]
@@ -316,6 +317,7 @@ pub struct ReanchorOutcome {
 #[uniffi::remote(Record)]
 pub struct ReanchorReport {
     pub outcomes: Vec<ReanchorOutcome>,
+    pub next: Option<String>,
 }
 
 #[uniffi::remote(Record)]
@@ -347,6 +349,19 @@ pub struct SyncReport {
     pub peers: u64,
     pub added: u64,
     pub skipped: u64,
+    pub refused: Vec<SyncRefusal>,
+}
+
+#[uniffi::remote(Record)]
+pub struct SyncRefusal {
+    pub file: String,
+    pub detail: String,
+}
+
+#[uniffi::remote(Record)]
+pub struct ZoneOffset {
+    pub from: f64,
+    pub seconds: i32,
 }
 
 #[uniffi::remote(Record)]
@@ -1114,9 +1129,10 @@ impl Core {
         self.0.ledger_record(reading, operation, target_languages)
     }
 
-    /// The days the drawer shows, in the reader's own zone: `utc_offset_seconds` east of UTC while `now` is the clock.
-    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Result<History, CoreError> {
-        self.0.ledger_history(now, utc_offset_seconds)
+    /// The days the drawer shows, in the reader's own zone: `zone` is its offsets east of UTC, each from the instant it
+    /// begins, ascending; the first also covers every earlier instant.
+    pub fn ledger_history(&self, now: f64, zone: Vec<ZoneOffset>) -> Result<History, CoreError> {
+        self.0.ledger_history(now, zone)
     }
 
     /// **Saves the reader's note on an entry** (plan §5.1) and enrols it for review.
@@ -1191,15 +1207,17 @@ impl Core {
         self.0.definition_hash_of(dict, entry)
     }
 
-    /// Re-anchors notes of one edition to another under the same lineage (plan §5.1).
+    /// Re-anchors notes of one edition to another under the same lineage (plan §5.1), a bounded amount a call: the
+    /// report's `next`, given back as `after`, starts the following call.
     pub fn study_reanchor(
         &self,
         old_edition: String,
         new_edition: String,
         stamp: Stamp,
         operation_prefix: String,
+        after: Option<String>,
     ) -> Result<ReanchorReport, CoreError> {
-        self.0.study_reanchor(old_edition, new_edition, stamp, operation_prefix)
+        self.0.study_reanchor(old_edition, new_edition, stamp, operation_prefix, after)
     }
 
     /// **The cards two devices left conflicted** (ADR-0027): the reader chooses a branch.

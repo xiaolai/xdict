@@ -11,7 +11,7 @@ use crate::error::{PackError, PackErrorKind, PackResult};
 use crate::json::Value;
 use crate::limits::{
     ETY_ANCESTRY, ETY_COLUMNS, ETY_DROPPED, ETY_ENGLISH, ETY_GROUP, ETY_ROOT, ETY_WITH_ROOT, MAX_ETYMOLOGY_BLOCK_ROWS,
-    MAX_GRAPH_EDGES, MAX_GRAPH_NODES, lookup,
+    MAX_GRAPH_DERIVATIONS, MAX_GRAPH_EDGES, MAX_GRAPH_NODES, lookup,
 };
 use crate::record::{FieldValue, RawRecord};
 use crate::skips::{Skips, sample};
@@ -36,6 +36,26 @@ struct Row {
 
 /// One node's ancestry edges: the parent it comes from, and the relation of that edge.
 type Edge = (Box<str>, Box<str>);
+
+/// `bound` when a graph of `nodes`, `edges` and `derivations` is past what one build may hold; the derivations are
+/// held whole until the pack is written, so they are bounded with the graph (audit 2026-11-05, L11).
+fn bounds(nodes: u64, edges: u64, derivations: u64) -> PackResult<()> {
+    if nodes > MAX_GRAPH_NODES || edges > MAX_GRAPH_EDGES {
+        return Err(PackError::new(
+            PackErrorKind::Bound,
+            format!(
+                "the ancestry graph holds {nodes} nodes and {edges} edges, over {MAX_GRAPH_NODES} and {MAX_GRAPH_EDGES}"
+            ),
+        ));
+    }
+    if derivations > MAX_GRAPH_DERIVATIONS {
+        return Err(PackError::new(
+            PackErrorKind::Bound,
+            format!("the ancestry graph holds {derivations} derivations, over {MAX_GRAPH_DERIVATIONS}"),
+        ));
+    }
+    Ok(())
+}
 
 /// Every node's ancestry edges, by child.
 type Parents = BTreeMap<Box<str>, BTreeSet<Edge>>;
@@ -81,17 +101,7 @@ impl EtymologyGraph {
 
     /// `bound` when the graph is past what one build may hold (plan-local-word-pack decision 4).
     fn within_bounds(&self) -> PackResult<()> {
-        let nodes = self.nodes.len() as u64;
-        if nodes > MAX_GRAPH_NODES || self.edges > MAX_GRAPH_EDGES {
-            return Err(PackError::new(
-                PackErrorKind::Bound,
-                format!(
-                    "the ancestry graph holds {nodes} nodes and {} edges, over {MAX_GRAPH_NODES} and {MAX_GRAPH_EDGES}",
-                    self.edges
-                ),
-            ));
-        }
-        Ok(())
+        bounds(self.nodes.len() as u64, self.edges, self.derivations.len() as u64)
     }
 
     /// The rows skipped while parsing, by reason.
@@ -470,6 +480,17 @@ mod tests {
     /// One row, its eleven columns named so a fixture cannot miscount them.
     fn row(fields: [&str; 11]) -> String {
         format!("{}\n", fields.join(","))
+    }
+
+    /// **The derivations are bounded like the nodes and edges** (audit 2026-11-05, L11): the list grew with every
+    /// English `*_with_root` row, unchecked.
+    #[test]
+    fn the_derivations_are_bounded() {
+        assert!(bounds(0, 0, MAX_GRAPH_DERIVATIONS).is_ok());
+        let over = bounds(0, 0, MAX_GRAPH_DERIVATIONS + 1).unwrap_err();
+        assert_eq!(over.kind(), PackErrorKind::Bound);
+        assert!(over.to_string().contains("derivations"), "{over}");
+        assert!(bounds(MAX_GRAPH_NODES + 1, 0, 0).is_err() && bounds(0, MAX_GRAPH_EDGES + 1, 0).is_err());
     }
 
     fn graph(rows: &[String]) -> PackResult<EtymologyGraph> {

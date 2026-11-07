@@ -104,6 +104,7 @@ internal static class Native
     private const uint CreateAlways = 2;
     private const uint FileAttributeNormal = 0x80;
     private const uint DuplicateSameAccess = 0x00000002;
+    private const uint DuplicateCloseSource = 0x00000001;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct FileBasicInfo
@@ -141,6 +142,13 @@ internal static class Native
     private static extern bool DuplicateHandle(
         IntPtr sourceProcess, SafeFileHandle source, SafeProcessHandle targetProcess, out IntPtr target,
         uint access, bool inherit, uint options);
+
+    /// <summary>`DuplicateHandle` with no target: with `DUPLICATE_CLOSE_SOURCE`, it closes a handle in another
+    /// process.</summary>
+    [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "DuplicateHandle")]
+    private static extern bool CloseSourceHandle(
+        SafeProcessHandle sourceProcess, IntPtr source, IntPtr targetProcess, IntPtr target, uint access, bool inherit,
+        uint options);
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
@@ -183,6 +191,14 @@ internal static class Native
         if (!DuplicateHandle(GetCurrentProcess(), file, service, out IntPtr duplicated, 0, false, DuplicateSameAccess))
             throw Failure("duplicate dictionary handle");
         return (ulong)duplicated.ToInt64();
+    }
+
+    /// <summary>Closes a handle this process duplicated into the service, for a request the service never received.
+    /// </summary>
+    internal static void CloseInService(SafeProcessHandle service, ulong handle)
+    {
+        if (!CloseSourceHandle(service, new IntPtr((long)handle), IntPtr.Zero, IntPtr.Zero, 0, false, DuplicateCloseSource))
+            throw Failure("close a handle in the service");
     }
 
     private static FileIdentity? IdentityOf(SafeFileHandle file)
@@ -459,5 +475,32 @@ internal sealed class ChildProcess(
         Output.Dispose();
         Errors.Dispose();
         process.Dispose();
+    }
+}
+
+/// <summary>**The handles one request duplicated into the service** (audit 2026-11-05): a request that never reaches the
+/// service — a later file that cannot be duplicated, a frame that cannot be written — gives them back with
+/// <see cref="Release"/>, since nothing in the service would close them before it exits.</summary>
+internal sealed class ServiceHandles(SafeProcessHandle service)
+{
+    private readonly List<ulong> made = [];
+
+    internal ulong Duplicate(SafeFileHandle file)
+    {
+        ulong handle = Native.DuplicateFile(service, file);
+        made.Add(handle);
+        return handle;
+    }
+
+    /// <summary>Closes every handle made so far in the service, once. A service that has exited closed them itself, so
+    /// a failure here is logged, never thrown over the error that brought the request here.</summary>
+    internal void Release()
+    {
+        foreach (ulong handle in made)
+        {
+            try { Native.CloseInService(service, handle); }
+            catch (Win32Exception error) { System.Diagnostics.Debug.WriteLine("service handle not closed: " + error.Message); }
+        }
+        made.Clear();
     }
 }

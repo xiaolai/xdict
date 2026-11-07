@@ -84,7 +84,11 @@ final class WorkGate: Sendable {
     func leave() {
         let next = state.withLock { state -> Waiting? in
             guard !state.waiting.isEmpty else {
-                state.running = max(0, state.running - 1)
+                // **Never below zero, and never silently** (audit 2026-11-05 L17): a debug build stops on a leave with
+                // nothing running; a release build keeps the clamp.
+                let released = Released(from: state.running)
+                if !released.balanced { assertionFailure("the work gate was left with nothing running") }
+                state.running = released.count
                 return nil
             }
             return state.waiting.removeFirst()

@@ -33,6 +33,8 @@ claiming presentation**: a hover holds its number while the shortcut that asked 
 | was superseded by a newer request that claimed presentation | `cancelled` |
 | was open when the presentation closed | `cancelled` |
 | was delivered and its consumer went away | `cancelled` |
+| was abandoned while its read ran (the pointer left, a newer ask replaced it, watching stopped), and the read then came back refused because another capture was busy | `cancelled` |
+| was owed a second read after a busy refusal, and a newer request replaced it before that read was asked | `cancelled` |
 
 **Observable assertions**
 
@@ -45,7 +47,10 @@ claiming presentation**: a hover holds its number while the shortcut that asked 
 
 **macOS instance:** `CaptureSinkTests.aDuplicateAcknowledgementIsIgnored`, `aRefusalCancelsTheRequest`,
 `escapeBeforeDeliveryCancelsAndTheResultIsNotDelivered`, `aConsumerThatDisappearsCancelsWhatIsOpen`,
-`anAcceptedRequestEndsWhenTheConsumerGoes`, `aLongRunOfRequestsDoesNotGrowTheBook`; `RequestNumberingTests.everyEndingIsToldOnce`.
+`anAcceptedRequestEndsWhenTheConsumerGoes`, `aLongRunOfRequestsDoesNotGrowTheBook`; `RequestNumberingTests.everyEndingIsToldOnce`;
+the busy rows (added 2026-11-05): `HoverWatcherSequenceTests.aBusyCaptureAfterThePointerLeftEndsTheRequest`,
+`aBusyCaptureAfterAStopEndsTheRequest`; `HoverSessionTests.aBusyEndAfterThePointerLeftDropsTheRequest`,
+`aBusyEndAfterAStopDropsTheRequest`, `aBusyEndAfterATapReplacedTheReadDropsIt`, `aTapThatSupersedesAnOwedRestEndsIt`.
 
 ## Rule 3 — A stale answer changes nothing
 

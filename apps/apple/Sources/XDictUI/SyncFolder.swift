@@ -1,3 +1,5 @@
+// AppKit: SwiftUI's `fileImporter` has no way to offer New Folder (`canCreateDirectories`), and a sync folder is
+// usually one the reader makes on the spot in iCloud Drive (L13: kept, not converted).
 import AppKit
 import Foundation
 
@@ -48,10 +50,11 @@ public enum SyncStaging {
     public static let limit = 256 * 1024 * 1024
 
     /// Empties `inbox` and copies `folder`'s logs into it. A file over `limit` is left out and named: a stray file in the
-    /// reader's folder must not fail the pass, and must not reach the service either.
+    /// reader's folder must not fail the pass, and must not reach the service either. **Nor does one that will not copy**
+    /// (audit 2026-11-05, M16): it is left out and named in `unreadable`, and the other logs still merge.
     @discardableResult
     public static func stage(from folder: URL, to inbox: URL, limit: Int = limit)
-        throws -> (copied: Int, oversized: [String]) {
+        throws -> (copied: Int, oversized: [String], unreadable: [String]) {
         let manager = FileManager.default
         try manager.createDirectory(at: inbox, withIntermediateDirectories: true)
         for file in try manager.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil) {
@@ -59,16 +62,21 @@ public enum SyncStaging {
         }
         var copied = 0
         var oversized: [String] = []
+        var unreadable: [String] = []
         for file in try logs(in: folder) {
             let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             guard size <= limit else {
                 oversized.append(file.lastPathComponent)
                 continue
             }
-            try manager.copyItem(at: file, to: inbox.appending(path: file.lastPathComponent))
-            copied += 1
+            do {
+                try manager.copyItem(at: file, to: inbox.appending(path: file.lastPathComponent))
+                copied += 1
+            } catch {
+                unreadable.append(file.lastPathComponent)
+            }
         }
-        return (copied, oversized)
+        return (copied, oversized, unreadable)
     }
 
     /// Copies the outbox's logs into the reader's folder, replacing this device's own log from an earlier pass.

@@ -31,7 +31,9 @@ public struct SettingsWordData: View {
                 if model.isWorking {
                     Button(role: .cancel) { model.cancelBuild() } label: { Text(WordDataSentences.cancel) }
                         .accessibilityIdentifier("settings.worddata.cancel")
-                } else if case .installed = model.state {
+                } else if model.held != nil {
+                    // **Remove follows the pack the service holds**, not the state's case: a refused replacement or
+                    // build leaves the installed pack attached, and the row keeps offering to remove it.
                     Button(role: .destructive) { Task { await model.remove() } } label: { Text(WordDataSentences.remove) }
                         .disabled(model.busy)
                         .accessibilityIdentifier("settings.worddata.remove")
@@ -56,7 +58,7 @@ public struct SettingsWordData: View {
     @ViewBuilder private var sentence: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
             line(text, symbol: symbol)
-            if case .installed(let pack) = model.state {
+            if !model.isWorking, let pack = model.held {
                 Text(WordDataSentences.summary(pack))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

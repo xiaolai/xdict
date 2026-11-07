@@ -261,7 +261,7 @@ fn applies(option: &Opt, html: &str) -> bool {
             if let Some(i) = open.iter().rposition(|(n, _)| !n.is_empty() && *n == name) {
                 open.truncate(i);
             }
-            rest = after.find('>').and_then(|end| after.get(end + 1..)).unwrap_or("");
+            rest = crate::tag::end(after).and_then(|end| after.get(end + 1..)).unwrap_or("");
             continue;
         }
         let Some(after) = rest.get(1..) else { break };
@@ -269,7 +269,7 @@ fn applies(option: &Opt, html: &str) -> bool {
             rest = after;
             continue;
         }
-        let end = tag_end(after);
+        let end = crate::tag::end(after).unwrap_or(after.len());
         let tag = rest.get(..end + 1).unwrap_or(rest);
         rest = after.get(end..).unwrap_or("");
         let name = tag_name(after);
@@ -302,33 +302,6 @@ fn applies(option: &Opt, html: &str) -> bool {
 /// A tag's name, lower case: what follows `<` or `</` up to a space, `/` or `>`.
 fn tag_name(after: &str) -> String {
     after.split(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').next().unwrap_or("").to_ascii_lowercase()
-}
-
-/// Where a start tag's `>` is in `after` (the tag without its `<`), quoted attribute values passed over; its length
-/// when it has none.
-fn tag_end(after: &str) -> usize {
-    let bytes = after.as_bytes();
-    let mut i = 0;
-    while let Some(&b) = bytes.get(i) {
-        match b {
-            b'>' => return i,
-            b'=' => {
-                i += 1;
-                while bytes.get(i).is_some_and(u8::is_ascii_whitespace) {
-                    i += 1;
-                }
-                if let Some(&q @ (b'"' | b'\'')) = bytes.get(i) {
-                    i += 1;
-                    while bytes.get(i).is_some_and(|&c| c != q) {
-                        i += 1;
-                    }
-                    i += 1;
-                }
-            }
-            _ => i += 1,
-        }
-    }
-    bytes.len()
 }
 
 /// What follows a raw text element's text: from its end tag (`</name`, ignoring case) on, or nothing without one.

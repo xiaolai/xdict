@@ -517,8 +517,10 @@ for (i, c) in (ledgerCases["readings"] as! [[String: Any]]).enumerated() {
 }
 let when = ledgerCases["history"] as! [String: Any]
 check("ledger.history", when["expect"], outcome {
-    j(try ledgerCore.ledgerHistory(now: (when["now"] as! NSNumber).doubleValue,
-                                   utcOffsetSeconds: Int32((when["utcOffsetSeconds"] as! NSNumber).intValue)))
+    let zone = (when["zone"] as! [[String: Any]]).map {
+        ZoneOffset(from: ($0["from"] as! NSNumber).doubleValue, seconds: Int32(($0["seconds"] as! NSNumber).intValue))
+    }
+    return j(try ledgerCore.ledgerHistory(now: (when["now"] as! NSNumber).doubleValue, zone: zone))
 })
 
 // MARK: - Phrase recognition (conformance/phrase/CONTRACT.md; plan-phrase-recognition WI-6)

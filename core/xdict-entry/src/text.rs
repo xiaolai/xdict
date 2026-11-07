@@ -144,13 +144,53 @@ pub const MAX_SPANS: usize = 4_096;
 /// hundreds), and the text budget usually binds first. Past this, later sense ids are ignored — their text stays in the
 /// projection with the enclosing sense's membership, as unclassified text does.
 pub const MAX_SENSES: usize = 16_384;
+/// How far up a new sense's parents are followed to find the runs it stays inside (audit 2026-11-05, M4b): a chain of
+/// a million senses each naming the one before once cost a walk of the whole chain per sense. Well past any real
+/// entry's nesting; a run further up ends where the sense starts.
+const MAX_SENSE_DEPTH: usize = 64;
+
+/// The open elements: the frames, and where each name's are, so an end tag finds its element without walking the stack
+/// (audit 2026-11-05, M4c: 100,000 open elements and as many stray end tags were 10¹⁰ comparisons).
+#[derive(Default)]
+struct Open {
+    frames: Vec<Frame>,
+    /// A name (lower case) to its frames' positions, innermost last.
+    by_name: BTreeMap<String, Vec<usize>>,
+}
+
+impl Open {
+    fn push(&mut self, frame: Frame) {
+        self.by_name.entry(frame.name.clone()).or_default().push(self.frames.len());
+        self.frames.push(frame);
+    }
+
+    /// The innermost open element named `name`.
+    fn innermost(&self, name: &str) -> Option<usize> {
+        crate::work::scanned(1);
+        self.by_name.get(&name.to_ascii_lowercase()).and_then(|v| v.last()).copied()
+    }
+
+    /// The elements from `pos` on closed: each is taken out of the index once, as it was put in.
+    fn truncate(&mut self, pos: usize) {
+        while self.frames.len() > pos {
+            let Some(frame) = self.frames.pop() else { break };
+            crate::work::scanned(1);
+            if let Some(v) = self.by_name.get_mut(&frame.name) {
+                v.pop();
+                if v.is_empty() {
+                    self.by_name.remove(&frame.name);
+                }
+            }
+        }
+    }
+}
 
 /// **`html` as plain text, held to `max_bytes`.** A budget that cuts reports the cut (`complete: false`, the bytes
 /// left out, where it fell, the runs dropped); it is data, never an error. A zero budget is an empty text that says
 /// what it left out.
 pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
     let mut state = State::default();
-    let mut frames: Vec<Frame> = Vec::new();
+    let mut open = Open::default();
     let mut at = 0usize;
     while at < html.len() {
         let Some(rest) = html.get(at..) else { break };
@@ -159,18 +199,18 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
                 // A `<` starts markup only when a name, `/`, `!` or `?` follows; `1 < 2` is text.
                 let next = rest.as_bytes().get(1).copied();
                 if next.is_some_and(|b| b.is_ascii_alphabetic() || matches!(b, b'/' | b'!' | b'?')) {
-                    at = at_tag(html, at, &mut frames, &mut state);
+                    at = at_tag(html, at, &mut open, &mut state);
                 } else {
-                    state.text("<", &frames);
+                    state.text("<", &open.frames);
                     at += 1;
                 }
             }
             Some(lt) => {
-                state.text(rest.get(..lt).unwrap_or(""), &frames);
+                state.text(rest.get(..lt).unwrap_or(""), &open.frames);
                 at += lt;
             }
             None => {
-                state.text(rest, &frames);
+                state.text(rest, &open.frames);
                 break;
             }
         }
@@ -377,7 +417,7 @@ impl State {
 }
 
 /// One tag at `at` (which holds `<`): the offset the scan continues from.
-fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> usize {
+fn at_tag(html: &str, at: usize, open: &mut Open, state: &mut State) -> usize {
     let rest = html.get(at..).unwrap_or("");
     if rest.starts_with("<!--") {
         return rest.get(4..).and_then(|s| s.find("-->")).map_or(html.len(), |e| at + 4 + e + 3);
@@ -387,7 +427,7 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
     }
     let Some(end) = tag_end(rest) else {
         // No `>`: what is left is text, not markup.
-        state.text(rest, frames);
+        state.text(rest, &open.frames);
         return html.len();
     };
     let tag = rest.get(..end).unwrap_or("");
@@ -395,18 +435,19 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
     let inner = tag.get(1..end.saturating_sub(1)).unwrap_or("");
     if let Some(close) = inner.strip_prefix('/') {
         let name = name_of(close);
-        if let Some(pos) = frames.iter().rposition(|f| f.name.eq_ignore_ascii_case(name)) {
-            let block = frames.get(pos).is_some_and(|f| f.block);
-            frames.truncate(pos);
+        if let Some(pos) = open.innermost(name) {
+            let block = open.frames.get(pos).is_some_and(|f| f.block);
+            open.truncate(pos);
             // **A run ends with the element that held it**, before the block boundary that follows: that newline
             // belongs to what comes next, not to the sense. (ADR-0029 d.2.)
-            close_scoped(state, frames.len(), false);
+            close_scoped(state, open.frames.len(), false);
             if block {
-                state.boundary(frames);
+                state.boundary(&open.frames);
             }
         }
         return after;
     }
+    let frames = &open.frames;
     let name = name_of(inner);
     let lower = name.to_ascii_lowercase();
     if lower == "br" {
@@ -471,7 +512,7 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
     if let Some(id) = attribute(&attrs, "data-xdict-sense").and_then(|value| parse_sense_id(&value)) {
         open_sense(state, frames.len(), id, &attrs, section.as_deref());
     }
-    frames.push(Frame { name: lower, role, label, section, hidden, pre, block });
+    open.push(Frame { name: lower, role, label, section, hidden, pre, block });
     after
 }
 
@@ -510,7 +551,8 @@ fn open_sense(state: &mut State, depth: usize, id: u32, attrs: &[(String, String
     let mut ancestors = Vec::new();
     let mut at = parent;
     while let Some(parent) = at {
-        if ancestors.contains(&parent) {
+        crate::work::scanned(1);
+        if ancestors.len() >= MAX_SENSE_DEPTH || ancestors.contains(&parent) {
             break;
         }
         ancestors.push(parent);
@@ -611,17 +653,9 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
 
 /// The end of the tag starting at the `<` of `s`: after its `>`, respecting quoted attribute values.
 fn tag_end(s: &str) -> Option<usize> {
-    let mut quote: Option<char> = None;
-    for (i, c) in s.char_indices() {
-        match quote {
-            Some(q) if c == q => quote = None,
-            Some(_) => {}
-            None if c == '"' || c == '\'' => quote = Some(c),
-            None if c == '>' => return Some(i + 1),
-            None => {}
-        }
-    }
-    None
+    // As HTML reads it (audit 2026-11-05, the second instance of L12): a quote opens a value only after `=`, so an
+    // attribute named `a"b` no longer swallows the text after it.
+    crate::tag::end(s).map(|i| i + 1)
 }
 
 /// The tag's name, without its closing slash or attributes.
@@ -1049,5 +1083,45 @@ mod tests {
         let first = p.senses.first().unwrap();
         assert_eq!(first.start, 4);
         assert_eq!(first.len, 8);
+    }
+
+    /// **A forged sense chain is walked within a bound** (audit 2026-11-05, M4b): each sense naming the one before it as
+    /// its parent once made every start walk the whole chain, cubic in the senses. Counted: one ancestor stepped is one.
+    #[test]
+    fn a_long_sense_chain_is_walked_within_a_bound() {
+        let n = 1500u32;
+        let html: String = (1..=n)
+            .map(|i| format!(r#"<p data-xdict-sense="{i}" data-xdict-sense-parent="{}">s{i}</p>"#, i - 1))
+            .collect();
+        let (p, read) = crate::work::counting(|| entry_text_from_html(&html, usize::MAX));
+        assert_eq!(p.senses.len(), n as usize);
+        assert_eq!(p.senses.last().and_then(|s| s.parent), Some(n - 1), "the parent the renderer wrote stands");
+        assert!(read <= u64::from(n) * (MAX_SENSE_DEPTH as u64 + 1) + html.len() as u64, "{read} steps");
+    }
+
+    /// **An end tag finds its element without walking the open ones** (audit 2026-11-05, M4c): a deep run of open
+    /// elements and as many end tags naming none of them was quadratic. Counted: one open element examined is one.
+    #[test]
+    fn end_tags_are_matched_without_walking_the_stack() {
+        let n = 5_000;
+        let html = format!("{}x{}</span>", "<span>".repeat(n), "</b>".repeat(n));
+        let (p, read) = crate::work::counting(|| entry_text_from_html(&html, usize::MAX));
+        assert_eq!(p.text, "x");
+        assert!(read <= 4 * n as u64, "{read} open elements examined");
+        // Matching is as before: an end tag closes its element and every one left open inside it.
+        let p = entry_text_from_html(r#"<div data-xdict-role="example"><i><b>one</div><span>two</span>"#, usize::MAX);
+        let roles: Vec<Option<&str>> = p.runs.iter().map(|r| r.role.as_deref()).collect();
+        assert_eq!(roles, vec![Some("example"), None]);
+        let p = entry_text_from_html(r#"<I data-xdict-role="label">one</i>two"#, usize::MAX);
+        assert_eq!(p.runs.iter().map(|r| r.role.as_deref()).collect::<Vec<_>>(), vec![Some("label"), None]);
+    }
+
+    /// **A tag ends where HTML ends it** (audit 2026-11-05, L12's second instance): a quote opens a value only after
+    /// `=`, so an attribute named with a quote once took the text after it, up to the next quote, for its tag.
+    #[test]
+    fn a_quote_in_an_attribute_name_does_not_hide_text() {
+        assert_eq!(entry_text_from_html(r#"<span a"b>one</span><i>"two</i>"#, usize::MAX).text, r#"one"two"#);
+        assert_eq!(entry_text_from_html(r#"<span title='a>b'>one</span>"#, usize::MAX).text, "one");
+        assert_eq!(entry_text_from_html(r#"<span title = "a>b" x=c"d>one</span>"#, usize::MAX).text, "one");
     }
 }

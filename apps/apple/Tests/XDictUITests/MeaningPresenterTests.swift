@@ -158,7 +158,8 @@ struct MeaningPresenterTests {
                                           grounding: presentation.grounding, outcome: presentation.outcome,
                                           coverage: nil, quotes: presentation.quotes,
                                           explanation: presentation.explanation, problem: nil, code: nil)
-        let text = MeaningPresenter.noteText(presentation: sourced, date: date) { resource in
+        let utc = try #require(TimeZone(secondsFromGMT: 0))
+        let text = MeaningPresenter.noteText(presentation: sourced, date: date, timeZone: utc) { resource in
             (try? CompiledCatalog.text(resource, in: "en")) ?? "<missing text>"
         }
         let lines = text.components(separatedBy: "\n")
@@ -169,6 +170,30 @@ struct MeaningPresenterTests {
         let source = try #require(MeaningSentences.source(.claudeCLI))
         let provenance = MeaningSentences.noteProvenance(source: source, model: "a-model", day: "2026-10-25")
         #expect(lines[2] == (try Self.text(provenance)))
+    }
+
+    /// **The note's day is the reader's day, not UTC's**: 20:00 UTC on 25 October is already the 26th in Shanghai and
+    /// still the 25th in Los Angeles.
+    @Test func theNoteIsDatedInTheReadersTimeZone() throws {
+        let presentation = try #require(MeaningPresenter.present(Self.answer(.matched, ["to keep"]),
+                                                                 settings: Self.settings, sent: Self.sent()))
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 10
+        components.day = 25
+        components.hour = 20
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        let date = try #require(Calendar(identifier: .gregorian).date(from: components))
+        for (zone, day) in [("Asia/Shanghai", "2026-10-26"), ("America/Los_Angeles", "2026-10-25")] {
+            let timeZone = try #require(TimeZone(identifier: zone))
+            let provenance = MeaningSentences.noteProvenance(source: presentation.facts.source
+                                                                 ?? String(localized: MeaningSentences.anAISource),
+                                                             model: presentation.facts.model, day: day)
+            let text = MeaningPresenter.noteText(presentation: presentation, date: date, timeZone: timeZone) { resource in
+                (try? CompiledCatalog.text(resource, in: "en")) ?? "<missing text>"
+            }
+            #expect(text.hasSuffix(try Self.text(provenance)), "\(zone): \(text)")
+        }
     }
 
     /// **Copy Answer is the explanation and its quotes as text** (plan-companion WI-10): each quote its own paragraph,

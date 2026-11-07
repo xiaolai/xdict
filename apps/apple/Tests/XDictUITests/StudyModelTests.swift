@@ -22,8 +22,12 @@ actor FakeStudyService: StudyService {
     var exported = #"{"version":1,"events":[]}"#
     var eraseReport = StudyEraseReport(clearedReadings: 2, clearedNotes: 1, clearedGrades: 3, recoverable: .freeBlocks)
     var reanchorReport = ReanchorReport(outcomes: [])
+    /// Answered first, one a call, before `reanchorReport`: a sweep's successive calls.
+    var reanchorReports: [ReanchorReport] = []
     var conflictList: [CardConflict] = []
     var syncReport = SyncReport(exported: 128, peers: 1, added: 2, skipped: 3)
+    /// When set, grades and undos get no answer, as a dropped connection or a deadline leaves them.
+    var unanswered = false
     private(set) var operations: [ServiceOperation] = []
 
     init(queue: [StudyCard] = [], summary: ReviewSummary? = ReviewSummary(due: 0, nextDue: nil),
@@ -37,6 +41,8 @@ actor FakeStudyService: StudyService {
     func call(_ operation: ServiceOperation) async -> ClientOutcome {
         operations.append(operation)
         switch operation {
+        case .reviewGrade where unanswered, .reviewUndo where unanswered:
+            return .failure(.wire(.interrupted))
         case .reviewQueue:
             return .success(Delivered(answer: .reviewQueue(queue), payload: nil))
         case .reviewSummary:
@@ -59,7 +65,8 @@ actor FakeStudyService: StudyService {
         case .eraseData:
             return .success(Delivered(answer: .erased(eraseReport), payload: nil))
         case .studyReanchor:
-            return .success(Delivered(answer: .reanchored(reanchorReport), payload: nil))
+            let report = reanchorReports.isEmpty ? reanchorReport : reanchorReports.removeFirst()
+            return .success(Delivered(answer: .reanchored(report), payload: nil))
         case .studyConflicts:
             return .success(Delivered(answer: .conflicts(conflictList), payload: nil))
         case .reviewResolve:
@@ -94,7 +101,9 @@ actor FakeStudyService: StudyService {
         return .success(Delivered(answer: .studyNote(note), payload: nil))
     }
 
+    func setUnanswered(_ value: Bool) { unanswered = value }
     func setReanchor(_ report: ReanchorReport) { reanchorReport = report }
+    func setReanchors(_ reports: [ReanchorReport]) { reanchorReports = reports }
     func setConflicts(_ conflicts: [CardConflict]) { conflictList = conflicts }
 }
 
@@ -158,6 +167,70 @@ struct StudyModelTests {
         #expect(after > before + 1, "the queue is read again rather than guessed")
     }
 
+    /// **Undo takes back the grade just made** (audit 2026-11-05, H2): after grading "run" the card in front is "walk",
+    /// and Undo must void run's new grade event — never walk's earlier one — and put run back in front.
+    @Test func undoVoidsTheGradeJustMadeNotTheCardInFront() async throws {
+        let run = fakeStudyCard(key: "run", head: "run-earlier")
+        let walk = fakeStudyCard(key: "walk", head: "walk-earlier")
+        let service = FakeStudyService(queue: [run, walk], outcomes: [
+            StudyOutcome(outcome: .recorded, card: fakeStudyCard(key: "run", head: "run-graded")),
+            StudyOutcome(outcome: .recorded, card: run),
+        ])
+        let model = Self.model(service)
+        await model.refresh()
+        #expect(!model.canUndo, "nothing graded in this session: Undo has nothing to take back")
+        #expect(await model.undo() == nil)
+        await model.grade(run, .good)
+        #expect(model.current?.target.key == walk.target.key)
+        #expect(model.canUndo)
+        let outcome = await model.undo()
+        #expect(outcome?.outcome == .recorded)
+        let calls = await service.recorded()
+        let sent = try #require(calls.last(where: { if case .reviewUndo = $0 { return true } else { return false } }))
+        guard case .reviewUndo(let target, let event, _, _) = sent else {
+            Issue.record("not an undo call")
+            return
+        }
+        #expect(target == run.target.key, "the graded card, not the one in front")
+        #expect(event == "run-graded", "the event the grade wrote, as its outcome reported it")
+        #expect(model.queue.map(\.target.entryKey) == ["run", "walk"], "the undone card is in front again")
+        #expect(!model.canUndo, "one grade, one undo")
+    }
+
+    /// **A grade that got no answer is not a grade** (audit 2026-11-05, M6): the card stays in front, the failure is
+    /// said, and the next answer that arrives clears it.
+    @Test func anUnansweredGradeKeepsTheCardAndSaysSo() async {
+        let card = fakeStudyCard(head: "grade-event")
+        let service = FakeStudyService(queue: [card, fakeStudyCard(key: "walk")])
+        await service.setUnanswered(true)
+        let model = Self.model(service)
+        await model.refresh()
+        let before = model.queue
+        #expect(await model.grade(card, .good) == nil)
+        #expect(model.queue == before, "the reader's answer was not recorded, so the card is still to be answered")
+        #expect(model.failure == .grade)
+        #expect(!model.canUndo, "nothing was written, so nothing can be undone")
+        await service.setUnanswered(false)
+        #expect(await model.grade(card, .good)?.outcome == .recorded)
+        #expect(model.failure == nil)
+        #expect(model.current?.target.entryKey == "walk")
+    }
+
+    /// An undo that got no answer keeps the grade it would take back, so Undo can be pressed again.
+    @Test func anUnansweredUndoCanBeAskedAgain() async {
+        let card = fakeStudyCard(head: "grade-event")
+        let service = FakeStudyService(queue: [card], outcomes: [
+            StudyOutcome(outcome: .recorded, card: fakeStudyCard(head: "graded")),
+        ])
+        let model = Self.model(service)
+        await model.refresh()
+        await model.grade(card, .hard)
+        await service.setUnanswered(true)
+        #expect(await model.undo() == nil)
+        #expect(model.failure == .undo)
+        #expect(model.canUndo)
+    }
+
     @Test func aNoteIsSavedWhereTheHistoryCardPointsAndIsFoundAgain() async throws {
         let entry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:aa"), key: "run", occurrence: 0)
         let target = fakeStudyCard().target
@@ -194,13 +267,49 @@ struct StudyModelTests {
         #expect(summary?.from == old && summary?.to == new)
         #expect(model.lastReanchor?.report.outcomes.map(\.result) == [.reanchored, .missing])
         let calls = await service.recorded()
-        guard case .studyReanchor(let sentOld, let sentNew, let stamp, let prefix) = try #require(calls.first) else {
+        guard case .studyReanchor(let sentOld, let sentNew, let stamp, let prefix, _) = try #require(calls.first) else {
             Issue.record("not a studyReanchor call")
             return
         }
         #expect(sentOld == old && sentNew == new)
         #expect(stamp.device == "d")
         #expect(!prefix.isEmpty, "each note's event id is derived from this prefix")
+    }
+
+    /// **A sweep runs until no note remains** (audit 2026-11-05, M5): the core answers "more remain" once, so the model
+    /// calls again from that cursor with the same prefix, and the summary holds both calls' outcomes — a `failed` note
+    /// counted, never dropped.
+    @Test func aReanchorThatLeavesNotesCallsAgainFromItsCursorAndCountsFailures() async throws {
+        let target = fakeStudyCard().target
+        let service = FakeStudyService()
+        await service.setReanchors([
+            ReanchorReport(outcomes: [ReanchorOutcome(target: target, result: .reanchored)], next: "cursor-1"),
+            ReanchorReport(outcomes: [ReanchorOutcome(target: target, result: .failed(detail: "Malformed"))]),
+        ])
+        let model = Self.model(service)
+        let summary = try #require(await model.reanchor(from: Edition(rawValue: "mdx-sha256-v1:aa"),
+                                                        to: Edition(rawValue: "mdx-sha256-v1:bb")))
+        #expect(summary.report.outcomes.map(\.result) == [.reanchored, .failed(detail: "Malformed")])
+        #expect(summary.failed == 1)
+        #expect(!summary.unfinished)
+        let sent = await service.recorded().compactMap { operation -> (String, String?)? in
+            guard case .studyReanchor(_, _, _, let prefix, let after) = operation else { return nil }
+            return (prefix, after)
+        }
+        #expect(sent.map(\.1) == [nil, "cursor-1"], "the second call starts where the first stopped")
+        #expect(Set(sent.map(\.0)).count == 1, "one sweep, one prefix: a retried note is the same event")
+    }
+
+    /// **A cursor that does not advance ends the sweep** rather than looping, and the summary says it did not finish.
+    @Test func aReanchorWhoseCursorDoesNotAdvanceStopsUnfinished() async throws {
+        let service = FakeStudyService()
+        await service.setReanchor(ReanchorReport(outcomes: [], next: "stuck"))
+        let model = Self.model(service)
+        let summary = try #require(await model.reanchor(from: Edition(rawValue: "mdx-sha256-v1:aa"),
+                                                        to: Edition(rawValue: "mdx-sha256-v1:bb")))
+        #expect(summary.unfinished)
+        let calls = await service.recorded().filter { if case .studyReanchor = $0 { true } else { false } }
+        #expect(calls.count == 2, "the first call and the one that answered the same cursor")
     }
 
     /// **Two devices' answers** (ADR-0027): the queue leaves the card out, the conflict is loaded beside it, and the

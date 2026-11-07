@@ -1026,7 +1026,9 @@ impl Inner {
         // evidence, and for the spelling modes neither are its reasons. A head's own footprint is counted once, at
         // build, so no query rescans its sources (audit, 2026-10-24). Past the bound the page is cut there, with no
         // total and a continuation at the hit not kept — never a hit whose evidence is half kept, and never a
-        // continuation past it.
+        // continuation past it. **The first hit is always kept** (audit 2026-11-05, M15): a page cut before it answered
+        // nothing with `next` at its own offset, so a caller that follows `next` asked the same page forever; the
+        // bound is overshot by at most that one hit's evidence.
         let mut hits: Vec<WordHit> = Vec::new();
         let mut bytes = spent;
         for (position, f) in found.into_iter().skip(start).take(end - start).enumerate() {
@@ -1039,7 +1041,7 @@ impl Inner {
             if !reasons_charged {
                 cost = reasons.iter().fold(cost, |n, reason| n.saturating_add(footprint(reason)));
             }
-            if bytes.saturating_add(cost) > MAX_ANSWER_EVIDENCE_BYTES {
+            if !hits.is_empty() && bytes.saturating_add(cost) > MAX_ANSWER_EVIDENCE_BYTES {
                 cut = Some(WordLimit::TotalBytes);
                 next = u32::try_from(start + position).ok();
                 break;
@@ -1661,4 +1663,45 @@ fn count(catalog: &Catalog, lexicon: Option<&WordLexicon>) -> WordStats {
         *counter += 1;
     }
     stats
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
+mod tests {
+    use super::*;
+    use crate::EntryRef;
+
+    fn explorer(words: &[&str]) -> WordExplorer {
+        let catalog = words
+            .iter()
+            .map(|word| WordCatalogEntry {
+                headword: (*word).into(),
+                sources: vec![WordSource {
+                    dict: "d1".into(),
+                    entry: EntryRef { edition: "e1".into(), key: (*word).into(), occurrence: 0 },
+                }],
+            })
+            .collect();
+        WordExplorer::new(catalog, None).unwrap()
+    }
+
+    /// **A page always moves** (audit 2026-11-05, M15): a collector that already spent the evidence bound used to
+    /// refuse the page's first hit, answering no hits and a continuation equal to the offset, which a pager following
+    /// `next` asks again for ever. The first hit of a page is kept, so `next` is past the offset whenever hits remain.
+    #[test]
+    fn a_page_cut_by_the_evidence_bound_still_moves() {
+        let explorer = explorer(&["able", "bake", "cake", "dale"]);
+        let inner = &explorer.inner;
+        for offset in [0u32, 1, 2] {
+            let query = WordQuery { text: "ake".into(), mode: WordMode::EndsWith, limit: 2, offset };
+            let found: Vec<Found> =
+                (0..4).map(|head| Found { order: 0, rank: head, head, reasons: Vec::new() }).collect();
+            let page =
+                inner.finish(&query, found, None, MAX_ANSWER_EVIDENCE_BYTES, false, |_| vec![WordReason::EndsWith]);
+            assert!(!page.hits.is_empty(), "offset {offset}: a page with hits left holds at least one");
+            assert!(page.next.is_some_and(|next| next > offset), "offset {offset}: next {:?} moves", page.next);
+            assert_eq!(page.exhausted, Some(WordLimit::TotalBytes), "the cut is still said");
+            assert_eq!(page.total, None);
+        }
+    }
 }

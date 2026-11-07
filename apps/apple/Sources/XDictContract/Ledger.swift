@@ -133,3 +133,35 @@ public struct LedgerHistory: Codable, Hashable, Sendable {
         self.days = days
     }
 }
+
+/// **One offset of the reader's zone** (audit 2026-11-05, L5d): `seconds` east of UTC from the instant `from` (epoch
+/// seconds) until the next entry's. A zone is a list of them in ascending order, and its first entry also covers every
+/// earlier instant, so a history range across a daylight-saving change puts each reading on its own local day.
+public struct ZoneOffset: Codable, Hashable, Sendable {
+    public let from: Double
+    public let seconds: Int32
+
+    public init(from: Double, seconds: Int32) {
+        self.from = from
+        self.seconds = seconds
+    }
+
+    /// The days of offsets a history request covers: the drawer's fourteen days, a margin either side of them, and the
+    /// day ahead, so the request built now still holds for a reading made a moment later.
+    public static let span: (before: TimeInterval, after: TimeInterval) = (before: 16 * 86_400, after: 86_400)
+
+    /// **The zone's offsets around `now`**, built from the system's own transitions: the offset at the start of
+    /// `span`, then one entry at each daylight-saving change up to its end. A zone without one is a single entry.
+    public static func zone(_ timeZone: TimeZone, around now: Date) -> [ZoneOffset] {
+        let start = now.addingTimeInterval(-span.before)
+        let end = now.addingTimeInterval(span.after)
+        var zone = [ZoneOffset(from: start.timeIntervalSince1970, seconds: Int32(timeZone.secondsFromGMT(for: start)))]
+        var cursor = start
+        while let change = timeZone.nextDaylightSavingTimeTransition(after: cursor), change <= end, change > cursor {
+            zone.append(ZoneOffset(from: change.timeIntervalSince1970,
+                                   seconds: Int32(timeZone.secondsFromGMT(for: change))))
+            cursor = change
+        }
+        return zone
+    }
+}

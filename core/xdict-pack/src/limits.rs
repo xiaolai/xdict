@@ -41,13 +41,17 @@ pub const MAX_DEPTH: u32 = 12;
 pub const MAX_GRAPH_NODES: u64 = 4_000_000;
 /// The most distinct ancestry edges the graph holds; see [`MAX_GRAPH_NODES`]. The pinned file has 835,244.
 pub const MAX_GRAPH_EDGES: u64 = 3_000_000;
+/// The most English derivations the graph holds before its records are written (audit 2026-11-05): its siblings'
+/// bound, for the one list that had none. The pinned file gives 211,899 derivation records (the report fixture's
+/// `parsedBySource.ety.derivation`), so this is over ten times it; a file past it is not etymology-db's.
+pub const MAX_GRAPH_DERIVATIONS: u64 = 3_000_000;
 /// The most rows one term's block may hold (etymology-db writes a handful): a file whose blocks never end is refused
 /// rather than accumulated waiting for the graph's own bound, which is only checked once a block completes.
 pub const MAX_ETYMOLOGY_BLOCK_ROWS: usize = 1_000_000;
 
 /// A source line, its terminator included.
 pub const MAX_SOURCE_LINE_BYTES: u64 = 16 << 20;
-/// One etymology-db CSV field.
+/// One etymology-db CSV field, in characters: the reference's `csv.field_size_limit` counts characters, not bytes.
 pub const MAX_CSV_FIELD_BYTES: u64 = 1 << 16;
 /// One zip member, read whole.
 pub const MAX_ZIP_MEMBER_BYTES: u64 = 256 << 20;

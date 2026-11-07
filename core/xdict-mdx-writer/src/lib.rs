@@ -13,6 +13,7 @@ use flate2::Compression as Level;
 use flate2::write::ZlibEncoder;
 use ripemd::{Digest, Ripemd128};
 
+pub mod corpus;
 pub mod lzo;
 mod v3;
 

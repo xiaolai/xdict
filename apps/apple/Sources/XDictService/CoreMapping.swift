@@ -717,6 +717,7 @@ extension XDictContract.ReanchorResult {
         case .reordered: self = .reordered
         case .changed: self = .changed
         case .missing: self = .missing
+        case .failed(let detail): self = .failed(detail: detail)
         }
     }
 }
@@ -730,7 +731,7 @@ extension XDictContract.ReanchorOutcome {
 
 extension XDictContract.ReanchorReport {
     init(_ report: XDictCore.ReanchorReport) {
-        self.init(outcomes: report.outcomes.map { XDictContract.ReanchorOutcome($0) })
+        self.init(outcomes: report.outcomes.map { XDictContract.ReanchorOutcome($0) }, next: report.next)
     }
 }
 
@@ -782,6 +783,7 @@ extension XDictContract.CardConflict {
 
 extension XDictContract.SyncReport {
     init(_ report: XDictCore.SyncReport) {
-        self.init(exported: report.exported, peers: report.peers, added: report.added, skipped: report.skipped)
+        self.init(exported: report.exported, peers: report.peers, added: report.added, skipped: report.skipped,
+                  refused: report.refused.map { XDictContract.SyncRefusal(file: $0.file, detail: $0.detail) })
     }
 }

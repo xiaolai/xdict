@@ -29,12 +29,14 @@ struct HealthTests {
         #expect(health.entries == 8)
         #expect(health.findings.map(\.kind) == [.brokenRedirects])
         #expect(health.findings.first?.examples.first?.key == "lost")
-        // At most one progress report, after the one chunk. Not exactly one: the reply comes back through the call's reply
-        // block and a report as a message to the client's exported object, two deliveries NSXPC does not order between
-        // them, and the client drops a report for a call already answered. The full service target lost it 3 runs in 10
-        // (2026-10-18), and still 1 in 20 with the client taking its callbacks in arrival order.
+        // Two progress reports at most, in order: the records after their one chunk (8 of 8), then the redirect walk
+        // counted on after them (10 of 10: the two redirects, "colour" and "lost"; since 2026-11-05 the walk reports
+        // after each of its chunks). A prefix, not exactly both: the reply comes back through the call's reply block and a report as a
+        // message to the client's exported object, two deliveries NSXPC does not order between them, and the client
+        // drops a report for a call already answered. The full service target lost one 3 runs in 10 (2026-10-18), and
+        // still 1 in 20 with the client taking its callbacks in arrival order.
         let heard = reports.withLock { $0 }
-        #expect(heard == [8] || heard.isEmpty, "one progress report at most, after the one chunk: \(heard)")
+        #expect([[], [8], [8, 10]].contains(heard), "the records, then the walk, a prefix at most: \(heard)")
         let again = await client.submitHealth(dict).outcome()
         guard case .success(let second) = again, case .health(let kept) = second.answer else {
             Issue.record("no second report: \(again)")

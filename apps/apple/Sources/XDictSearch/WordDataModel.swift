@@ -36,6 +36,9 @@ public final class WordDataModel {
     }
 
     public private(set) var state: State = .unknown
+    /// **The pack the service holds, as it last answered**, kept beside a refusal: a refused file or build leaves the
+    /// installed pack attached (the core replaces it only on success), so the row still names it and offers Remove.
+    public private(set) var held: WordPackInfo?
     /// A copy, a download or an attach is running: the row's buttons are disabled meanwhile.
     public private(set) var busy = false
     /// **A download and build are running**, observable in its own right: the row draws a Cancel button from it, and a
@@ -51,7 +54,10 @@ public final class WordDataModel {
     @ObservationIgnored private let manifest: @Sendable () -> Data?
     /// The network the sources arrive over: `URLSession` in the app, a fake in the tests.
     @ObservationIgnored private let transfer: any WordPackTransfer
-    @ObservationIgnored private var generation = 0
+    /// **One operation at a time** (M8): launch's restore, an install, a build, a removal and a refresh each wait for
+    /// the one before. Interleaved, a restore's question superseded an install's attach, so an install the service had
+    /// accepted deleted its own staged file, and a second attach could replace the pack just installed.
+    @ObservationIgnored private var tail: Task<Void, Never>?
 
     /// `container` names the app group's `WordPack` folder, or nil in a process without the entitlement (the test
     /// hosts). The model never falls back to another folder: a pack the service cannot read is no pack.
@@ -109,19 +115,36 @@ public final class WordDataModel {
     /// holds none — after a service restart, or a first launch. **The question comes first** because attaching means
     /// parsing 183 MB: a Settings pane opened on a Mac that already has the pack costs one short call, not that parse.
     public func restore() async {
-        await refresh()
-        if case .absent = state, let file = installedFile {
-            await attach(path: file)
+        await serially {
+            await self.ask(.wordPack)
+            if case .absent = self.state, let file = self.installedFile {
+                await self.attach(path: file)
+            }
         }
     }
 
     public func refresh() async {
-        await ask(.wordPack)
+        await serially { await self.ask(.wordPack) }
+    }
+
+    /// Runs `body` after every operation started before it has finished, and returns when `body` has.
+    private func serially(_ body: @escaping @MainActor @Sendable () async -> Void) async {
+        let previous = tail
+        let next = Task { @MainActor in
+            await previous?.value
+            await body()
+        }
+        tail = next
+        await next.value
     }
 
     /// **Installs `url`**, a file the reader chose: copied into the container under the one name the service is told,
     /// then attached. A refusal deletes the copy, so the container never holds a pack the service rejected.
     public func install(_ url: URL) async {
+        await serially { await self.installNow(url) }
+    }
+
+    private func installNow(_ url: URL) async {
         guard let folder = container() else {
             state = .trouble(.noContainer)
             return
@@ -153,6 +176,8 @@ public final class WordDataModel {
         let accepted = await attach(path: staged)
         guard accepted else {
             try? FileManager.default.removeItem(at: staged)
+            // The refusal stays on the row; what the service still holds is asked, not assumed.
+            await reread()
             return
         }
         do {
@@ -171,6 +196,10 @@ public final class WordDataModel {
     /// A download that fails names its file and leaves nothing behind; a cancel removes what it wrote and installs
     /// nothing; a build the service refuses comes back as a refusal with the builder's own sentence.
     public func buildFromSources() async {
+        await serially { await self.buildNow() }
+    }
+
+    private func buildNow() async {
         guard container() != nil else {
             state = .trouble(.noContainer)
             return
@@ -200,6 +229,10 @@ public final class WordDataModel {
         busy = true
         defer { busy = false }
         let sourceFolder = folder.appending(path: "sources")
+        // **The sources go when the run ends, however it ends** (M8): they are about 185 MB that only this build reads,
+        // and a later build downloads every file again, so a folder kept after a cancel, a refusal or an install is
+        // disk taken from the reader for nothing.
+        defer { try? FileManager.default.removeItem(at: sourceFolder) }
         do {
             try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
             try manifest.write(to: sourceFolder.appending(path: WordPackSources.manifestName), options: .atomic)
@@ -218,7 +251,8 @@ public final class WordDataModel {
                 }
             }
         } catch is CancellationError {
-            state = .absent
+            // A cancel installs nothing, but a pack attached before the build is still there: ask, never assume absent.
+            await askOutsideTheCancelledBuild()
             return
         } catch let failure as WordPackDownload.Failure {
             state = .trouble(.download(failure))
@@ -230,7 +264,7 @@ public final class WordDataModel {
         // **A cancel that arrived during the download starts no build**: the service call is not interruptible from
         // here (`SearchBackend` exposes no ticket for a long call), so not starting it is what can be honoured.
         if Task.isCancelled {
-            state = .absent
+            await askOutsideTheCancelledBuild()
             return
         }
         state = .building(WordDataBuild())
@@ -250,7 +284,8 @@ public final class WordDataModel {
         }
         switch outcome.wordPackBuilt {
         case .success(let answer):
-            state = answer.pack.map { .installed($0) } ?? .absent
+            heard(answer)
+            return
         // **The builder's own sentence survives**: it names the source and the line, which is the one thing a reader
         // with a damaged download needs; flattening it into "damaged file" throws that away.
         case .failure(.wire(.core(.malformed(let detail)))), .failure(.wire(.core(.unsupported(_, let detail)))),
@@ -261,11 +296,18 @@ public final class WordDataModel {
         case .failure:
             state = .trouble(.noAnswer)
         }
+        // A refused build leaves whatever pack was attached before it: the refusal stays, the pack is asked for. Asked
+        // from a task of its own, since a cancel that came while the service built has cancelled this one.
+        await Task { @MainActor in await self.reread() }.value
     }
 
     /// **Removes the pack**: the service detaches it, then the app deletes the file. A failed detach keeps the file, so
     /// what the row says and what the container holds stay the same.
     public func remove() async {
+        await serially { await self.removeNow() }
+    }
+
+    private func removeNow() async {
         busy = true
         defer { busy = false }
         let folder = container()
@@ -281,23 +323,22 @@ public final class WordDataModel {
             do {
                 try FileManager.default.removeItem(at: file)
             } catch {
+                held = nil
                 state = .trouble(.removeFailed)
                 return
             }
         }
+        held = nil
         state = .absent
     }
 
     @discardableResult private func attach(path: URL) async -> Bool {
         busy = true
         defer { busy = false }
-        generation += 1
-        let mine = generation
         let outcome = await backend.request(.setWordPack(path: path.path(percentEncoded: false)))
-        guard mine == generation else { return false }
         switch outcome.wordPack {
-        case .success(let state):
-            self.state = state.pack.map { .installed($0) } ?? .absent
+        case .success(let answer):
+            heard(answer)
             return true
         case .failure(.wire(let error)):
             state = .refused(WordDataRefusal(error))
@@ -308,16 +349,35 @@ public final class WordDataModel {
         }
     }
 
+    /// **The re-read after a cancel, asked from a task of its own**: this build's task is the one cancelled, and
+    /// `SearchBackend` does not promise to answer a cancelled caller, so asked from inside it the question could come
+    /// back unanswered and write "no answer" over the pack the service holds. A new `Task` does not inherit the
+    /// cancellation; the build still waits for its answer.
+    private func askOutsideTheCancelledBuild() async {
+        await Task { @MainActor in await self.ask(.wordPack) }.value
+    }
+
     private func ask(_ operation: ServiceOperation) async {
-        generation += 1
-        let mine = generation
         let outcome = await backend.request(operation)
-        guard mine == generation else { return }
         switch outcome.wordPack {
-        case .success(let state): self.state = state.pack.map { .installed($0) } ?? .absent
+        case .success(let answer): heard(answer)
         case .failure(.wire(let error)): state = .refused(WordDataRefusal(error))
         case .failure: state = .trouble(.noAnswer)
         }
+    }
+
+    /// **What the service holds, asked after a refusal** without replacing the refusal's sentence: only `held` moves.
+    /// An unanswered question leaves both as they were.
+    private func reread() async {
+        if case .success(let answer) = await backend.request(.wordPack).wordPack {
+            held = answer.pack
+        }
+    }
+
+    /// An answer that names what the service holds: the row's state and `held` both follow it.
+    private func heard(_ answer: WordPackState) {
+        held = answer.pack
+        state = answer.pack.map { .installed($0) } ?? .absent
     }
 }
 

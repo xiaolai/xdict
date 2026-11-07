@@ -20,6 +20,7 @@ mod sheet;
 mod strip;
 mod symbols;
 mod tables;
+mod tag;
 mod text;
 mod url;
 mod work;

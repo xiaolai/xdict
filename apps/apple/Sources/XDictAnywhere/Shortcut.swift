@@ -108,8 +108,19 @@ public struct Shortcut: Hashable, Codable, Sendable {
     /// for no options at all.
     public static let layoutTranslationOptions = OptionBits(kUCKeyTranslateNoDeadKeysMask)
 
+    /// **One reader of the layout at a time** (2026-11-05): HIToolbox aborts the process when the Text Input Sources
+    /// API is used from two threads at once ("if you are a non-UI application … you must not call TIS/TSM API from
+    /// multiple threads concurrently"), and a test process is one: Swift Testing runs suites in parallel, and a suite
+    /// isolated to the main actor beside one that is not made two callers of `label()` in the same instant, so the
+    /// XDictUITests bundle died with SIGABRT on the merged tree of the 2026-11-05 audit. The app reads it from the main
+    /// thread only, as a UI application must; the lock makes the rule hold in every process. The fuller shape,
+    /// `@MainActor` on this function, would reach every sentence built from a label and every test of one.
+    private static let layoutLock = NSLock()
+
     /// The character the current keyboard layout types for `keyCode` with no modifiers.
     public static func currentLayoutName(_ keyCode: UInt32) -> String? {
+        layoutLock.lock()
+        defer { layoutLock.unlock() }
         // `exactly`, because `UInt16(_:)` traps on a key code past 65,535 — which a corrupted
         // preference can hold, however `isUsable` screens it.
         guard let code = UInt16(exactly: keyCode),

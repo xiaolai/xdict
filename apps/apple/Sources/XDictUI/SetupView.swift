@@ -103,7 +103,7 @@ public struct SetupView: View {
                    hoverDoubleTap: hover?.isDoubleTap ?? false, screenRecording: hover?.screenRecording ?? .notSetUp,
                    services: reading.services, appleLookUp: reading.appleLookUp,
                    spotlightEnabled: spotlight?.enabled ?? false, spotlightFailed: spotlight?.lastRunFailed ?? false,
-                   aiConfigured: aiIsOn)
+                   aiConfigured: aiIsOn, shortcutProblem: registrar.problem)
     }
 
     public var body: some View {
@@ -211,8 +211,9 @@ public struct SetupView: View {
                         .toggleStyle(.checkbox)
                         .accessibilityIdentifier("setup.hover.toggle")
                 }
-                Button { SettingsRoute.shared.showPane(.general) } label: { Text("Open General") }
-                    .accessibilityIdentifier("setup.hover.general")
+                // The pane that holds hover's switch and key (`Step.settingsPane`), not General, which has neither.
+                Button { openPane(of: step) } label: { Text("Open Lookup Settings") }
+                    .accessibilityIdentifier("setup.hover.lookup")
             case .services:
                 Button { actions.openSettings(.keyboardShortcuts) } label: { Text("Open Keyboard Shortcuts") }
                     .accessibilityIdentifier("setup.services.open")
@@ -240,7 +241,7 @@ public struct SetupView: View {
                 Button { actions.openSettings(.spotlight) } label: { Text("Open Spotlight Settings") }
                     .accessibilityIdentifier("setup.spotlight.open")
             case .ai:
-                Button { SettingsRoute.shared.showPane(.ai) } label: { Text("Open AI Settings") }
+                Button { openPane(of: step) } label: { Text("Open AI Settings") }
                     .accessibilityIdentifier("setup.ai.open")
             }
         }
@@ -278,6 +279,13 @@ public struct SetupView: View {
             // A line of the row, not the row: the row's own id carries its state, and these three carry which trigger.
             .accessibilityIdentifier("setup.appleLookUp.part.\(part.rawValue)")
         }
+    }
+
+    /// The row of XDict's Settings that holds a step's control, revealed: one table, `Step.settingsItem`, which the
+    /// tests pin to Settings search's.
+    private func openPane(of step: SetupBoard.Step) {
+        guard let item = step.settingsItem else { return }
+        SettingsRoute.shared.reveal(item)
     }
 
     /// The pane each line's button opens.

@@ -65,19 +65,28 @@ pub fn script_purpose(text: &str) -> Result<&'static str, &'static str> {
 }
 
 /// The bodies of an entry's inline `<script>`s (those without a `src`), at most [`INLINE_SCRIPTS`] of them; each
-/// `<script` is looked for once, so the cost is the entry's length.
+/// `<script` is looked for once, so the cost is the entry's length. Its tag is read as HTML reads it ([`crate::tag::end`]): a
+/// `>` in a quoted value does not end it, and one that never ends is the rest of the entry, no script.
 pub(crate) fn inline_scripts(entry: &str) -> impl Iterator<Item = &str> {
     let mut rest = entry;
     std::iter::from_fn(move || {
         loop {
             let lower_at = find_ignoring_case(rest, "<script")?;
-            let from = rest.get(lower_at..)?;
-            let gt = from.find('>')?;
-            let tag = from.get(..gt)?;
-            let body_from = from.get(gt + 1..)?;
+            let after_name = rest.get(lower_at + "<script".len()..)?;
+            // `<scripting>` is another element.
+            if after_name.bytes().next().is_some_and(|b| !(b.is_ascii_whitespace() || matches!(b, b'/' | b'>'))) {
+                rest = after_name;
+                continue;
+            }
+            let Some(gt) = crate::tag::end(after_name) else {
+                rest = "";
+                return None;
+            };
+            let tag = after_name.get(..gt)?;
+            let body_from = after_name.get(gt + 1..)?;
             let end = find_ignoring_case(body_from, "</script").unwrap_or(body_from.len());
             rest = body_from.get(end..)?;
-            if crate::phon::attribute_of(tag, "src").is_none() {
+            if !crate::roles::attributes(&format!("<script{tag}>")).iter().any(|(name, _)| name == "src") {
                 return body_from.get(..end);
             }
         }
@@ -173,5 +182,27 @@ mod tests {
         assert_eq!(arrow("<<b>x</b>"), None);
         assert_eq!(arrow("<<>>"), None);
         assert_eq!(arrow(&format!("<<{}>>", "a".repeat(200))), None);
+    }
+
+    /// **Every inline script is read, its tag as HTML reads it** (audit 2026-11-05, L12): a `>` inside a quoted value
+    /// once ended the tag before its `src`, a `<scripting>` was taken for a script, and a fold script after them went
+    /// unread, so S10 could unwrap what it needs.
+    #[test]
+    fn inline_scripts_are_read_tag_by_tag() {
+        fn scripts(html: &str) -> Vec<&str> {
+            inline_scripts(html).collect()
+        }
+        assert_eq!(
+            scripts(r#"<script data-x="a>b" src="t.js"></script><p>x</p><script>toggle('y')</script>"#),
+            ["toggle('y')"]
+        );
+        assert_eq!(scripts(r#"<script title='>' >fold()</script>"#), ["fold()"]);
+        assert_eq!(scripts("<scripting>x</scripting><script>toggle()</script>"), ["toggle()"]);
+        assert_eq!(scripts("<SCRIPT type=text/javascript>show(1)</Script >"), ["show(1)"]);
+        // A `<script` whose tag never ends is the rest of the entry; what came before is still read.
+        assert_eq!(scripts(r#"<script>toggle()</script><p>a</p><script data-x="b>"#), ["toggle()"]);
+        assert_eq!(scripts(r#"<script>toggle()</script><script src="x.js"#), ["toggle()"]);
+        // An unclosed script runs to the end, as a browser runs it.
+        assert_eq!(scripts("<script>hide(1)"), ["hide(1)"]);
     }
 }

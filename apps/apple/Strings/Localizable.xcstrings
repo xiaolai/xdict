@@ -554,6 +554,40 @@
         }
       }
     },
+    "%lld notes could not be read and stay on the old one.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld note could not be read and stays on the old one."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld notes could not be read and stay on the old one."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 条笔记无法读取，仍留在旧版本上。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld notes now point to this edition.": {
       "localizations": {
         "en": {
@@ -1926,6 +1960,23 @@
         }
       }
     },
+    "AI answer": {
+      "comment": "The mark on a gloss that is the reader's own AI answer",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI answer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 释义"
+          }
+        }
+      }
+    },
     "AI-generated. It can be wrong; check it against the entry.": {
       "localizations": {
         "en": {
@@ -2535,6 +2586,22 @@
         }
       }
     },
+    "Another device (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another device (%@)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一台设备（%@）"
+          }
+        }
+      }
+    },
     "Answer Pane": {
       "localizations": {
         "en": {
@@ -2771,6 +2838,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "“词典”App 中启用了 Apple 自己的词典。"
+          }
+        }
+      }
+    },
+    "Ask AI": {
+      "comment": "History card action: ask the AI about this reading",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask AI"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "询问 AI"
           }
         }
       }
@@ -6172,6 +6256,22 @@
         }
       }
     },
+    "Hide context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide context"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏上下文"
+          }
+        }
+      }
+    },
     "History": {
       "localizations": {
         "en": {
@@ -6205,18 +6305,18 @@
         }
       }
     },
-    "Hold %@ and rest the pointer on a word in any app. Change the key in General.": {
+    "Hold %@ and rest the pointer on a word in any app. Change the key in Settings ▸ Lookup.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold %@ and rest the pointer on a word in any app. Change the key in General."
+            "value": "Hold %@ and rest the pointer on a word in any app. Change the key in Settings ▸ Lookup."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按住 %@，把指针停在任意 App 中的单词上。可在“通用”中更改按键。"
+            "value": "按住 %@，把指针停在任意 App 中的单词上。可在“设置”▸“查词”中更改按键。"
           }
         }
       }
@@ -6303,7 +6403,7 @@
       }
     },
     "Hover needs Screen Recording here": {
-      "comment": "Shown briefly by the pointer; the Screen Recording row is in Settings > General",
+      "comment": "Shown briefly by the pointer; the Screen Recording row is in Settings > Lookup",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -7151,6 +7251,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "学习"
+          }
+        }
+      }
+    },
+    "Left out, could not be read: %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left out, could not be read: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取，已略过：%@。"
           }
         }
       }
@@ -8245,6 +8361,22 @@
         }
       }
     },
+    "No lookup shortcut is registered. Choose one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No lookup shortcut is registered. Choose one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未注册查询快捷键，请选择一个。"
+          }
+        }
+      }
+    },
     "No matches": {
       "localizations": {
         "en": {
@@ -8289,6 +8421,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有笔记。"
+          }
+        }
+      }
+    },
+    "No other device’s log in this folder could be read.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No other device’s log in this folder could be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件夹中其他设备的记录都无法读取。"
           }
         }
       }
@@ -9244,22 +9392,6 @@
         }
       }
     },
-    "Open General": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open General"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开“通用”"
-          }
-        }
-      }
-    },
     "Open Keyboard Shortcuts": {
       "localizations": {
         "en": {
@@ -9288,6 +9420,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开“登录项”设置…"
+          }
+        }
+      }
+    },
+    "Open Lookup Settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Lookup Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开“查词”设置"
           }
         }
       }
@@ -11689,6 +11837,22 @@
         }
       }
     },
+    "Show context": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show context"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示上下文"
+          }
+        }
+      }
+    },
     "Show in Finder": {
       "localizations": {
         "en": {
@@ -11989,6 +12153,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "部分词典的例句无法读取。"
+          }
+        }
+      }
+    },
+    "Some notes were not checked and stay on the old edition.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some notes were not checked and stay on the old edition."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分笔记尚未检查，仍留在旧版本上。"
           }
         }
       }
@@ -12317,18 +12497,18 @@
         }
       }
     },
-    "Tap %@ twice with the pointer resting on a word. Change the key in General.": {
+    "Tap %@ twice with the pointer resting on a word. Change the key in Settings ▸ Lookup.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap %@ twice with the pointer resting on a word. Change the key in General."
+            "value": "Tap %@ twice with the pointer resting on a word. Change the key in Settings ▸ Lookup."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "把指针停在单词上连按两次 %@。可在“通用”中更改按键。"
+            "value": "把指针停在单词上连按两次 %@。可在“设置”▸“查词”中更改按键。"
           }
         }
       }
@@ -13487,6 +13667,38 @@
         }
       }
     },
+    "The grade could not be undone. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The grade could not be undone. Try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能撤销评分，请重试。"
+          }
+        }
+      }
+    },
+    "The grade was not recorded. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The grade was not recorded. Try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评分未能记录，请重试。"
+          }
+        }
+      }
+    },
     "The input was incomplete": {
       "localizations": {
         "en": {
@@ -14214,22 +14426,6 @@
         }
       }
     },
-    "The shortcut is in use by another app. Choose another one.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The shortcut is in use by another app. Choose another one."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个快捷键已被其他 App 占用，请换一个。"
-          }
-        }
-      }
-    },
     "The sign-in page could not be opened. Copy its address and open it in your browser.": {
       "localizations": {
         "en": {
@@ -14804,6 +15000,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有可朗读的内容。"
+          }
+        }
+      }
+    },
+    "This Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac"
           }
         }
       }
@@ -17140,6 +17352,23 @@
         }
       }
     },
+    "as %@": {
+      "comment": "A word's lemma, when the dictionary's form differs: e.g. as run",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作 %@"
+          }
+        }
+      }
+    },
     "ends with it": {
       "localizations": {
         "en": {
@@ -17886,89 +18115,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "简体中文"
-          }
-        }
-      }
-    },
-    "Show context": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show context"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示上下文"
-          }
-        }
-      }
-    },
-    "Hide context": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide context"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "隐藏上下文"
-          }
-        }
-      }
-    },
-    "AI answer": {
-      "comment": "The mark on a gloss that is the reader's own AI answer",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AI answer"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AI 释义"
-          }
-        }
-      }
-    },
-    "Ask AI": {
-      "comment": "History card action: ask the AI about this reading",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ask AI"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "询问 AI"
-          }
-        }
-      }
-    },
-    "as %@": {
-      "comment": "A word's lemma, when the dictionary's form differs: e.g. as run",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "as %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "作 %@"
           }
         }
       }

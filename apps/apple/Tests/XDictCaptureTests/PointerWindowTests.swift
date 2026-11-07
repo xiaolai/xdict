@@ -108,3 +108,23 @@ struct PointerWindowTests {
         ]).isEmpty)
     }
 }
+
+/// **One layer rule for both questions** (audit 2026-11-05 L15): which app's window is in front of ours (`ownership`)
+/// and which app's window lies behind ours to be read (`behind`) used to disagree — panel level (8) against layer 0 — so
+/// a floating palette of another app the reader could see beside an XDict panel named that app for one and was skipped
+/// by the other. A screen-spanning overlay above panel level (the Dock at 20, Notification Center at 21) names no app
+/// for either.
+struct PointerWindowLayerTests {
+    @Test(arguments: [0, 3, PointerWindow.panelLevelMaximum, PointerWindow.panelLevelMaximum + 1, 20, 21, 24])
+    func aLayerNamesAnAppForBothQuestionsOrForNeither(layer: Int) {
+        let point = CGPoint(x: 50, y: 50)
+        let area = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let theirs = ListedWindow(pid: 22, bounds: area, windowID: 1, layer: layer)
+        let ourPanel = ListedWindow(pid: 99, bounds: area, windowID: 2, layer: 101)
+        let ourWindow = ListedWindow(pid: 99, bounds: area, windowID: 3, layer: 0)
+        let inFront = PointerWindow.ownership(at: point, in: [theirs, ourWindow], ours: 99) == .coveringOurs(owner: 22)
+        let readBehind = PointerWindow.behind(at: point, in: [ourPanel, theirs], ours: 99) == theirs
+        #expect(inFront == readBehind, "layer \(layer): in front \(inFront), read behind \(readBehind)")
+        #expect(inFront == (layer <= PointerWindow.panelLevelMaximum), "layer \(layer)")
+    }
+}

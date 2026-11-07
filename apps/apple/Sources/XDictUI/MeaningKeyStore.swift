@@ -34,18 +34,44 @@ public struct KeychainKeyStore: MeaningKeyStore {
         return String(data: data, encoding: .utf8)
     }
 
+    /// **Update first, add only where there is nothing to update** (L4): deciding by `key()` read a stored item that
+    /// could not be read (a locked Keychain, bytes that are not UTF-8) as absent, and the add then failed as a
+    /// duplicate. The accessibility class goes with the update too, so an older item is brought to it.
     public func save(_ key: String) throws {
         let data = Data(key.utf8)
-        let status: OSStatus
-        if self.key() == nil {
+        let changes: [String: Any] = [kSecValueData as String: data,
+                                      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock]
+        switch Self.afterUpdate(SecItemUpdate(base as CFDictionary, changes as CFDictionary)) {
+        case .done:
+            return
+        case .refuse(let status):
+            throw MeaningKeyError(status: status)
+        case .add:
             var item = base
-            item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            status = SecItemAdd(item as CFDictionary, nil)
-        } else {
-            status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            item.merge(changes) { _, new in new }
+            let status = SecItemAdd(item as CFDictionary, nil)
+            guard status == errSecSuccess else { throw MeaningKeyError(status: status) }
         }
-        guard status == errSecSuccess else { throw MeaningKeyError(status: status) }
+    }
+
+    /// What a save does after `SecItemUpdate` answered `status`.
+    public enum SaveStep: Equatable, Sendable {
+        /// The stored key was replaced.
+        case done
+        /// No key is stored: add one.
+        case add
+        /// The Keychain refused; the status is surfaced, never retried as an add.
+        case refuse(OSStatus)
+    }
+
+    /// **The update's status, decided**: success is done, `errSecItemNotFound` is the one status that means add, and
+    /// every other status is the Keychain's refusal, said to the reader.
+    public static func afterUpdate(_ status: OSStatus) -> SaveStep {
+        switch status {
+        case errSecSuccess: .done
+        case errSecItemNotFound: .add
+        default: .refuse(status)
+        }
     }
 
     public func remove() throws {

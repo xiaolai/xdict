@@ -64,6 +64,39 @@ web_binding() {
     wasm-bindgen --target web --out-dir "$1" "$target/wasm32-unknown-unknown/release/xdict_wasm.wasm"
 }
 
+# **Every budget lives here, by name** (the 2026-11-05 audit, G8): `measure-memory.sh` of each binding asks
+# `memory_budget <swift|worker> <step>` and writes no number of its own, so a change that needs a higher budget changes
+# it here, beside its reason (AGENTS.md: "says why in `binding-env.sh`, beside the number");
+# apps/apple/Tools/tests/memory-budgets-test.sh holds the scripts to it. In MiB, the peak of one step in its own process.
+# Swift (macOS): measured on an Apple-silicon Mac on 2026-10-16, plus about 2% (see `within`).
+MEMORY_BUDGET_SWIFT_IMPORT=16
+MEMORY_BUDGET_SWIFT_ENTRY=410
+MEMORY_BUDGET_SWIFT_REFUSED=242
+MEMORY_BUDGET_SWIFT_RESOURCE=240
+# Worker (Node 24 and wasm-bindgen 0.2.129): entry and refused re-set on the single build host (2026-10-17): the same
+# core grows wasm memory 2 -> 269 MiB on both hosts, but Node's own resident memory there sits 3-4 MiB above the Mac mini
+# these were first measured on (refused 362-363, entry 507-514 on the tree before and after entry-defects alike); ~1%
+# above the highest, as before.
+MEMORY_BUDGET_WORKER_IMPORT=125
+MEMORY_BUDGET_WORKER_ENTRY=520
+MEMORY_BUDGET_WORKER_REFUSED=367
+MEMORY_BUDGET_WORKER_RESOURCE=333
+
+# memory_budget <swift|worker> <import|entry|refused|resource>: that step's budget in MiB; an unknown one fails loud.
+memory_budget() {
+    case $1:$2 in
+        swift:import) echo "$MEMORY_BUDGET_SWIFT_IMPORT" ;;
+        swift:entry) echo "$MEMORY_BUDGET_SWIFT_ENTRY" ;;
+        swift:refused) echo "$MEMORY_BUDGET_SWIFT_REFUSED" ;;
+        swift:resource) echo "$MEMORY_BUDGET_SWIFT_RESOURCE" ;;
+        worker:import) echo "$MEMORY_BUDGET_WORKER_IMPORT" ;;
+        worker:entry) echo "$MEMORY_BUDGET_WORKER_ENTRY" ;;
+        worker:refused) echo "$MEMORY_BUDGET_WORKER_REFUSED" ;;
+        worker:resource) echo "$MEMORY_BUDGET_WORKER_RESOURCE" ;;
+        *) echo "no memory budget for $1 $2" >&2; return 1 ;;
+    esac
+}
+
 # A memory step's line ("…, N MiB after; …") held to $2 MiB: its peak past that is reported and returns 1. The
 # budgets are what was measured on an Apple-silicon Mac on 2026-10-16, plus about 2%. They sit above the
 # 2026-10-14 baseline (aa67039: Swift entry 369, refused 224; Worker entry 481, refused 333) by what the roles' tree

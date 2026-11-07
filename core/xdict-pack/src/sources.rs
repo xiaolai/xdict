@@ -182,6 +182,9 @@ impl<R: Read> Csv<R> {
         let mut position = 0usize;
         loop {
             let mut field = String::new();
+            // **Counted in characters, as the reference's `csv.field_size_limit` counts** (audit 2026-11-05, L11): a
+            // byte count refused CJK fields the reference reads.
+            let mut chars: u64 = 0;
             let mut quoted = false;
             if content.get(position).copied() == Some('"') {
                 quoted = true;
@@ -189,7 +192,7 @@ impl<R: Read> Csv<R> {
             }
             let at_comma = loop {
                 // A field is capped as it grows: the check after the field would run only once it was already held.
-                if field.len() as u64 > MAX_CSV_FIELD_BYTES {
+                if chars > MAX_CSV_FIELD_BYTES {
                     return Err(PackError::at(
                         PackErrorKind::Bound,
                         self.source.clone(),
@@ -201,6 +204,7 @@ impl<R: Read> Csv<R> {
                     None => {
                         if quoted {
                             field.push_str(terminator);
+                            chars += terminator.chars().count() as u64;
                             match self.lines.next_line()? {
                                 Some(next) => {
                                     number = next.number;
@@ -218,6 +222,7 @@ impl<R: Read> Csv<R> {
                         if ch == '"' {
                             if content.get(position + 1).copied() == Some('"') {
                                 field.push('"');
+                                chars += 1;
                                 position += 2;
                             } else {
                                 quoted = false;
@@ -225,6 +230,7 @@ impl<R: Read> Csv<R> {
                             }
                         } else {
                             field.push(ch);
+                            chars += 1;
                             position += 1;
                         }
                     }
@@ -234,28 +240,16 @@ impl<R: Read> Csv<R> {
                     }
                     Some(ch) => {
                         field.push(ch);
+                        chars += 1;
                         position += 1;
                     }
                 }
             };
-            self.check_field(&field, number)?;
             record.push(field);
             if !at_comma {
                 return Ok(Some(Record { fields: record, line: number }));
             }
         }
-    }
-
-    fn check_field(&self, field: &str, line: u64) -> PackResult<()> {
-        if field.chars().count() as u64 > MAX_CSV_FIELD_BYTES {
-            return Err(PackError::at(
-                PackErrorKind::Bound,
-                self.source.clone(),
-                line,
-                format!("field larger than field limit ({MAX_CSV_FIELD_BYTES})"),
-            ));
-        }
-        Ok(())
     }
 }
 
@@ -352,5 +346,22 @@ mod tests {
         let error = reader.next_record().unwrap_err();
         assert_eq!(error.kind(), PackErrorKind::Bound);
         assert!(error.to_string().contains("field larger than field limit (65536)"));
+    }
+
+    /// **The field limit counts characters, as the reference's `csv.field_size_limit` does** (audit 2026-11-05, L11):
+    /// a field of 30,000 CJK characters is 90,000 bytes and within the limit; one character past it is refused, quoted
+    /// across lines or not.
+    #[test]
+    fn the_field_limit_counts_characters_not_bytes() {
+        let limit = MAX_CSV_FIELD_BYTES as usize;
+        let wide = "字".repeat(30_000);
+        assert_eq!(records(&format!("{wide},b\n")), vec![vec![wide.clone(), "b".to_string()]]);
+        let full = "字".repeat(limit);
+        assert_eq!(records(&format!("\"{full}\",b\n")), vec![vec![full, "b".to_string()]]);
+        for text in [format!("{},b\n", "字".repeat(limit + 1)), format!("\"{}\n{}\",b\n", "字".repeat(limit), "字")]
+        {
+            let error = Csv::new(text.as_bytes(), "ety").next_record().unwrap_err();
+            assert_eq!(error.kind(), PackErrorKind::Bound, "{error}");
+        }
     }
 }

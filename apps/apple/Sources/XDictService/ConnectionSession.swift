@@ -54,8 +54,10 @@ final class ServiceContext: Sendable {
     static func containerStorage(environment: [String: String] = ProcessInfo.processInfo.environment)
         -> Dictionaries.Storage? {
         guard environment["APP_SANDBOX_CONTAINER_ID"] == XDictIdentity.dictionaryService else { return nil }
+        // The sandbox's home is the container's own `Data` folder: every folder of the service's is inside it.
         return Dictionaries.Storage(indexes: URL.cachesDirectory.appending(path: "indexes", directoryHint: .isDirectory),
-                                    registry: URL.applicationSupportDirectory.appending(path: "registry", directoryHint: .isDirectory))
+                                    registry: URL.applicationSupportDirectory.appending(path: "registry", directoryHint: .isDirectory),
+                                    own: [URL.homeDirectory])
     }
 }
 
@@ -101,7 +103,7 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         let facts = files.map { HandleInspection.facts(of: $0.fileDescriptor) }
         let request: Request
         switch Request.receive(envelope, handles: facts, filesOf: context.dictionaries.filesOf(),
-                               editions: context.dictionaries.editions()) {
+                               editions: context.dictionaries.editions(), confinement: context.dictionaries.confinement) {
         case .answered(let response):
             context.log.notice("refused a request before decoding it whole: \(String(describing: response.outcome), privacy: .public)")
             return answer(response, payload: nil, credit: nil, reply: reply)

@@ -114,6 +114,39 @@ struct ShortcutRegistrarTests {
         #expect(backend.shortcuts == [.defaultLookUp, .defaultLookUp], "registered again exactly once")
     }
 
+    /// **Suspended means nothing registers** (audit 2026-11-05 L15): a registration of the saved shortcut while the
+    /// recorder is armed — the app's launch registering, say — used to register under the armed field, so the shortcut
+    /// being replaced fired instead of reaching it. It waits for the recording's end, which registers once.
+    @Test func nothingRegistersWhileSuspended() throws {
+        let backend = FakeHotkeyBackend()
+        let shortcut = registrar(backend, try ShortcutTests.scratchDefaults())
+        shortcut.registerSaved()
+        shortcut.suspend(true)
+        #expect(shortcut.registerSaved() == nil)
+        #expect(!shortcut.isRegistered, "the saved shortcut was registered while the recorder was armed")
+        #expect(backend.shortcuts == [.defaultLookUp], "registered while suspended: \(backend.shortcuts)")
+        shortcut.suspend(false)
+        #expect(shortcut.isRegistered && !shortcut.isSuspended)
+        #expect(backend.shortcuts == [.defaultLookUp, .defaultLookUp], "registered again exactly once")
+    }
+
+    /// **A choice made while suspended waits for the end of the recording**, then is taken under the usual rules: it
+    /// registers then, once, and is saved.
+    @Test func aChoiceWhileSuspendedIsTakenWhenTheRecordingEnds() throws {
+        let defaults = try ShortcutTests.scratchDefaults()
+        let backend = FakeHotkeyBackend()
+        let shortcut = registrar(backend, defaults)
+        shortcut.registerSaved()
+        shortcut.suspend(true)
+        #expect(shortcut.choose(chosen) == nil)
+        #expect(!shortcut.isRegistered, "the choice was registered while the recorder was armed")
+        #expect(backend.shortcuts == [.defaultLookUp], "registered while suspended: \(backend.shortcuts)")
+        shortcut.suspend(false)
+        #expect(shortcut.current == chosen && shortcut.isRegistered)
+        #expect(backend.shortcuts == [.defaultLookUp, chosen], "the choice was not registered once at the end")
+        #expect(ShortcutStore(defaults: defaults).load() == chosen)
+    }
+
     /// Choosing the same shortcut again changes nothing.
     @Test func choosingTheSameShortcutIsNoChange() throws {
         let backend = FakeHotkeyBackend()

@@ -135,3 +135,38 @@ fn the_guards_are_the_entry_views() {
     );
     assert!(!entry.unwrap().html.is_empty());
 }
+
+/// One entry written twice: with marks named as XDict's own on five of its elements, and without them.
+fn forged_and_plain() -> [W; 2] {
+    let body = |m: [&str; 5]| {
+        format!(
+            r#"<div class="e"{}><b class="hw">run</b><div class="s"{}><b>1.</b> <span class="d"{}>to move fast on your feet</span></div><div class="s"><b>2.</b> <i class="x"{}>She runs to school every day.</i><span class="tr"{}>她每天跑步去学校。</span></div></div>"#,
+            m[0], m[1], m[2], m[3], m[4]
+        )
+    };
+    let forged = [
+        r#" data-xdict-role="example" data-xdict-sure="example""#,
+        r#" DATA-XDICT-SENSE="3" data-xdict-sense-parent="0" data-xdict-section="idioms""#,
+        r#" data-xdict-role="example" data-xdict-sure="example" data-xdict-sense="9" data-xdict-sense-run"#,
+        r#" data-xdict-role="definition" data-xdict-sure="definition" data-xdict-label="register""#,
+        r#" Data-Xdict-Role="example" data-xdict-sure="example" data-xdict-sense-end"#,
+    ];
+    [W::text("forged", &body(forged)), W::text("plain", &body([""; 5]))]
+}
+
+/// **A dictionary's own `data-xdict-*` is never read as XDict's** (audit 2026-11-05, M3): the projection of an entry
+/// that forges them is the projection of the same entry without them, and the core's own marks are still there.
+#[test]
+fn a_dictionarys_own_xdict_marks_do_not_reach_the_text() {
+    let dir = Scratch::new("forged");
+    std::fs::write(dir.0.join("noad.mdx"), writer::write(&Spec::mdx(), &forged_and_plain()).unwrap()).unwrap();
+    std::fs::write(dir.0.join("noad.css"), SHEET).unwrap();
+    let package = Package { mdx: dir.at("noad.mdx"), mdd: vec![], sidecars: vec![dir.at("noad.css")] };
+    let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+    let edition = core.import(package.clone(), &NoProgress).unwrap().edition;
+    let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+    let text = |key: &str| core.entry_text(dict.clone(), reference(&edition, key), view(u64::MAX)).unwrap();
+    let (forged, plain) = (text("forged"), text("plain"));
+    assert_eq!((&forged.text, &forged.spans, &forged.senses), (&plain.text, &plain.spans, &plain.senses));
+    assert!(plain.spans.iter().any(|s| s.role.as_deref() == Some("example")), "the core's own marks: {plain:?}");
+}

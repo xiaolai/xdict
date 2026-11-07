@@ -208,7 +208,7 @@ fn resolved(file: &File, targets: &[Vec<String>], failures: &mut Vec<String>, na
 
 #[test]
 fn lookup_on_the_corpus() {
-    let Ok(dirs) = std::env::var("XDICT_MDX_CORPUS") else {
+    let Some(dirs) = xdict_mdx_writer::corpus::wanted("XDICT_MDX_CORPUS").unwrap_or_else(|why| panic!("{why}")) else {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };

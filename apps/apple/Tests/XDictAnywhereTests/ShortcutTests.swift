@@ -43,6 +43,20 @@ struct ShortcutTests {
         #expect(store.load() == chosen)
     }
 
+    /// **The layout is read by one caller at a time** (2026-11-05): forty readers at once, as a parallel test run
+    /// makes them, finish without HIToolbox aborting the process; without the lock in `currentLayoutName` this test
+    /// dies with SIGABRT ("TIS/TSM API is being called in two threads concurrently"), the way the whole XDictUITests
+    /// bundle did on the merged tree of the audit.
+    @Test func concurrentLayoutReadsDoNotAbortTheProcess() async {
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<40 {
+                group.addTask {
+                    for code in 0..<60 { _ = Shortcut.currentLayoutName(UInt32(code)) }
+                }
+            }
+        }
+    }
+
     /// An unusable saved shortcut — edited by hand, or corrupt — is not registered: the default is.
     @Test func anUnusableOrCorruptSavedShortcutFallsBackToTheDefault() throws {
         let defaults = try Self.scratchDefaults()

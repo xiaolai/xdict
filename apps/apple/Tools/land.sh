@@ -36,8 +36,10 @@ command_of() {
         # The tool tests read git (the source tree): the copy has none, so it gets a snapshot. No hooks: a host's own
         # global hooks (the build Mac's, 2026-10-17) judge commits meant for a repository, not this throwaway one.
         apple-test) echo "rm -rf .git && git init -q && git add -A && git -c core.hooksPath=/dev/null -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && XDICT_KNOWN_COMMITS=\$PWD/../../.known-commits make test" ;;
-        entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
-        lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
+        # XDICT_CORPUS_REQUIRED=1: a corpus that did not arrive fails the test with its sentence, never "not measured"
+        # (2026-11-05); measured() below still reads the lines a measurement prints.
+        entries) echo "cd core && XDICT_CORPUS_REQUIRED=1 XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
+        lookup-corpus) echo "cd core && XDICT_CORPUS_REQUIRED=1 XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
         # Run in the host's copy, which is flat: dev-docs/ sits at the copy's root, whatever the Air's workspace looks
         # like (the fixtures are rsynced there below).
         mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
@@ -92,6 +94,12 @@ fi
 corpus_id=$(python3 -I Tools/gate-cache.py corpus-id "$AIR_CORPUS") || fail "could not read the corpus's identity"
 full=()
 [ "${FULL:-}" != 1 ] || full=(--full)
+# **What is keyed is what ran** (the 2026-11-05 audit, M12): the tree is read before the keys are made and again once a
+# lane's copy is on its host; when the two differ, an edit landed between them, the copy may hold content no key names,
+# and a pass there is printed but not recorded. An edit after the copy changes nothing the host runs. Known limit: an
+# edit made and undone inside that window reads as no change.
+readonly TREE_CMD=${XDICT_SOURCE_TREE_CMD:-Tools/source-tree.sh}
+keyed_tree=$($TREE_CMD) || fail "could not read the source tree"
 : >"$OUT/todo"
 for g in $gates; do
     facts=()
@@ -177,6 +185,8 @@ host_job() {
         for g in "$@"; do printf '%s\t%s\tran\t0\tcould not copy the tree: %s\n' "$g" "$host" "$(tail -1 "$rlog")" >"$OUT/$g.result"; done
         return
     fi
+    local copied_tree
+    copied_tree=$($TREE_CMD 2>/dev/null) || copied_tree="unreadable"
     for g in "$@"; do
         # The format-3.0 test's file is an .mdx, which the copy leaves out: sent alone (it is MDXBuilder's, not content).
         # dev-docs/ is a sibling of the main checkout (the workspace root), so a worktree has none of its own.
@@ -198,7 +208,9 @@ cd $remote && $(command_of "$g" "$corpus")" >"$OUT/$g.log" 2>&1
         [ "$status" != 0 ] || measured "$g" "$OUT/$g.log" || status=97
         line=$(grep -v '^[[:space:]]*$' "$OUT/$g.log" | tail -1 | cut -c1-90)
         [ "$status" != 97 ] || line="green, but the corpus was not measured"
-        if [ "$status" = 0 ]; then
+        if [ "$status" = 0 ] && [ "$copied_tree" != "$keyed_tree" ]; then
+            line="passed; NOT cached: the tree changed during the run"
+        elif [ "$status" = 0 ]; then
             key=$(awk -F'\t' -v g="$g" '$1 == g { print $2 }' "$OUT/todo")
             python3 -I Tools/gate-cache.py record "$g" "$key" "$(( $(date +%s) - t0 ))" "$host" || line="passed; NOT cached: $line"
         fi

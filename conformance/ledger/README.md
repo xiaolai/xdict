@@ -20,5 +20,7 @@ Comparing is by subset, as everywhere in `conformance/fixtures/`: every field `e
 and lists must have equal lengths and order — extra fields the binding carries are ignored.
 
 A binding runs this after its fixture scenario: a fresh core (no data directory, so the log is in memory), the
-readings in file order, each outcome compared as its own word, then `history` at `history.now` with its UTC offset,
-compared with `history.expect`.
+readings in file order, each outcome compared as its own word, then `history` at `history.now` with its zone,
+compared with `history.expect`. The zone is a list of offsets, each in force from its `from` (epoch seconds) until the
+next; the first also covers everything before it. The second entry here starts after every reading, so it changes
+nothing: it is there so each binding carries a list, not one number.
