@@ -143,12 +143,19 @@ impl HandleSource {
         self.write
     }
 
+    /// The size admission saw. A source that grows after the request was admitted stages no more than this: the
+    /// budget the caller checked is the budget the copy spends.
+    pub fn admitted_size(&self) -> u64 {
+        self.at_open
+            .map_or_else(|| self.size(), |at_open| at_open.size)
+    }
+
     /// Copies a read-only source into the service's staging inbox, byte for byte, at most its admitted size.
     pub fn copy_to(&self, path: &Path) -> Result<u64, Failure> {
         let mut out = File::create(path)
             .map_err(CoreError::from)
             .map_err(Failure::Core)?;
-        let size = self.size();
+        let size = self.admitted_size();
         let mut offset = 0u64;
         while offset < size {
             let len = u32::try_from((size - offset).min(1_048_576)).map_err(|_| {
@@ -307,6 +314,21 @@ pub fn identity_rule(
                 held
             }
         }
+    }
+}
+
+/// Closes a handle the app duplicated into this process for a request that was refused before admission. The app's
+/// copy lives in this process only: nothing else here can close it, so a rejected request would otherwise retain its
+/// handles until the process ends.
+pub fn close(handle: u64) {
+    if handle == 0 || handle > i64::MAX as u64 {
+        return;
+    }
+    // SAFETY: an accepted-by-value handle number the app duplicated for one request; closing it is the only owner's
+    // act, and a stale or already-closed value is answered with GetLastError rather than a crash.
+    #[allow(unsafe_code)]
+    unsafe {
+        CloseHandle(handle as usize as *mut c_void);
     }
 }
 

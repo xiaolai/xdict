@@ -5,6 +5,10 @@ using XDict.Client;
 
 namespace XDict.Models;
 
+/// <summary>A committed removal or restore, and why the history could not be re-read afterwards: the mutation stands,
+/// the caller keeps its undo, and the window says the two facts apart. Null <see cref="RefreshError"/> is success.</summary>
+public sealed record HistoryMutation(string Outcome, Exception? RefreshError);
+
 public sealed class HistorySession(
     ServiceClient client,
     Func<LearningSettings>? settings = null,
@@ -39,7 +43,7 @@ public sealed class HistorySession(
             : Cards.Where(card => languages.Contains(card.Reading.Language)).ToList();
 
     /// <summary>Hides the card's readings behind a tombstone that carries no content.</summary>
-    public async Task<string> RemoveAsync(HistoryCard card, CancellationToken cancellation = default)
+    public async Task<HistoryMutation> RemoveAsync(HistoryCard card, CancellationToken cancellation = default)
     {
         var removal = new { eventIds = card.Events, at = now(), device = device() };
         string outcome = StudyWire.Read<string>(
@@ -48,11 +52,10 @@ public sealed class HistorySession(
                 removal,
                 operation = "remove:" + Guid.NewGuid().ToString("N"),
             }, cancellation: cancellation).ConfigureAwait(false));
-        await LoadAsync(cancellation).ConfigureAwait(false);
-        return outcome;
+        return new HistoryMutation(outcome, await RefreshAsync(cancellation).ConfigureAwait(false));
     }
 
-    public async Task<string> RestoreAsync(HistoryCard card, CancellationToken cancellation = default)
+    public async Task<HistoryMutation> RestoreAsync(HistoryCard card, CancellationToken cancellation = default)
     {
         var removal = new { eventIds = card.Events, at = now(), device = device() };
         string outcome = StudyWire.Read<string>(
@@ -61,8 +64,26 @@ public sealed class HistorySession(
                 removal,
                 operation = "restore:" + Guid.NewGuid().ToString("N"),
             }, cancellation: cancellation).ConfigureAwait(false));
-        await LoadAsync(cancellation).ConfigureAwait(false);
-        return outcome;
+        return new HistoryMutation(outcome, await RefreshAsync(cancellation).ConfigureAwait(false));
+    }
+
+    /// <summary>The re-read after a committed mutation: its failure is returned, never thrown, so the removal keeps
+    /// its undo and the window can say the two facts apart. A cancelled refresh is the caller's own and is thrown.</summary>
+    private async Task<Exception?> RefreshAsync(CancellationToken cancellation)
+    {
+        try
+        {
+            await LoadAsync(cancellation).ConfigureAwait(false);
+            return null;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            return error;
+        }
     }
 
     /// <summary>The card's gloss, read from the recorded edition and cached for this session; a dictionary with no

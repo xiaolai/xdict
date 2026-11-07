@@ -37,6 +37,13 @@ public static class Program
             Console.Error.WriteLine("--service or XDICT_SERVICE must name the built xdict-service.exe");
             return 2;
         }
+        // Half a fixture request used to skip every dictionary check while still printing "pass". A caller that
+        // named one folder meant to name both, so it is a usage error, never a quiet handshake-only run.
+        if ((generated is null) != (expected is null))
+        {
+            Console.Error.WriteLine("--generated and --expected must be given together");
+            return 2;
+        }
 
         using var client = new ServiceClient(service, new ServiceClientOptions { Storage = "conformance-" + Guid.NewGuid().ToString("N") });
         int failures = 0;
@@ -90,21 +97,28 @@ public static class Program
             return null;
         });
 
-        if (generated is not null && expected is not null)
+        if (generated is not null)
         {
             Check("the tiny fixture answers as expected", () =>
             {
-                Fixtures.Tiny(client, generated, expected);
+                Fixtures.Tiny(client, generated, expected!);
                 return null;
             });
             Check("every matrix variant answers as expected", () =>
             {
-                Fixtures.Matrix(client, generated, expected);
+                Fixtures.Matrix(client, generated, expected!);
                 return null;
             });
         }
+        else
+        {
+            Console.WriteLine("dictionary fixtures: skipped (handshake only; give --generated and --expected)");
+        }
 
-        Console.WriteLine(failures == 0 ? "conformance: pass" : $"conformance: {failures} failed");
+        string verdict = failures == 0
+            ? generated is null ? "conformance: pass (handshake only)" : "conformance: pass"
+            : $"conformance: {failures} failed";
+        Console.WriteLine(verdict);
         return failures == 0 ? 0 : 1;
     }
 

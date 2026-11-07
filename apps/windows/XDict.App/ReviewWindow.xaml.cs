@@ -225,6 +225,7 @@ public sealed partial class ReviewWindow : Window
             ReviewOutcome outcome = await session.GradeAsync(grade);
             Say(Strings.Get(outcome.Ineligible ? "review.ineligible" : "review.graded"));
             ShowCurrent();
+            SayRefresh();
             await LoadConflictsAsync();
             Changed?.Invoke();
         }
@@ -257,6 +258,7 @@ public sealed partial class ReviewWindow : Window
             await session.UndoAsync();
             Say(Strings.Get("review.undone"));
             ShowCurrent();
+            SayRefresh();
             await LoadConflictsAsync();
             Changed?.Invoke();
         }
@@ -304,6 +306,14 @@ public sealed partial class ReviewWindow : Window
         {
             NoteBox.IsReadOnly = false;
         }
+    }
+
+    /// <summary>The mutation committed but the queue behind it could not be re-read: said as its own fact, never as
+    /// a failed grade.</summary>
+    private void SayRefresh()
+    {
+        if (session.RefreshError is { } error)
+            Say(Strings.Format("review.refreshFailed", Describe(error)));
     }
 
     private void SetBusy(bool value)
@@ -393,6 +403,7 @@ public sealed partial class ReviewWindow : Window
             await session.ResolveAsync(conflict, keep);
             Say(Strings.Get("review.resolved"));
             ShowCurrent();
+            SayRefresh();
             await LoadConflictsAsync();
             Changed?.Invoke();
         }

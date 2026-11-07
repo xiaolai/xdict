@@ -11,6 +11,7 @@ public class AIHttpSourceTests
     private sealed class Loopback : IAsyncDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource cancellation = new();
         private readonly TaskCompletionSource<string> request =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Task serving;
@@ -30,9 +31,9 @@ public class AIHttpSourceTests
         {
             try
             {
-                using TcpClient client = await listener.AcceptTcpClientAsync();
+                using TcpClient client = await listener.AcceptTcpClientAsync(cancellation.Token);
                 NetworkStream stream = client.GetStream();
-                string headers = await ReadHeaders(stream);
+                string headers = await ReadHeaders(stream, cancellation.Token);
                 int length = 0;
                 foreach (string line in headers.Split("\r\n"))
                     if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase) &&
@@ -41,7 +42,7 @@ public class AIHttpSourceTests
                 int filled = 0;
                 while (filled < length)
                 {
-                    int read = await stream.ReadAsync(payload.AsMemory(filled));
+                    int read = await stream.ReadAsync(payload.AsMemory(filled), cancellation.Token);
                     if (read == 0) break;
                     filled += read;
                 }
@@ -50,9 +51,9 @@ public class AIHttpSourceTests
                 string reason = status switch { 200 => "OK", 302 => "Found", 401 => "Unauthorized", _ => "Error" };
                 string head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n" +
                               $"Content-Length: {answer.Length}\r\nConnection: close\r\n\r\n";
-                await stream.WriteAsync(Encoding.ASCII.GetBytes(head));
-                await stream.WriteAsync(answer);
-                await stream.FlushAsync();
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(head), cancellation.Token);
+                await stream.WriteAsync(answer, cancellation.Token);
+                await stream.FlushAsync(cancellation.Token);
             }
             catch (Exception error)
             {
@@ -61,13 +62,13 @@ public class AIHttpSourceTests
             }
         }
 
-        private static async Task<string> ReadHeaders(NetworkStream stream)
+        private static async Task<string> ReadHeaders(NetworkStream stream, CancellationToken cancellation)
         {
             var bytes = new List<byte>();
             var one = new byte[1];
             while (true)
             {
-                int read = await stream.ReadAsync(one);
+                int read = await stream.ReadAsync(one, cancellation);
                 if (read == 0) break;
                 bytes.Add(one[0]);
                 if (bytes.Count >= 4 && bytes[^4] == '\r' && bytes[^3] == '\n' && bytes[^2] == '\r' && bytes[^1] == '\n')
@@ -78,9 +79,35 @@ public class AIHttpSourceTests
 
         public async ValueTask DisposeAsync()
         {
+            // A read already running on an accepted connection has no deadline of its own: cancelling is what ends
+            // it, and the wait is bounded so a stuck socket cannot hang the suite.
+            cancellation.Cancel();
             listener.Stop();
-            try { await serving; } catch (Exception) { }
+            try { await serving.WaitAsync(TimeSpan.FromSeconds(5)); } catch (Exception) { }
+            cancellation.Dispose();
         }
+    }
+
+    /// <summary>A loopback port that accepts nothing: a redirect aimed at it is either refused before connecting
+    /// (nothing pending) or would show up as a pending connection.</summary>
+    private sealed class Reserved : IDisposable
+    {
+        private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+        public Reserved()
+        {
+            listener.Start();
+            Endpoint = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/v1/chat/completions");
+        }
+        public Uri Endpoint { get; }
+        public bool HasPending => listener.Pending();
+        public void Dispose() => listener.Stop();
+    }
+
+    /// <summary>A handler that fails before a socket exists: the offline case without a port race.</summary>
+    private sealed class Refusing : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken) => throw new HttpRequestException("offline");
     }
 
     private const string Answer = "{\"outcome\":\"explanationOnly\",\"quotes\":[],\"explanation\":\"It means to hold.\"}";
@@ -94,6 +121,7 @@ public class AIHttpSourceTests
     private sealed class Sequence : IAsyncDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource cancellation = new();
         private readonly (int Status, string Body, string? Location)[] replies;
         private readonly List<string> requests = [];
         private readonly Task serving;
@@ -115,9 +143,9 @@ public class AIHttpSourceTests
             {
                 foreach ((int status, string body, string? location) in replies)
                 {
-                    using TcpClient client = await listener.AcceptTcpClientAsync();
+                    using TcpClient client = await listener.AcceptTcpClientAsync(cancellation.Token);
                     NetworkStream stream = client.GetStream();
-                    string headers = await ReadHeaders(stream);
+                    string headers = await ReadHeaders(stream, cancellation.Token);
                     int length = 0;
                     foreach (string line in headers.Split("\r\n"))
                         if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase) &&
@@ -126,7 +154,7 @@ public class AIHttpSourceTests
                     int filled = 0;
                     while (filled < length)
                     {
-                        int read = await stream.ReadAsync(payload.AsMemory(filled));
+                        int read = await stream.ReadAsync(payload.AsMemory(filled), cancellation.Token);
                         if (read == 0) break;
                         filled += read;
                     }
@@ -136,21 +164,21 @@ public class AIHttpSourceTests
                     string head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n" +
                                   $"Content-Length: {answer.Length}\r\nConnection: close\r\n" +
                                   (location is null ? "" : $"Location: {location}\r\n") + "\r\n";
-                    await stream.WriteAsync(Encoding.ASCII.GetBytes(head));
-                    await stream.WriteAsync(answer);
-                    await stream.FlushAsync();
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(head), cancellation.Token);
+                    await stream.WriteAsync(answer, cancellation.Token);
+                    await stream.FlushAsync(cancellation.Token);
                 }
             }
             catch (Exception) { }
         }
 
-        private static async Task<string> ReadHeaders(NetworkStream stream)
+        private static async Task<string> ReadHeaders(NetworkStream stream, CancellationToken cancellation)
         {
             var bytes = new List<byte>();
             var one = new byte[1];
             while (true)
             {
-                int read = await stream.ReadAsync(one);
+                int read = await stream.ReadAsync(one, cancellation);
                 if (read == 0) break;
                 bytes.Add(one[0]);
                 if (bytes.Count >= 4 && bytes[^4] == '\r' && bytes[^3] == '\n' && bytes[^2] == '\r' && bytes[^1] == '\n')
@@ -163,8 +191,10 @@ public class AIHttpSourceTests
 
         public async ValueTask DisposeAsync()
         {
+            cancellation.Cancel();
             listener.Stop();
-            try { await serving; } catch (Exception) { }
+            try { await serving.WaitAsync(TimeSpan.FromSeconds(5)); } catch (Exception) { }
+            cancellation.Dispose();
         }
     }
 
@@ -178,8 +208,16 @@ public class AIHttpSourceTests
         Assert.Equal(Answer, content);
         string request = await server.Request;
         Assert.Contains("Authorization: Bearer secret-key", request);
-        Assert.Contains("THE COMPOSED QUESTION", request);
         Assert.Contains("\"model\":\"model-a\"", request);
+        // The body is parsed, not substring-matched: one user message, holding exactly the composed question. A second
+        // message, a system prompt or a rewritten question is a leak the substring checks could not see.
+        string json = request[(request.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        System.Text.Json.JsonElement messages = document.RootElement.GetProperty("messages");
+        Assert.Equal(1, messages.GetArrayLength());
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+        Assert.Equal("THE COMPOSED QUESTION", messages[0].GetProperty("content").GetString());
+        Assert.False(document.RootElement.TryGetProperty("stream", out var stream) && stream.GetBoolean());
     }
 
     [Fact]
@@ -224,15 +262,11 @@ public class AIHttpSourceTests
     [Fact]
     public async Task AnOfflineEndpointIsTyped()
     {
-        int port;
-        using (var probe = new TcpListener(IPAddress.Loopback, 0))
-        {
-            probe.Start();
-            port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        }
-        var source = new AIHttpSource();
+        // A handler that refuses before any socket exists: no released port for another process to claim between the
+        // probe and the connection, which would make the test's result depend on the host.
+        var source = new AIHttpSource(new HttpClient(new Refusing()));
         var error = await Assert.ThrowsAsync<AIProviderException>(() =>
-            source.AskAsync(new AIHttpConfig(new Uri($"http://127.0.0.1:{port}/v1/chat/completions"), "m"), "q"));
+            source.AskAsync(new AIHttpConfig(new Uri("http://127.0.0.1:1/v1/chat/completions"), "m"), "q"));
         Assert.Equal(AIProviderError.Unreachable, error.Error);
     }
 
@@ -320,6 +354,41 @@ public class AIHttpSourceTests
             Assert.Equal(AIProviderError.Redirect, error.Error);
             Assert.Single(server.Requests);
         }
+        // Each origin component on its own: a port change with the same scheme and host, and a scheme change with
+        // the same host and port. A check that compared only the host would follow both.
+        using (var elsewhere = new Reserved())
+        {
+            await using var server = new Sequence((302, "", elsewhere.Endpoint.ToString()), (200, Response(Answer), null));
+            var error = await Assert.ThrowsAsync<AIProviderException>(() =>
+                new AIHttpSource().AskAsync(new AIHttpConfig(server.Endpoint, "m", "secret-key", SendKey: true), "q"));
+            Assert.Equal(AIProviderError.Redirect, error.Error);
+            Assert.Single(server.Requests);
+            Assert.False(elsewhere.HasPending, "the refused destination received a connection");
+        }
+        using (var elsewhere = new Reserved())
+        {
+            // Same host and port, an https scheme: not the same origin, and refused before the key travels.
+            var downgrade = new UriBuilder(elsewhere.Endpoint) { Scheme = Uri.UriSchemeHttps }.Uri;
+            await using var server = new Sequence((302, "", downgrade.ToString()), (200, Response(Answer), null));
+            var error = await Assert.ThrowsAsync<AIProviderException>(() =>
+                new AIHttpSource().AskAsync(new AIHttpConfig(server.Endpoint, "m", "secret-key", SendKey: true), "q"));
+            Assert.Equal(AIProviderError.Redirect, error.Error);
+            Assert.False(elsewhere.HasPending, "the refused destination received a connection");
+        }
+    }
+
+    [Fact]
+    public async Task AProviderRefusalNeverEchoesTheKey()
+    {
+        // The refusal is provider-controlled text on a *successful* response; it reaches the exception the same way a
+        // server error does, and must be redacted the same way.
+        await using var server = new Sequence((200, Response("", refusal: "no secret-key for you"), null));
+        var error = await Assert.ThrowsAsync<AIProviderException>(() =>
+            new AIHttpSource().AskAsync(new AIHttpConfig(server.Endpoint, "m", "secret-key", SendKey: true), "q"));
+        Assert.Equal(AIProviderError.Refused, error.Error);
+        Assert.DoesNotContain("secret-key", error.Detail);
+        Assert.DoesNotContain("secret-key", error.Message);
+        Assert.Contains("[key]", error.Detail);
     }
 
     [Fact]

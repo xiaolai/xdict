@@ -158,6 +158,86 @@ public class SyncTests
     }
 
     [Fact]
+    public async Task ExactlyTheCountBoundIsNotOverIt()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "xdict-sync-exact-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        using var client = new ServiceClient(
+            Environment.GetEnvironmentVariable("XDICT_SERVICE")!,
+            new ServiceClientOptions { Storage = "sync-exact-" + Guid.NewGuid().ToString("N") });
+        try
+        {
+            for (int i = 0; i < SyncSession.MaxFiles; i++)
+                File.WriteAllText(Path.Combine(folder, $"peer-{i}.xdlog"), "");
+            // The bound is "more than MaxFiles": exactly that many passes the local check and reaches the service,
+            // whatever the service then says about empty logs.
+            Exception? error = await Record.ExceptionAsync(() =>
+                new SyncSession(client, device: () => "sync-exact").SyncAsync(folder));
+            Assert.IsNotType<SyncLimitException>(error);
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Fact]
+    public async Task AFileOverItsOwnBoundIsRefusedAndEarlierHandlesAreReleased()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "xdict-sync-file-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        using var client = new ServiceClient(
+            Environment.GetEnvironmentVariable("XDICT_SERVICE")!,
+            new ServiceClientOptions { Storage = "sync-file-" + Guid.NewGuid().ToString("N") });
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "peer-0.xdlog"), "");
+            string big = Path.Combine(folder, "peer-1.xdlog");
+            using (FileStream sparse = File.Create(big)) sparse.SetLength(SyncSession.MaxBytes + 1);
+            string destination = Path.Combine(folder, "xdict-sync-file.xdlog");
+            File.WriteAllText(destination, "the log that was already there");
+            int held = client.HeldFiles;
+            var error = await Assert.ThrowsAsync<SyncLimitException>(() =>
+                new SyncSession(client, device: () => "sync-file").SyncAsync(folder));
+            Assert.Contains(big, error.Message);
+            Assert.Contains((SyncSession.MaxBytes + 1).ToString(), error.Message);
+            // The peer observed before the oversized one is released, and the destination is untouched.
+            Assert.Equal(held, client.HeldFiles);
+            Assert.Equal("the log that was already there", File.ReadAllText(destination));
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Fact]
+    public async Task TheAggregateBoundIsRefusedOnTheSecondFile()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "xdict-sync-total-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        using var client = new ServiceClient(
+            Environment.GetEnvironmentVariable("XDICT_SERVICE")!,
+            new ServiceClientOptions { Storage = "sync-total-" + Guid.NewGuid().ToString("N") });
+        try
+        {
+            // Each at the per-file bound exactly; together over the aggregate.
+            foreach (string name in new[] { "peer-0.xdlog", "peer-1.xdlog" })
+                using (FileStream sparse = File.Create(Path.Combine(folder, name)))
+                    sparse.SetLength(SyncSession.MaxBytes);
+            int held = client.HeldFiles;
+            var error = await Assert.ThrowsAsync<SyncLimitException>(() =>
+                new SyncSession(client, device: () => "sync-total").SyncAsync(folder));
+            Assert.Contains("exceed", error.Message);
+            Assert.Equal(held, client.HeldFiles);
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Fact]
     public void AWriteHandleOutsideLedgerSyncIsAdmission()
     {
         using var client = new ServiceClient(

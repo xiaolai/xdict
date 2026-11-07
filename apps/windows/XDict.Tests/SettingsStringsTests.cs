@@ -34,6 +34,35 @@ public class SettingsStringsTests
     }
 
     [Fact]
+    public void EveryKeyShapedLiteralIsAKeyOrAKeyPrefix()
+    {
+        // The call-site regex sees `Strings.Get("key")` and nothing else: a switch's arms, a ternary and
+        // `"meaning.outcome." + outcome` are looked up dynamically. Every literal shaped like a catalogue key must be
+        // one — or a prefix of one, for the concatenated form — so a missing arm or a typo is a failing test.
+        var groups = Strings.Keys.Select(key => key.Split('.')[0]).ToHashSet(StringComparer.Ordinal);
+        var offenders = new List<string>();
+        foreach (string file in Directory.GetFiles(AppRoot(), "*.cs", SearchOption.AllDirectories))
+        {
+            string text = File.ReadAllText(file);
+            foreach (Match match in Regex.Matches(text, "\"([A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z0-9]+)*\\.?)\""))
+            {
+                string literal = match.Groups[1].Value;
+                if (!literal.Contains('.')) continue;
+                // A resource's own name in a URL or a file join (`find.js`), not a look-up key.
+                if (Regex.IsMatch(literal, @"\.(js|css|json|html?|txt|mdx|mdd|exe|dll|xbf|pri|xaml)$")) continue;
+                string group = literal.Split('.')[0];
+                if (!groups.Contains(group)) continue;
+                if (Strings.Keys.Contains(literal)) continue;
+                if (literal.EndsWith('.') && Strings.Keys.Any(key =>
+                        key.StartsWith(literal, StringComparison.Ordinal))) continue;
+                offenders.Add(Path.GetFileName(file) + ": " + literal);
+            }
+        }
+        Assert.True(offenders.Count == 0,
+            "key-shaped literals that are not catalogue keys: " + string.Join(" | ", offenders));
+    }
+
+    [Fact]
     public void EverySettingsRouteIsNamedForAutomation()
     {
         string xaml = File.ReadAllText(Path.Combine(AppRoot(), "SettingsWindow.xaml"));

@@ -24,25 +24,34 @@ public class Contract5Tests
     private static (ServiceClient Client, string Dict, string Edition, object[] Files) OpenTiny()
     {
         ServiceClient client = Start();
-        string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")
-            ?? throw new InvalidOperationException("XDICT_FIXTURES names the generated conformance fixtures"), "tiny");
-        object[] files =
-        [
-            client.Observe("tiny.mdx", "tiny.mdx", Path.Combine(dir, "tiny.mdx")),
-            client.Observe("tiny.mdd", "tiny.mdd", Path.Combine(dir, "tiny.mdd")),
-            client.Observe("tiny.css", "tiny.css", Path.Combine(dir, "tiny.css")),
-        ];
-        var package = new
+        try
         {
-            mdx = new { file = "tiny.mdx" },
-            mdd = new[] { new { file = "tiny.mdd" } },
-            sidecars = new[] { new { file = "tiny.css" } },
-        };
-        Assert.Null(client.Call("import", new { package, progress = false }, files).Error);
-        Reply opened = client.Call("open", new { package }, files);
-        Assert.Null(opened.Error);
-        JsonElement ok = Ok(opened);
-        return (client, ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!, files);
+            string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")
+                ?? throw new InvalidOperationException("XDICT_FIXTURES names the generated conformance fixtures"), "tiny");
+            object[] files =
+            [
+                client.Observe("tiny.mdx", "tiny.mdx", Path.Combine(dir, "tiny.mdx")),
+                client.Observe("tiny.mdd", "tiny.mdd", Path.Combine(dir, "tiny.mdd")),
+                client.Observe("tiny.css", "tiny.css", Path.Combine(dir, "tiny.css")),
+            ];
+            var package = new
+            {
+                mdx = new { file = "tiny.mdx" },
+                mdd = new[] { new { file = "tiny.mdd" } },
+                sidecars = new[] { new { file = "tiny.css" } },
+            };
+            Assert.Null(client.Call("import", new { package, progress = false }, files).Error);
+            Reply opened = client.Call("open", new { package }, files);
+            Assert.Null(opened.Error);
+            JsonElement ok = Ok(opened);
+            return (client, ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!, files);
+        }
+        catch
+        {
+            // Ownership has not been transferred yet: a failed setup must not leave a service process per test run.
+            client.Dispose();
+            throw;
+        }
     }
 
     [Fact]
@@ -92,24 +101,69 @@ public class Contract5Tests
         }
     }
 
+    /// <summary>A pack the core accepts: a version 2 header and no entries. Its source id is the marker a refusal must
+    /// leave in place.</summary>
+    private const string EmptyPack = """
+        {"type":"header","schema":"xdict-word-pack","version":2,"language":"en","sources":[{"id":"test","name":"Test","url":"https://example.invalid/x","version":"1","sha256":"0000000000000000000000000000000000000000000000000000000000000000","licence":"CC0-1.0","attribution":"The contract test"}]}
+        """;
+
+    private static string InstallEmptyPack(ServiceClient client)
+    {
+        string path = Path.Combine(Path.GetTempPath(), "xdict-held-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        File.WriteAllText(path, EmptyPack + "\n");
+        object[] files = [client.Observe("held", "pack.jsonl", path)];
+        Reply installed = client.Call("setWordPack", new { file = new { file = "held" } }, files);
+        Assert.Null(installed.Error);
+        return path;
+    }
+
     [Fact]
     public void TheWordPackRefusesWhatItCannotReadAndKeepsThePackItHeld()
     {
-        var (client, _, _, files) = OpenTiny();
+        var (client, dict, _, files) = OpenTiny();
         using (client)
         {
             Assert.Equal(JsonValueKind.Null, Ok(client.Call("wordPack", null)).GetProperty("pack").ValueKind);
+            // A distinguishable pack comes first: a refusal that deleted what was held would leave the same null the
+            // test started with, so starting empty proved nothing.
+            string heldPath = InstallEmptyPack(client);
+            try
+            {
+                JsonElement heldPack = Ok(client.Call("wordPack", null)).GetProperty("pack");
+                Assert.Equal(2u, heldPack.GetProperty("version").GetUInt32());
+                Assert.Equal("test", heldPack.GetProperty("sources")[0].GetString());
+                string before = Ok(client.Call("explore", new
+                {
+                    dicts = new[] { dict },
+                    mode = new { type = "endsWith" },
+                    text = "un",
+                    offset = 0,
+                    limit = 20,
+                }, files)).GetProperty("rows").GetRawText();
 
-            string dir = Environment.GetEnvironmentVariable("XDICT_FIXTURES")!;
-            object[] pack =
-            [
-                client.Observe("pack", "xdict-word-pack.jsonl", Path.Combine(dir, "tiny", "tiny.mdx")),
-            ];
-            Reply refused = client.Call("setWordPack", new { file = new { file = "pack" } }, pack);
-            Assert.NotEqual("", Error(refused));
-            Assert.Contains(Error(refused), Validate.CoreErrorTypes);
-            Assert.Equal(JsonValueKind.Null, Ok(client.Call("wordPack", null)).GetProperty("pack").ValueKind);
+                string dir = Environment.GetEnvironmentVariable("XDICT_FIXTURES")!;
+                object[] pack =
+                [
+                    client.Observe("pack", "xdict-word-pack.jsonl", Path.Combine(dir, "tiny", "tiny.mdx")),
+                ];
+                Reply refused = client.Call("setWordPack", new { file = new { file = "pack" } }, pack);
+                Assert.NotEqual("", Error(refused));
+                Assert.Contains(Error(refused), Validate.CoreErrorTypes);
 
+                // What was held is still held, by its own facts and by its answers.
+                JsonElement after = Ok(client.Call("wordPack", null)).GetProperty("pack");
+                Assert.Equal(2u, after.GetProperty("version").GetUInt32());
+                Assert.Equal("test", after.GetProperty("sources")[0].GetString());
+                Assert.Equal(before, Ok(client.Call("explore", new
+                {
+                    dicts = new[] { dict },
+                    mode = new { type = "endsWith" },
+                    text = "un",
+                    offset = 0,
+                    limit = 20,
+                }, files)).GetProperty("rows").GetRawText());
+            }
+            finally { File.Delete(heldPath); }
             Assert.Equal(JsonValueKind.Null, Ok(client.Call("clearWordPack", null)).GetProperty("pack").ValueKind);
         }
     }
@@ -120,20 +174,37 @@ public class Contract5Tests
         var (client, _, _, _) = OpenTiny();
         using (client)
         {
-            string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")!, "tiny");
-            object[] files =
-            [
-                client.Observe("source", "kaikki.jsonl", Path.Combine(dir, "tiny.mdx")),
-                client.Observe("manifest", "manifest.json", Path.Combine(dir, "tiny.mdx")),
-            ];
-            Reply refused = client.Call("buildWordPack", new
+            string heldPath = InstallEmptyPack(client);
+            try
             {
-                sources = new[] { new { file = "source" } },
-                manifest = new { file = "manifest" },
-            }, files);
-            Assert.NotEqual("", Error(refused));
-            Assert.Contains(Error(refused), Validate.CoreErrorTypes);
-            Assert.Equal(JsonValueKind.Null, Ok(client.Call("wordPack", null)).GetProperty("pack").ValueKind);
+                // A valid source and a manifest that is not JSON: only the manifest is wrong, so the refusal is the
+                // manifest's, not any core error at all.
+                string manifestPath = Path.Combine(Path.GetTempPath(),
+                    "xdict-manifest-" + Guid.NewGuid().ToString("N") + ".json");
+                File.WriteAllText(manifestPath, "{not a manifest");
+                try
+                {
+                    string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")!, "tiny");
+                    object[] files =
+                    [
+                        client.Observe("source", "kaikki.jsonl", Path.Combine(dir, "tiny.mdx")),
+                        client.Observe("manifest", "manifest.json", manifestPath),
+                    ];
+                    Reply refused = client.Call("buildWordPack", new
+                    {
+                        sources = new[] { new { file = "source" } },
+                        manifest = new { file = "manifest" },
+                    }, files);
+                    Assert.Equal("malformed", Error(refused));
+                    string detail = refused.Error!.Value.GetProperty("detail").GetString()!;
+                    Assert.Contains("manifest", detail);
+                    JsonElement after = Ok(client.Call("wordPack", null)).GetProperty("pack");
+                    Assert.Equal(2u, after.GetProperty("version").GetUInt32());
+                    Assert.Equal("test", after.GetProperty("sources")[0].GetString());
+                }
+                finally { File.Delete(manifestPath); }
+            }
+            finally { File.Delete(heldPath); }
         }
     }
 
@@ -183,16 +254,38 @@ public class Contract5Tests
             JsonElement built = Ok(examples);
             Assert.Equal(edition, built.GetProperty("edition").GetString());
             Assert.True(built.TryGetProperty("cached", out _));
+            // What the store holds, not only that a build answered: the fixture has no Chinese, so the store is
+            // empty for that stated reason and no pair can be answered from it.
+            Assert.True(built.GetProperty("noChinese").GetBoolean());
+            Assert.Equal(0u, built.GetProperty("pairs").GetUInt32());
+            JsonElement exampleQuery = Ok(client.Call("examples", new
+            {
+                query = "run",
+                dicts = new[] { dict },
+                limit = 20,
+            }, files));
+            Assert.Empty(exampleQuery.GetProperty("hits").EnumerateArray());
 
             Reply phrases = client.Call("phrasesBuild", new { dict }, files);
             Assert.Null(phrases.Error);
             JsonElement phrasesBuilt = Ok(phrases);
             Assert.Equal(edition, phrasesBuilt.GetProperty("edition").GetString());
-            Assert.True(phrasesBuilt.TryGetProperty("phrases", out _));
+            ulong stored = phrasesBuilt.GetProperty("phrases").GetUInt64();
+            JsonElement phraseQuery = Ok(client.Call("phrases", new
+            {
+                sentence = "The run began.",
+                term = new { location = 4, length = 3 },
+                dicts = new[] { dict },
+            }, files));
+            // The store answers about this dictionary: its own pair count, and no invented match.
+            Assert.Equal(stored, (ulong)phraseQuery.GetProperty("matches").GetArrayLength());
 
-            // The build is kept: the reader's next query reads the store instead of building it again.
+            // The build is kept: the reader's next query reads the store instead of building it again, with the same
+            // contents the first pass wrote.
             JsonElement again = Ok(client.Call("examplesBuild", new { dict }, files));
             Assert.True(again.GetProperty("cached").GetBoolean());
+            Assert.Equal(built.GetProperty("pairs").GetUInt32(), again.GetProperty("pairs").GetUInt32());
+            Assert.Equal(built.GetProperty("roles").GetRawText(), again.GetProperty("roles").GetRawText());
         }
     }
 }

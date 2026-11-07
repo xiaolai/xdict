@@ -68,6 +68,13 @@ public class AIContractTests
                             Assert.Equal(translation.GetString(), result.Translation);
                         if (expect.TryGetProperty("explanation", out JsonElement explanation))
                             Assert.Equal(explanation.GetString(), result.Explanation);
+                        // The accepted quotes are the answer's own, in order: a validator that dropped or reordered
+                        // them passed every other assertion in this vector set.
+                        if (input.TryGetProperty("answer", out JsonElement answer) &&
+                            answer.TryGetProperty("quotes", out JsonElement quotes) &&
+                            quotes.ValueKind == JsonValueKind.Array)
+                            Assert.Equal(quotes.EnumerateArray().Select(item => item.GetString()).ToArray(),
+                                result.Quotes.ToArray());
                     }
                     else
                     {

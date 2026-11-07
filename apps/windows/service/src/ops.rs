@@ -457,7 +457,7 @@ impl Service {
             }
             // MARK: contract 5 — Explore and its stores
             "explore" => {
-                self.ensure_pack_loaded();
+                self.ensure_pack_loaded()?;
                 let body: ExploreBody = decode(&request.operation)?;
                 record(self.core.explore(
                     body.dicts,
@@ -473,7 +473,7 @@ impl Service {
                 record(rows.iter().map(collocation_json).collect::<Vec<_>>())
             }
             "wordPack" => {
-                self.ensure_pack_loaded();
+                self.ensure_pack_loaded()?;
                 record(json!({ "pack": self.core.word_pack() }))
             }
             "setWordPack" => self.set_word_pack(request, sources),
@@ -624,6 +624,7 @@ impl Service {
                 .map_err(CoreError::from)
                 .map_err(Failure::Core)?;
             let path = root.join("pack.jsonl");
+            StagingBudget::new().take(&source)?;
             source.copy_to(&path)?;
             let info = self
                 .core
@@ -680,6 +681,7 @@ impl Service {
                 .map_err(CoreError::from)
                 .map_err(Failure::Core)?;
             let mut staged = std::collections::HashSet::new();
+            let mut budget = StagingBudget::new();
             for file in &body.sources {
                 let source = sources.remove(&file.file).ok_or_else(|| {
                     Failure::admission(format!(
@@ -696,6 +698,7 @@ impl Service {
                         file.file
                     )));
                 }
+                budget.take(&source)?;
                 source.copy_to(&raw.join(name))?;
             }
             let manifest = sources.remove(&body.manifest.file).ok_or_else(|| {
@@ -705,6 +708,7 @@ impl Service {
                 ))
             })?;
             let manifest_path = root.join("manifest.json");
+            budget.take(&manifest)?;
             manifest.copy_to(&manifest_path)?;
             let output = out.join("xdict-word-pack.jsonl");
             let progress = self.build_progress(request.id, events);
@@ -884,31 +888,35 @@ impl Service {
 
     /// The first word-pack question on a restarted service loads the persisted pack: the service was idle, not
     /// gone, and a missing pack would otherwise turn every pack mode into "not installed". A corrupt file is
-    /// removed after one refusal.
-    fn ensure_pack_loaded(&self) {
+    /// refused to the caller and then removed once, so the next service start is clean.
+    fn ensure_pack_loaded(&self) -> Result<(), Failure> {
         if self.core.word_pack().is_some() {
-            return;
+            return Ok(());
         }
         let installed = self.installed_pack();
         if !installed.is_file() {
-            return;
+            return Ok(());
         }
         let _guard = self
             .pack_lock
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if self.core.word_pack().is_some() {
-            return;
+            return Ok(());
         }
-        if let Err(error) = self
+        match self
             .core
             .attach_word_pack(installed.to_string_lossy().into_owned())
         {
-            eprintln!(
-                "the installed word pack {} could not be loaded: {error:?}",
-                installed.display()
-            );
-            let _ = std::fs::remove_file(&installed);
+            Ok(_) => Ok(()),
+            Err(error) => {
+                eprintln!(
+                    "the installed word pack {} could not be loaded: {error:?}",
+                    installed.display()
+                );
+                let _ = std::fs::remove_file(&installed);
+                Err(Failure::Core(error))
+            }
         }
     }
 
@@ -1057,6 +1065,44 @@ fn package_ids(spec: &PackageSpec) -> Vec<String> {
 /// The render context, with the service's base: no request can move it.
 /// The contract's text budget: the macOS `Limits.maxTextBytes`.
 const TEXT_MAX: u64 = 1 << 20;
+
+/// What one request may stage to disk before the core reads it. A pack is 183 MB today and the build's pinned
+/// sources are each downloaded at its manifest size; these are the service's own defence against a handle filling
+/// the disk, checked against the size admission recorded and enforced again while the copy runs (`HandleSource`).
+const STAGE_FILE_MAX: u64 = 512 * 1024 * 1024;
+const STAGE_TOTAL_MAX: u64 = 1024 * 1024 * 1024;
+
+/// One request's staging budget: taken before each copy, never after, so a file past the bound is refused before a
+/// byte of it lands.
+struct StagingBudget {
+    remaining: u64,
+}
+
+impl StagingBudget {
+    fn new() -> Self {
+        Self {
+            remaining: STAGE_TOTAL_MAX,
+        }
+    }
+
+    fn take(&mut self, source: &HandleSource) -> Result<(), Failure> {
+        let size = source.admitted_size();
+        if size > STAGE_FILE_MAX {
+            return Err(Failure::admission(format!(
+                "{}: {size} bytes is over the {STAGE_FILE_MAX}-byte staging bound",
+                source.name()
+            )));
+        }
+        if size > self.remaining {
+            return Err(Failure::admission(format!(
+                "{}: the request's staged files would exceed {STAGE_TOTAL_MAX} bytes",
+                source.name()
+            )));
+        }
+        self.remaining -= size;
+        Ok(())
+    }
+}
 
 /// The entry-text view: the service's base, the body ceiling and the text budget both bounded, never the request's.
 fn text_view(requested: TextViewBody) -> Result<TextView, Failure> {

@@ -8,14 +8,18 @@ using XDict.Models;
 
 public class ContractMismatchTests
 {
-    [Fact]
-    public void AnOlderContractIsRefusedTyped()
+    [Theory]
+    [InlineData(-1)] // Wire.Version - 1: an older contract
+    [InlineData(1)]  // Wire.Version + 1: a newer one
+    public void AnOlderOrNewerContractIsRefusedTyped(int offset)
     {
+        // Both directions, each named from Wire.Version: 999 was a newer number, so the "older" case was never sent.
+        uint foreign = unchecked((uint)(Wire.Version + offset));
         using ServiceClient client = Start();
-        Reply reply = client.CallWithContract(999, "versions", null);
+        Reply reply = client.CallWithContract(foreign, "versions", null);
         Assert.NotNull(reply.Error);
         Assert.Equal("contractMismatch", reply.Error!.Value.GetProperty("type").GetString());
-        Assert.Equal(999u, reply.Error.Value.GetProperty("contract").GetUInt32());
+        Assert.Equal(foreign, reply.Error.Value.GetProperty("contract").GetUInt32());
         Assert.Equal(Wire.Version, reply.Error.Value.GetProperty("service").GetUInt32());
         Assert.Equal(client.LastRequestId, reply.Id);
         Assert.NotNull(client.Handshake());

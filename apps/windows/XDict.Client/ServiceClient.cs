@@ -67,6 +67,9 @@ public sealed class ServiceClient : IDisposable
     }
 
     public int ProcessId => Connection().Child.ProcessId;
+    /// <summary>For the tests: how many file handles this client holds for observations. A pass that fails midway must
+    /// leave this where it found it.</summary>
+    internal int HeldFiles { get { lock (state) return paths.Count; } }
     internal SafeFileHandle RequestPipe => ((FileStream)Connection().Child.Input).SafeFileHandle;
     public ulong LastRequestId => (ulong)Interlocked.Read(ref nextId);
     // Request ids and operation names only: useful to prove queued work did not cross the pipe.
@@ -234,8 +237,23 @@ public sealed class ServiceClient : IDisposable
                         if (package.Connection == current) return null;
                         ServiceConnection live = current!;
                         ulong reopenId = (ulong)Interlocked.Increment(ref nextId);
-                        Reply reopened = await live.Send(Wire.Version, reopenId, "open", package.Body,
-                            () => Materialize(live, package.Files), () => { }, token).WaitAsync(token).ConfigureAwait(false);
+                        // The restore is a transmission of its own: it must be reclaimable when the deadline or the
+                        // caller's cancellation stops the wait, or its id stays pending on a connection nobody reads.
+                        if (!FitsEnvelope(Wire.Version, reopenId, "open", package.Body, package.Files))
+                            return Error(id, "envelopeTooLarge");
+                        bool reopenSent = false;
+                        Reply reopened;
+                        try
+                        {
+                            reopened = await live.Send(Wire.Version, reopenId, "open", package.Body,
+                                () => Materialize(live, package.Files), () => reopenSent = true, token)
+                                .WaitAsync(token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            if (reopenSent) live.Abandon(reopenId, TimeSpan.Zero);
+                            throw;
+                        }
                         if (reopened.Error is { } reopenError)
                             return Error(id, reopenError.GetProperty("type").GetString() ?? "staleHandle");
                         if (reopened.Ok?.GetProperty("type").GetString() != "ready")
@@ -277,6 +295,10 @@ public sealed class ServiceClient : IDisposable
                 }
                 finally { current.Restore.Release(); }
             }
+            // Before any handle is duplicated: a refused envelope must leave nothing in the service (its handles are
+            // only closed by the process that owns them, and that is the service).
+            if (!FitsEnvelope(contract, id, operation, requestBody, requestFiles))
+                return Error(id, "envelopeTooLarge");
             Reply reply = await current.Send(contract, id, operation, requestBody,
                 () => Materialize(current, requestFiles), () => { sent = true; RequestSent?.Invoke(id, operation); }, token).WaitAsync(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested(); // A completed late reply cannot publish a superseded generation.
@@ -320,7 +342,13 @@ public sealed class ServiceClient : IDisposable
             return Error(id, timeout.IsCancellationRequested ? "deadline" : "cancelled");
         }
         catch (ServiceFailureException error) { return Error(id, error.ErrorType); }
-        catch (RequestTooLargeException) { return Error(id, "envelopeTooLarge"); }
+        catch (RequestTooLargeException)
+        {
+            // The backstop fired after the handles were duplicated: only the service can close them, so the
+            // connection is replaced (a new spawn) rather than left holding handles the app can no longer name.
+            current?.Dispose();
+            return Error(id, "envelopeTooLarge");
+        }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
             current?.Dispose();
@@ -342,6 +370,19 @@ public sealed class ServiceClient : IDisposable
             if (acquired) credit!.Release();
             Interlocked.Decrement(ref queued);
         }
+    }
+
+    /// <summary>Whether the envelope fits CONTRACT.md §5's 4 MiB before any handle is duplicated into the service.
+    /// The files are measured as the caller observed them: materializing replaces each handle's `0` with at most 20
+    /// digits, so the margin below covers every record.</summary>
+    private static bool FitsEnvelope(uint contract, ulong id, string operation, JsonNode? body,
+        IReadOnlyList<object> files)
+    {
+        byte[] measured = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            contract, id, op = operation, files, operation = body,
+        }, Wire.Options);
+        return measured.Length + 20L * files.Count <= Wire.JsonMax;
     }
 
     private IReadOnlyList<object> Materialize(ServiceConnection current, IReadOnlyList<object> files)

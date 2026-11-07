@@ -224,11 +224,20 @@ public sealed partial class HistoryWindow : Window
         busy = true;
         try
         {
-            await session.RemoveAsync(card);
+            HistoryMutation result = await session.RemoveAsync(card);
+            // The mutation committed: the undo is recorded before anything that a failed re-read could lose.
             removed = card;
-            await ReloadAsync();
-            StatusText.Text = Strings.Get("history.removed");
             RestoreButton.Visibility = Visibility.Visible;
+            if (result.RefreshError is { } refresh)
+            {
+                Build();
+                StatusText.Text = Strings.Format("history.refreshFailed", Describe(refresh));
+            }
+            else
+            {
+                await ReloadAsync();
+                StatusText.Text = Strings.Get("history.removed");
+            }
         }
         catch (Exception error)
         {
@@ -246,11 +255,19 @@ public sealed partial class HistoryWindow : Window
         busy = true;
         try
         {
-            await session.RestoreAsync(removed);
+            HistoryMutation result = await session.RestoreAsync(removed);
             removed = null;
             RestoreButton.Visibility = Visibility.Collapsed;
-            await ReloadAsync();
-            StatusText.Text = Strings.Get("history.restored");
+            if (result.RefreshError is { } refresh)
+            {
+                Build();
+                StatusText.Text = Strings.Format("history.refreshFailed", Describe(refresh));
+            }
+            else
+            {
+                await ReloadAsync();
+                StatusText.Text = Strings.Get("history.restored");
+            }
         }
         catch (Exception error)
         {

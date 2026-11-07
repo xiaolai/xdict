@@ -106,7 +106,8 @@ public static class StudyWire
                 ? kind.GetString() ?? "internal"
                 : "internal", error);
         if (reply.Ok is not { } ok) throw new InvalidOperationException("the study reply has no answer");
-        return ok.Deserialize<T>(Wire.Options) ?? throw new InvalidOperationException("the study reply did not decode");
+        T value = ok.Deserialize<T>(Wire.Options) ?? throw new InvalidOperationException("the study reply did not decode");
+        return Valid(value);
     }
 
     public static T? ReadOrNull<T>(Reply reply) where T : class
@@ -115,6 +116,50 @@ public static class StudyWire
             throw new ServiceFailureException(error.TryGetProperty("type", out JsonElement kind)
                 ? kind.GetString() ?? "internal"
                 : "internal", error);
-        return reply.Ok is { } ok ? ok.Deserialize<T>(Wire.Options) : null;
+        return reply.Ok is { } ok ? ok.Deserialize<T>(Wire.Options) is { } value ? Valid(value) : null : null;
     }
+
+    /// <summary>A record is published only when its mandatory members are there. Deserialization alone accepts `{}`
+    /// as any record — a History with no days, a StudyCard with no target — and every consumer below would then
+    /// fail somewhere else. The contract's records are all-mandatory, so a missing one is a protocol violation.</summary>
+    private static T Valid<T>(T value) where T : class
+    {
+        if (!Complete(value))
+            throw new ContractViolationException(
+                $"a {typeof(T).Name} record is missing a member the contract requires");
+        return value;
+    }
+
+    private static bool Complete(object? value) => value switch
+    {
+        null => false,
+        History history => history.Days is not null && history.Days.All(Complete),
+        HistoryDay day => day.Id is not null && day.Label is not null && day.Cards is not null &&
+            day.Cards.All(Complete),
+        HistoryCard card => card.Reading is not null && card.Events is not null &&
+            card.Events.All(id => id is not null) && Complete(card.Reading),
+        HistoryReading reading => reading.Surface is not null && reading.Lemma is not null &&
+            reading.Sentence is not null && reading.Quality is not null && reading.Edition is not null &&
+            reading.EntryKey is not null && reading.DictionaryName is not null && reading.Language is not null &&
+            reading.Device is not null,
+        HistoryGloss gloss => gloss.Entry is not null && gloss.Entry.Edition is not null &&
+            gloss.Entry.Key is not null,
+        StudyCard card => card.Target is not null && card.Note is not null && card.State is not null &&
+            card.Head is not null && card.NoteHead is not null && Complete(card.Target) && Complete(card.Note) &&
+            Complete(card.State),
+        StudyTarget target => target.Lineage is not null && target.EntryKey is not null && target.Kind is not null &&
+            target.Edition is not null && target.DefinitionHash is not null,
+        StudyNote note => note.Target is not null && note.Text is not null && note.Device is not null &&
+            Complete(note.Target),
+        StudyCardState state => state.Phase is not null,
+        ReviewOutcome outcome => outcome.Outcome is not null && outcome.Card is not null && Complete(outcome.Card),
+        CardConflict conflict => conflict.Target is not null && conflict.Note is not null &&
+            conflict.Candidates is not null && conflict.Candidates.All(candidate => candidate is not null &&
+                candidate.Id is not null && candidate.Grade is not null && candidate.Device is not null &&
+                candidate.After is not null && Complete(candidate.After)),
+        ReanchorReport report => report.Outcomes is not null && report.Outcomes.All(outcome => outcome is not null &&
+            outcome.Target is not null && outcome.Result is not null && Complete(outcome.Target)),
+        EraseReport report => report.Recoverable is not null,
+        _ => true,
+    };
 }

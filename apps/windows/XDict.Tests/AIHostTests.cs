@@ -7,14 +7,33 @@ public class AIHostTests
 {
     private sealed class Fake(string answer) : IAISource
     {
+        private int calls;
+        public int Calls => Volatile.Read(ref calls);
         public string? Sent { get; private set; }
         public AIMode? Mode { get; private set; }
 
         public Task<string> AskAsync(AIMode mode, string composed, CancellationToken cancellation = default)
         {
+            Interlocked.Increment(ref calls);
             Mode = mode;
             Sent = composed;
             return Task.FromResult(answer);
+        }
+    }
+
+    /// <summary>A source whose one ask never completes until the test says so: cancellation has somewhere to land.</summary>
+    private sealed class Pending : IAISource
+    {
+        private readonly TaskCompletionSource<string> completion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Calls { get; private set; }
+
+        public Task<string> AskAsync(AIMode mode, string composed, CancellationToken cancellation = default)
+        {
+            Calls++;
+            Started.TrySetResult();
+            return completion.Task.WaitAsync(cancellation);
         }
     }
 
@@ -34,6 +53,48 @@ public class AIHostTests
         Assert.False(answer.Ungrounded);
         Assert.Equal(composition.Text, source.Sent);
         Assert.Equal(AIMode.Grounded, source.Mode);
+        // One question is one provider call: a retry or a duplicated send would be visible here.
+        Assert.Equal(1, source.Calls);
+    }
+
+    [Fact]
+    public async Task OneQuestionIsOneProviderCallAndCancellationReachesIt()
+    {
+        var source = new Pending();
+        var host = new AIHost(source);
+        var ask = new AIAsk("hold", 7, 4, "Please hold the door.", "en", AIMode.Grounded, Entry,
+            Template: "{term} in: {sentence}\n{entry}");
+        AIComposition composition = host.Prepare(ask, () => true);
+        using var cancellation = new CancellationTokenSource();
+        Task<AIAnswer> asked = host.AskAsync(composition, () => true, cancellation.Token);
+        await source.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, source.Calls);
+        cancellation.Cancel();
+        // The provider's own cancellation token is the caller's: the call stops with it, and nothing retries.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked);
+        Assert.Equal(1, source.Calls);
+    }
+
+    [Fact]
+    public async Task ConsentRevokedAfterPrepareRefusesToSend()
+    {
+        // Consent can change between the preview and the send: the send checks it again, before the provider is called.
+        var grounded = new Fake("{}");
+        var host = new AIHost(grounded);
+        AIComposition composition = host.Prepare(
+            new AIAsk("hold", 7, 4, "Please hold the door.", "en", AIMode.Grounded, Entry,
+                Template: "{term} in: {sentence}\n{entry}"), () => true);
+        await Assert.ThrowsAsync<AIConsentException>(() => host.AskAsync(composition, () => false));
+        Assert.Equal(0, grounded.Calls);
+
+        var sense = new Fake("{}");
+        var explaining = new AIHost(sense);
+        AIComposition explained = explaining.Prepare(
+            new AIAsk("hold", 7, 4, "Please hold.", "en", AIMode.ExplainSense, Entry,
+                new AISense(1, 0, (ulong)"1. to hold".Length, "1. to hold", "1", "verb", true),
+                Template: "{term} {sentence} {entry} {sense}"), () => true);
+        await Assert.ThrowsAsync<AIConsentException>(() => explaining.AskAsync(explained, () => false));
+        Assert.Equal(0, sense.Calls);
     }
 
     [Fact]

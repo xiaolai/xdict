@@ -42,14 +42,17 @@ public sealed class ReadingRecorder(ServiceClient client)
         object? span = context.Start >= 0 && context.Length > 0
             ? new { start = (uint)context.Start, len = (uint)context.Length }
             : null;
+        // The capture's own ends (the contract's `cut`), in the ledger's bits, and the quality that follows from
+        // them: a sentence whose start or end the capture may have cut is `mayBeCut`, never `complete`.
+        int cut = context.CutBits;
         return new
         {
             surface = term.Term,
             lemma = key,
             sentence = context.Sentence,
             span,
-            cut = (byte)0,
-            quality = "complete",
+            cut = (byte)cut,
+            quality = cut == 0 ? "complete" : "mayBeCut",
             edition = hit.Edition,
             entryKey = key,
             occurrence,
@@ -61,8 +64,9 @@ public sealed class ReadingRecorder(ServiceClient client)
     }
 
     /// <summary>Records one reading where the switch is on and a sentence was captured; null where nothing should be
-    /// written. A stale service answer is retried once with the same operation id, so a lost acknowledgement is one
-    /// event, never two.</summary>
+    /// written by design. A refusal is thrown, never returned as null: a lost history write must be observable, not
+    /// look like the switch was off. A stale service answer is retried once with the same operation id, so a lost
+    /// acknowledgement is one event, never two.</summary>
     public async Task<LedgerRecordOutcome?> RecordAsync(CapturedTerm term, SearchHit hit, LibraryDictionary? dictionary,
         LearningSettings settings, string? devicePath = null, CancellationToken cancellation = default)
     {
@@ -79,10 +83,18 @@ public sealed class ReadingRecorder(ServiceClient client)
             if (type is "staleHandle" or "deadline" or "closed")
                 reply = await client.CallAsync("ledgerRecord", body, cancellation: cancellation).ConfigureAwait(false);
         }
+        if (reply.Error is { } failure)
+        {
+            string type = failure.TryGetProperty("type", out JsonElement kind) && kind.GetString() is { } named
+                ? named
+                : "internal";
+            throw new ServiceFailureException(type, failure);
+        }
         if (reply.Ok is { ValueKind: JsonValueKind.String } ok && ok.GetString() is { } outcome &&
             Enum.TryParse(outcome, ignoreCase: true, out LedgerRecordOutcome parsed))
             return parsed;
-        return null;
+        throw new ContractViolationException(
+            "the ledger answered a record outcome this shell does not know");
     }
 }
 

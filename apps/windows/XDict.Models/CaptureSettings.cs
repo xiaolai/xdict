@@ -60,13 +60,16 @@ public sealed record CaptureSettings
         _ => "0x" + key.ToString("X2"),
     };
 
-    /// <summary>A rebinding is kept only when Windows gave it; on a clash the caller puts the previous combination
-    /// back, as Hotkey.Rebind does. The previous record carries every other choice, hover's included.</summary>
+    /// <summary>A rebinding is kept only when Windows gave it; on a clash this function itself puts the previous
+    /// combination back before reporting it, so the reader is never left without a shortcut, and the restoration is
+    /// testable without the app's window. The previous record carries every other choice, hover's included.</summary>
     public static CaptureSettings TryRebind(CaptureSettings previous, uint modifiers, uint key,
         Func<uint, uint, bool> register, Action unregisterOld)
     {
         unregisterOld();
         if (register(modifiers, key)) return previous with { Modifiers = modifiers, Key = key };
+        // The old combination keeps working: re-registered before the clash is reported.
+        register(previous.Modifiers, previous.Key);
         throw new CaptureClashException(modifiers, key);
     }
 }

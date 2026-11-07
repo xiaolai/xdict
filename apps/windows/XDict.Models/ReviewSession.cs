@@ -24,6 +24,11 @@ public sealed class ReviewSession(
     public string? LastGradeEvent { get; private set; }
     public string? LastGradeTarget { get; private set; }
 
+    /// <summary>Why the queue could not be re-read after a committed grade, undo or resolution: the mutation stands,
+    /// and the caller says so instead of reporting it as failed. Null when the last refresh succeeded; cleared by
+    /// the next one.</summary>
+    public Exception? RefreshError { get; private set; }
+
     /// <summary>The card the next grade extends; the queue's first, or none when nothing is due.</summary>
     public bool CanGrade => Current is not null && Revealed;
 
@@ -71,8 +76,12 @@ public sealed class ReviewSession(
         {
             LastGradeEvent = outcome.Card.Head;
             LastGradeTarget = target;
+            // Committed: the revealed card is no longer the one to present, whatever the refresh does. Leaving it as
+            // Current is what made a successful grade look like a failed one when only the re-read failed.
+            Cards = Cards.Skip(1).ToArray();
+            Revealed = false;
         }
-        await LoadAsync(cancellation: cancellation).ConfigureAwait(false);
+        await RefreshAsync(cancellation).ConfigureAwait(false);
         return outcome;
     }
 
@@ -91,7 +100,7 @@ public sealed class ReviewSession(
             }, cancellation: cancellation).ConfigureAwait(false));
         LastGradeEvent = null;
         LastGradeTarget = null;
-        await LoadAsync(cancellation: cancellation).ConfigureAwait(false);
+        await RefreshAsync(cancellation).ConfigureAwait(false);
         return outcome;
     }
 
@@ -111,8 +120,27 @@ public sealed class ReviewSession(
                 stamp = Stamp(),
                 operation = "resolve:" + Guid.NewGuid().ToString("N"),
             }, cancellation: cancellation).ConfigureAwait(false));
-        await LoadAsync(cancellation: cancellation).ConfigureAwait(false);
+        await RefreshAsync(cancellation).ConfigureAwait(false);
         return outcome;
+    }
+
+    /// <summary>The re-read after a committed mutation: its failure is recorded, not thrown, so a grade that was
+    /// written is never reported as a failure. A cancelled refresh is the caller's own and is thrown.</summary>
+    private async Task RefreshAsync(CancellationToken cancellation)
+    {
+        try
+        {
+            await LoadAsync(cancellation: cancellation).ConfigureAwait(false);
+            RefreshError = null;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            RefreshError = error;
+        }
     }
 
     public async Task<ReviewSummary> SummaryAsync(CancellationToken cancellation = default) =>

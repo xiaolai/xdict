@@ -25,26 +25,35 @@ public class Contract2Tests
     private static (ServiceClient Client, string Dict, string Edition) OpenTiny()
     {
         ServiceClient client = Start();
-        string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")
-            ?? throw new InvalidOperationException("XDICT_FIXTURES names the generated conformance fixtures"), "tiny");
-        object[] files =
-        [
-            client.Observe("tiny.mdx", "tiny.mdx", Path.Combine(dir, "tiny.mdx")),
-            client.Observe("tiny.mdd", "tiny.mdd", Path.Combine(dir, "tiny.mdd")),
-            client.Observe("tiny.css", "tiny.css", Path.Combine(dir, "tiny.css")),
-        ];
-        var package = new
+        try
         {
-            mdx = new { file = "tiny.mdx" },
-            mdd = new[] { new { file = "tiny.mdd" } },
-            sidecars = new[] { new { file = "tiny.css" } },
-        };
-        Reply imported = client.Call("import", new { package, progress = false }, files);
-        Assert.Null(imported.Error);
-        Reply opened = client.Call("open", new { package }, files);
-        Assert.Null(opened.Error);
-        JsonElement ok = Ok(opened);
-        return (client, ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!);
+            string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")
+                ?? throw new InvalidOperationException("XDICT_FIXTURES names the generated conformance fixtures"), "tiny");
+            object[] files =
+            [
+                client.Observe("tiny.mdx", "tiny.mdx", Path.Combine(dir, "tiny.mdx")),
+                client.Observe("tiny.mdd", "tiny.mdd", Path.Combine(dir, "tiny.mdd")),
+                client.Observe("tiny.css", "tiny.css", Path.Combine(dir, "tiny.css")),
+            ];
+            var package = new
+            {
+                mdx = new { file = "tiny.mdx" },
+                mdd = new[] { new { file = "tiny.mdd" } },
+                sidecars = new[] { new { file = "tiny.css" } },
+            };
+            Reply imported = client.Call("import", new { package, progress = false }, files);
+            Assert.Null(imported.Error);
+            Reply opened = client.Call("open", new { package }, files);
+            Assert.Null(opened.Error);
+            JsonElement ok = Ok(opened);
+            return (client, ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!);
+        }
+        catch
+        {
+            // Ownership has not been transferred yet: a failed setup must not leave a service process per test run.
+            client.Dispose();
+            throw;
+        }
     }
 
     private static List<JsonElement> Cards(JsonElement history) =>
@@ -257,6 +266,9 @@ public class Contract2Tests
         double at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var stamp = new { at, device = "contract2" };
 
+        // The same service process throughout: a Handshake after the refusal is answered by a client that silently
+        // respawned unless the process is compared.
+        int pid = client.ProcessId;
         string tooBig = new('x', 4_200_000);
         Reply over = client.Call("ledgerRecord", new
         {
@@ -265,6 +277,7 @@ public class Contract2Tests
             targetLanguages = new[] { "en" },
         });
         Assert.Equal("envelopeTooLarge", Error(over));
+        Assert.Equal(pid, client.ProcessId);
         Assert.NotNull(client.Handshake());
 
         string large = new('y', 2_200_000);
@@ -285,7 +298,11 @@ public class Contract2Tests
         Reply history = client.Call("ledgerHistory", new { now = at, utcOffsetSeconds = 0 });
         Assert.Equal("envelopeTooLarge", Error(history));
         Assert.Equal((uint)Wire.JsonMax, history.Error!.Value.GetProperty("ceiling").GetUInt32());
+        // A refused reply is the service's bound, answered by the service: it survived, rather than the client's next
+        // call finding a new one.
+        Assert.Equal(pid, client.ProcessId);
         Assert.NotNull(client.Handshake());
+        Assert.Equal(pid, client.ProcessId);
 
         Reply erased = client.Call("eraseData", new
         {
@@ -294,5 +311,23 @@ public class Contract2Tests
         });
         Assert.Null(erased.Error);
         Assert.NotNull(client.Handshake());
+    }
+
+    [Fact]
+    public void AnOversizedIncomingFrameEndsTheConnection()
+    {
+        // Written straight onto the pipe, past ServiceClient's own pre-flight: this is the service's bound, not the
+        // client's. The service reads the length before the frame, so the four bytes alone decide it.
+        string service = Environment.GetEnvironmentVariable("XDICT_SERVICE")
+            ?? throw new InvalidOperationException("XDICT_SERVICE names the built xdict-service executable");
+        using ChildProcess child = Native.Spawn(service, "raw-" + Guid.NewGuid().ToString("N"));
+        child.Input.Write(BitConverter.GetBytes((uint)(Wire.JsonMax + 1)));
+        child.Input.Flush();
+        // The contract's sentence is that the connection ends: the service process exits and its reply pipe reaches
+        // end of stream, rather than answering anything further.
+        Assert.True(Native.WaitForSingleObject(child.ProcessHandle, 10_000) == 0,
+            "the service kept a connection whose frame was over its bound");
+        try { Assert.Equal(-1, child.Output.ReadByte()); }
+        catch (IOException) { /* a broken pipe is the same end of the connection */ }
     }
 }

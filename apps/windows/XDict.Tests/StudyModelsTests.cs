@@ -10,30 +10,44 @@ public class StudyModelsTests
 {
     private const double At = 1_800_000_000;
 
-    private static (ServiceClient Client, string Dict, string Edition) OpenTiny()
+    private static ServiceClient Connect() => new(
+        Environment.GetEnvironmentVariable("XDICT_SERVICE")
+            ?? throw new InvalidOperationException("XDICT_SERVICE names the built xdict-service executable"),
+        new ServiceClientOptions { Storage = "study-" + Guid.NewGuid().ToString("N") });
+
+    /// <summary>Imports and opens one generated fixture on an existing client (`tiny`, `twin-a`, `twin-b`).</summary>
+    private static (string Dict, string Edition) Open(ServiceClient client, string fixture)
     {
-        ServiceClient client = new(
-            Environment.GetEnvironmentVariable("XDICT_SERVICE")
-                ?? throw new InvalidOperationException("XDICT_SERVICE names the built xdict-service executable"),
-            new ServiceClientOptions { Storage = "study-" + Guid.NewGuid().ToString("N") });
-        string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")!, "tiny");
+        string dir = Path.Combine(Environment.GetEnvironmentVariable("XDICT_FIXTURES")!, fixture);
+        // The generated fixtures keep their own names: tiny carries tiny.css, the twins share marker.css.
+        string sidecar = fixture == "tiny" ? "tiny.css" : "marker.css";
+        // Observation ids are per fixture, never shared: two open dictionaries would otherwise overwrite each
+        // other's path in the client, and a request for one would carry the other's handle.
+        string mdx = fixture + ".mdx", mdd = fixture + ".mdd", css = fixture + ".css";
         object[] files =
         [
-            client.Observe("tiny.mdx", "tiny.mdx", Path.Combine(dir, "tiny.mdx")),
-            client.Observe("tiny.mdd", "tiny.mdd", Path.Combine(dir, "tiny.mdd")),
-            client.Observe("tiny.css", "tiny.css", Path.Combine(dir, "tiny.css")),
+            client.Observe(mdx, mdx, Path.Combine(dir, mdx)),
+            client.Observe(mdd, mdd, Path.Combine(dir, mdd)),
+            client.Observe(css, css, Path.Combine(dir, sidecar)),
         ];
         var package = new
         {
-            mdx = new { file = "tiny.mdx" },
-            mdd = new[] { new { file = "tiny.mdd" } },
-            sidecars = new[] { new { file = "tiny.css" } },
+            mdx = new { file = mdx },
+            mdd = new[] { new { file = mdd } },
+            sidecars = new[] { new { file = css } },
         };
         Assert.Null(client.Call("import", new { package, progress = false }, files).Error);
         Reply opened = client.Call("open", new { package }, files);
         Assert.Null(opened.Error);
         JsonElement ok = opened.Ok!.Value;
-        return (client, ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!);
+        return (ok.GetProperty("dict").GetString()!, ok.GetProperty("edition").GetString()!);
+    }
+
+    private static (ServiceClient Client, string Dict, string Edition) OpenTiny()
+    {
+        ServiceClient client = Connect();
+        (string dict, string edition) = Open(client, "tiny");
+        return (client, dict, edition);
     }
 
     [Fact]
@@ -63,6 +77,12 @@ public class StudyModelsTests
             Assert.NotNull(session.Current);
             Assert.True(session.CanOpen(session.Current!));
             Assert.False(session.CanGrade); // reveal-before-grade
+            // The flag is not the guard: grading before the reveal is refused, records nothing and leaves the card
+            // unrevealed. Removing GradeAsync's own check leaves this suite red.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => session.GradeAsync(StudyGrade.Good));
+            Assert.Null(session.LastGradeEvent);
+            Assert.False(session.Revealed);
+            Assert.NotNull(session.Current);
             Assert.True(session.Reveal());
             Assert.True(session.CanGrade);
 
@@ -113,6 +133,42 @@ public class StudyModelsTests
                 File.Delete(export);
             }
         }
+    }
+
+    [Fact]
+    public async Task ReanchoringMovesTheNoteToTheSecondEditionAndKeepsItsEvidence()
+    {
+        // Two editions of one dictionary, differing files but the same entry text: an argument swap or a move to the
+        // old edition would leave the note where it was, which the same-edition test could not see.
+        using ServiceClient client = Connect();
+        (string firstDict, string firstEdition) = Open(client, "twin-a");
+        (string secondDict, string secondEdition) = Open(client, "twin-b");
+        Assert.NotEqual(firstEdition, secondEdition);
+        Assert.NotEqual(firstDict, secondDict);
+        var entry = new { edition = firstEdition, key = "word", occurrence = 0 };
+        const string sentinel = "reanchor note";
+        var stamp = new { at = At, device = "device-a" };
+        Assert.Null(client.Call("studyNoteAt", new
+        {
+            entry,
+            text = sentinel,
+            name = "Twin A",
+            stamp,
+            operation = "note-" + Guid.NewGuid().ToString("N"),
+        }).Error);
+        string hash = StudyWire.Read<string>(client.Call("definitionHash",
+            new { dict = secondDict, entry = new { edition = secondEdition, key = "word", occurrence = 0 } }));
+        Assert.False(string.IsNullOrWhiteSpace(hash));
+
+        var session = new ReviewSession(client, now: () => At, device: () => "device-a");
+        ReanchorReport report = await session.ReanchorAsync(firstEdition, secondEdition);
+        Assert.Contains(report.Outcomes, item => item.Result == "reanchored");
+        StudyNote moved = Assert.Single(
+            StudyWire.Read<List<StudyNote>>(client.Call("studyNotes", null)), note => note.Text == sentinel);
+        Assert.Equal(secondEdition, moved.Target.Edition);
+        Assert.Equal(hash, moved.Target.DefinitionHash);
+        Assert.Equal("word", moved.Target.EntryKey);
+        Assert.Empty(await session.ConflictsAsync());
     }
 
     [Fact]

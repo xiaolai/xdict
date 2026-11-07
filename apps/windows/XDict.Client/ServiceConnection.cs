@@ -47,7 +47,10 @@ internal sealed class ServiceConnection : IDisposable
         {
             cancellation.ThrowIfCancellationRequested();
             if (!IsAlive) throw new IOException("the service stopped");
-            // File handles are duplicated only after queue admission, never for superseded queued requests.
+            // File handles are duplicated only after queue admission, never for superseded queued requests. The
+            // caller has already refused an envelope that cannot fit (ServiceClient.FitsEnvelope), so this check is
+            // the backstop for a caller that skipped it; it runs after the duplication and the connection is then
+            // replaced, which is what reclaims the handles the service never took ownership of.
             byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 contract, id, op = operation, files = files(), operation = body,

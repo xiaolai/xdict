@@ -12,49 +12,31 @@ public class AICliSourceTests
     [Fact]
     public void TheCodexArgumentsAreTheDocumentedConfinedExec()
     {
-        IReadOnlyList<string> arguments = CodexCliSource.Arguments(Config, "C:\\work\\last.txt");
-        Assert.Equal("exec", arguments[0]);
-        Assert.Contains("--ephemeral", arguments);
-        Assert.Contains("--ignore-user-config", arguments);
-        Assert.Contains("--ignore-rules", arguments);
-        Assert.Contains("--skip-git-repo-check", arguments);
-        Assert.Contains("-s", arguments);
-        Assert.Contains("read-only", arguments);
-        Assert.Contains("-C", arguments);
-        Assert.Contains("C:\\work", arguments);
-        Assert.Contains("-c", arguments);
-        Assert.Contains("mcp_servers={}", arguments);
-        Assert.Contains("--disable", arguments);
-        Assert.Contains("shell_tool", arguments);
-        Assert.Contains("browser_use", arguments);
-        Assert.Contains("unified_exec", arguments);
-        Assert.Contains("-o", arguments);
-        Assert.Contains("C:\\work\\last.txt", arguments);
-        Assert.Contains("-m", arguments);
-        Assert.Contains("model-x", arguments);
-        Assert.Equal("-", arguments[^1]); // the prompt is stdin, never an argument
+        // The whole sequence, in order: membership alone let a flag and its value drift apart, and one empty
+        // argument satisfied a "contains" check for any flag.
+        Assert.Equal(new[]
+        {
+            "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules",
+            "--disable", "shell_tool", "--disable", "browser_use", "--disable", "unified_exec",
+            "-s", "read-only", "-C", "C:\\work",
+            "-c", "approval_policy=\"never\"", "-c", "mcp_servers={}",
+            "-o", "C:\\work\\last.txt",
+            "-m", "model-x",
+            "-", // the prompt is stdin, never an argument
+        }, CodexCliSource.Arguments(Config, "C:\\work\\last.txt"));
     }
 
     [Fact]
     public void TheClaudeArgumentsAreTheDocumentedStructuredPrint()
     {
-        IReadOnlyList<string> arguments = ClaudeCliSource.Arguments(Config, AIMode.Grounded);
-        Assert.Equal("-p", arguments[0]);
-        Assert.Contains("--output-format", arguments);
-        Assert.Contains("json", arguments);
-        Assert.Contains("--json-schema", arguments);
-        Assert.Contains(AIAnswerSchemas.Meaning, arguments);
-        Assert.Contains("--no-session-persistence", arguments);
-        Assert.Contains("--tools", arguments);
-        Assert.Contains("", arguments);
-        Assert.Contains("--strict-mcp-config", arguments);
-        Assert.Contains("--setting-sources", arguments);
-        Assert.Contains("--disable-slash-commands", arguments);
-        Assert.Contains("--permission-prompts", arguments);
-        Assert.Contains("none", arguments);
-        Assert.Contains("--safe-mode", arguments);
-        Assert.Contains("--model", arguments);
-        Assert.Contains("model-x", arguments);
+        Assert.Equal(new[]
+        {
+            "-p", "--output-format", "json", "--json-schema", AIAnswerSchemas.Meaning,
+            "--no-session-persistence", "--tools", "", "--strict-mcp-config",
+            "--setting-sources", "", "--disable-slash-commands",
+            "--permission-prompts", "none", "--safe-mode",
+            "--model", "model-x",
+        }, ClaudeCliSource.Arguments(Config, AIMode.Grounded));
     }
 
     [Fact]

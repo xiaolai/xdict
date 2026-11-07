@@ -38,19 +38,9 @@ internal sealed class Hotkey : IDisposable
         Registered = false;
     }
 
-    /// <summary>Rebinds, or reports the clash and puts the previous combination back.</summary>
-    public CaptureSettings Rebind(CaptureSettings previous, uint modifiers, uint key)
-    {
-        try
-        {
-            return CaptureSettings.TryRebind(previous, modifiers, key, Register, Unregister);
-        }
-        catch (CaptureClashException)
-        {
-            Register(previous.Modifiers, previous.Key); // the old combination keeps working
-            throw;
-        }
-    }
+    /// <summary>Rebinds; the model puts the previous combination back on a clash and reports it.</summary>
+    public CaptureSettings Rebind(CaptureSettings previous, uint modifiers, uint key) =>
+        CaptureSettings.TryRebind(previous, modifiers, key, Register, Unregister);
 
     private IntPtr OnMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam)
     {

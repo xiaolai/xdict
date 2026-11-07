@@ -136,6 +136,39 @@ impl Drop for Permit {
     }
 }
 
+/// The answers a lifetime may hold behind the writer. A work credit bounds the work, not the bytes already computed:
+/// released when the work ends, it lets new threads start while earlier answers are still waiting for a client that
+/// stopped reading. This permit is taken before the thread starts and held until its reply has been written, so
+/// completed payloads cannot pile up past the bound.
+pub struct ReplyGate(Mutex<usize>);
+
+impl ReplyGate {
+    /// One more than the work gate's total (2 bulk + 8 lookup + 1 import + 1 build): a thread whose work permit was
+    /// released still finds a slot for the reply it is about to write, while a stalled writer is bounded.
+    pub fn new() -> Self {
+        Self(Mutex::new(13))
+    }
+
+    pub fn take(self: &Arc<Self>) -> Option<ReplyPermit> {
+        let mut slots = self.0.lock().unwrap_or_else(|p| p.into_inner());
+        if *slots == 0 {
+            return None;
+        }
+        *slots -= 1;
+        Some(ReplyPermit { gate: self.clone() })
+    }
+}
+
+pub struct ReplyPermit {
+    gate: Arc<ReplyGate>,
+}
+impl Drop for ReplyPermit {
+    fn drop(&mut self) {
+        let mut slots = self.gate.0.lock().unwrap_or_else(|p| p.into_inner());
+        *slots += 1;
+    }
+}
+
 pub struct Activity(Mutex<ActivityState>);
 struct ActivityState {
     active: usize,

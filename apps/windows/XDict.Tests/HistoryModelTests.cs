@@ -86,9 +86,9 @@ public class HistoryModelTests
             Assert.Empty(session.Visible(["de"]));
 
             HistoryCard english = session.Visible(["en"]).Single();
-            Assert.Equal("recorded", await session.RemoveAsync(english));
+            Assert.Equal("recorded", (await session.RemoveAsync(english)).Outcome);
             Assert.Single(session.Cards);
-            Assert.Equal("recorded", await session.RestoreAsync(english));
+            Assert.Equal("recorded", (await session.RestoreAsync(english)).Outcome);
             Assert.Equal(2, session.Cards.Count);
 
             HistoryGloss gloss = await session.GlossAsync(english);
@@ -130,11 +130,13 @@ public class HistoryModelTests
         var (client, _, edition) = OpenTiny();
         using (client)
         {
-            var term = CapturedTerm.From(CaptureValue.Make(JsonSerializer.SerializeToNode(new
+            string rejected = "REJECTED-" + Guid.NewGuid().ToString("N");
+            string accepted = "ACCEPTED-" + Guid.NewGuid().ToString("N");
+            CapturedTerm Term(string sentence) => CapturedTerm.From(CaptureValue.Make(JsonSerializer.SerializeToNode(new
             {
                 term = "run",
                 confidence = 1,
-                context = new { kind = "available", sentence = "The run began at dawn.", term = new { start = 4, length = 3 } },
+                context = new { kind = "available", sentence, term = new { start = 4, length = 3 } },
             })!))!;
             var hit = new SearchHit(edition, "Tiny",
                 JsonSerializer.SerializeToElement(new { edition, key = "run", occurrence = 0 }), "run", "exact", []);
@@ -145,13 +147,37 @@ public class HistoryModelTests
                 HistoryDisclosed = true,
                 TargetLanguages = ["fr"],
             };
-            var recorder = new ReadingRecorder(client);
-            Assert.Equal(LedgerRecordOutcome.SkippedLanguage,
-                await recorder.RecordAsync(term, hit, dictionary, settings, devicePath: Path.GetTempFileName()));
-            var session = new HistorySession(client, settings: () => settings, now: () => At, utcOffset: () => 0,
-                device: () => "device-a");
-            await session.LoadAsync();
-            Assert.Empty(session.Cards);
+            string devicePath = Path.Combine(Path.GetTempPath(), "xdict-device-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var recorder = new ReadingRecorder(client);
+                Assert.Equal(LedgerRecordOutcome.SkippedLanguage, await recorder.RecordAsync(
+                    Term("The run began at dawn. " + rejected), hit, dictionary, settings, devicePath));
+                // An accepted language writes, so the absence below is the language filter and not a broken path.
+                Assert.Equal(LedgerRecordOutcome.Recorded, await recorder.RecordAsync(
+                    Term("The run began at dawn. " + accepted), hit, dictionary,
+                    settings with { TargetLanguages = [] }, devicePath));
+                // The event log itself, not the projected history: an empty card list does not prove the rejected
+                // sentence never reached the log.
+                string export = Path.Combine(Path.GetTempPath(), "xdict-export-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    await new DataExport(client).ExportAsync(export);
+                    string stored = File.ReadAllText(export);
+                    Assert.Contains(accepted, stored);
+                    Assert.DoesNotContain(rejected, stored);
+                }
+                finally { File.Delete(export); }
+                // The drawer keeps the last MAX_DAYS (14) only, and the recorder stamps the reading with the real
+                // clock: asking with the test's fixed day would drop the reading before the assertion saw it.
+                var session = new HistorySession(client, settings: () => settings,
+                    now: () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), utcOffset: () => 0,
+                    device: () => "device-a");
+                await session.LoadAsync();
+                var card = Assert.Single(session.Cards);
+                Assert.Contains(accepted, card.Reading.Sentence);
+            }
+            finally { File.Delete(devicePath); }
         }
     }
 }

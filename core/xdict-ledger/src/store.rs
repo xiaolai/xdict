@@ -104,9 +104,7 @@ impl Store for FileStore {
         if let Err(error) = file.write_all(bytes) {
             // A short write leaves a partial frame. Every later append would follow it and be discarded when the
             // log is reopened, so the partial bytes are cut away; if even that fails the log is past use.
-            let rolled_back = file
-                .set_len(end)
-                .and_then(|()| file.seek(SeekFrom::Start(end)).map(|_| ()));
+            let rolled_back = file.set_len(end).and_then(|()| file.seek(SeekFrom::Start(end)).map(|_| ()));
             return Err(match rolled_back {
                 Ok(()) => refused("appending to the log", error),
                 Err(rollback) => LedgerError::Storage(format!(
@@ -249,10 +247,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("history.log");
         let store = FileStore::open(&path).unwrap();
-        store.append(b"one").unwrap();
-        store.rewrite(b"two").unwrap();
-        assert_eq!(store.load().unwrap(), b"two".to_vec());
+        // A longer replacement with a shorter one: an in-place write that forgot to truncate would leave the old
+        // suffix behind, which an equal-length pair of strings could never show.
+        store.append(b"a much longer first log line\n").unwrap();
+        store.rewrite(b"short").unwrap();
+        assert_eq!(store.load().unwrap(), b"short".to_vec());
         drop(store);
+        let reopened = FileStore::open(&path).unwrap();
+        assert_eq!(reopened.load().unwrap(), b"short".to_vec(), "the stale suffix survived the rewrite");
+        drop(reopened);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

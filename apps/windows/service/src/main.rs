@@ -7,7 +7,7 @@ mod wire;
 
 use crate::failure::Failure;
 use crate::ops::{Service, is_bulk};
-use crate::runtime::{Active, Activity, WorkGate, Writer};
+use crate::runtime::{Active, Activity, ReplyGate, WorkGate, Writer};
 use crate::wire::{CONTRACT, JSON_MAX, Request};
 use serde_json::{Value, json};
 use std::io::{self, Read};
@@ -42,6 +42,7 @@ fn main() {
     let writer = Arc::new(Writer::new(io::stdout()));
     let service = Arc::new(Service::new(core, std::path::PathBuf::from(staging)));
     let gates = Arc::new(WorkGate::new());
+    let replies = Arc::new(ReplyGate::new());
     let activity = Arc::new(Activity::new());
     {
         let activity = activity.clone();
@@ -72,18 +73,21 @@ fn main() {
         // Read permanent envelope fields before attempting any version-specific record.
         let Some(id) = value.get("id").and_then(Value::as_u64) else {
             // A bad envelope must be answered, not silently end the service: every handle would become stale.
+            close_handles(&value);
             writer.json(&json!({"contract": CONTRACT, "id": 0, "error": {
                 "type": "malformed", "detail": "the request has no numeric id"
             }}));
             continue;
         };
         let Some(contract) = value.get("contract").and_then(Value::as_u64) else {
+            close_handles(&value);
             writer.json(&json!({"contract": CONTRACT, "id": id, "error": {
                 "type": "malformed", "detail": "the request has no contract"
             }}));
             continue;
         };
         if contract != u64::from(CONTRACT) {
+            close_handles(&value);
             writer.json(&json!({"contract": CONTRACT, "id": id, "error": {
                 "type": "contractMismatch", "contract": contract, "service": CONTRACT
             }}));
@@ -99,9 +103,10 @@ fn main() {
             }
             continue;
         }
-        let request: Request = match serde_json::from_value(value) {
+        let request: Request = match serde_json::from_value(value.clone()) {
             Ok(request) => request,
             Err(error) => {
+                close_handles(&value);
                 writer.json(&json!({"contract": CONTRACT, "id": id, "error": {"type": "malformed", "detail": error.to_string()}}));
                 continue;
             }
@@ -113,6 +118,7 @@ fn main() {
                 .and_then(Value::as_u64)
                 .unwrap_or(0);
             let cancelled = service.cancel_request(target);
+            close_handles(&value);
             writer.json(&json!({"contract": CONTRACT, "id": id, "ok": {"cancelled": cancelled}}));
             continue;
         }
@@ -134,10 +140,18 @@ fn main() {
             1
         };
         let Some(permit) = gates.take(class) else {
+            // The app duplicated handles into this process for a request that will never run; only this process can
+            // close them.
+            close_handles(&value);
             writer.reply(
                 id,
                 Err(Failure::busy("the service's work credits are full")),
             );
+            continue;
+        };
+        let Some(reply_slot) = replies.take() else {
+            close_handles(&value);
+            writer.reply(id, Err(Failure::busy("the service's reply queue is full")));
             continue;
         };
         // The cancel's one owner is this loop: registered before the long thread can run, removed after it.
@@ -148,6 +162,9 @@ fn main() {
         let writer = writer.clone();
         thread::spawn(move || {
             let _permit = permit;
+            // Held until this thread's reply has been written: the work credit is released before the reply, this is
+            // what bounds completed payloads waiting behind the writer.
+            let _reply_slot = reply_slot;
             let _active = active;
             let outcome = service.run(&request, writer.as_ref());
             if long {
@@ -167,6 +184,20 @@ fn main() {
         });
     }
     // The parent closed or corrupted its private connection: kill all abandoned work with this process.
+}
+
+/// Ends a request the service answers without admitting it. The app duplicated its file handles into this process
+/// before writing the envelope, and nothing here owns them yet: only this process can close them, so every rejection
+/// path that does not reach `admit` must.
+fn close_handles(value: &Value) {
+    let Some(files) = value.get("files").and_then(Value::as_array) else {
+        return;
+    };
+    for file in files {
+        if let Some(handle) = file.get("handle").and_then(Value::as_u64) {
+            handles::close(handle);
+        }
+    }
 }
 
 fn usage(message: &str) -> ! {

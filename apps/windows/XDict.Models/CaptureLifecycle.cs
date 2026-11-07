@@ -27,8 +27,15 @@ public interface ICaptureSink
 /// <summary>The context outcome (§4), parsed from the value's own node.</summary>
 public abstract record CaptureContext
 {
-    public sealed record Available(string Sentence, int Start, int Length) : CaptureContext
+    public sealed record Available(string Sentence, int Start, int Length,
+        IReadOnlyList<string>? Cut = null, string? Gap = null) : CaptureContext
     {
+        /// <summary>Which outer ends of the sentence the capture may have cut (`start`, `end`): the ledger's bits
+        /// are these names, never a guess from the sentence's shape.</summary>
+        public int CutBits =>
+            (Cut is not null && Cut.Contains("start", StringComparer.Ordinal) ? 1 : 0) |
+            (Cut is not null && Cut.Contains("end", StringComparer.Ordinal) ? 2 : 0);
+
         /// <summary>Metadata only: the sentence is held by the session, never by a log line.</summary>
         public override string ToString() => $"available({Length} units at {Start})";
     }
@@ -50,26 +57,62 @@ public sealed class CapturedTerm
         Value = value;
     }
 
-    /// <summary>From a validated value: the one production path. Null for a refused one.</summary>
+    /// <summary>From a validated value: the one production path. Null for a refused one — and for a value whose term
+    /// or context cannot be read as its variant says it is, so a hostile shape is refused here rather than throwing
+    /// after the value was called valid.</summary>
     public static CapturedTerm? From(CaptureValue.Result result)
     {
-        if (!result.Valid || result.Value is null) return null;
-        JsonNode value = result.Value;
-        string term = value["term"]!.GetValue<string>();
-        JsonNode? context = value["context"];
-        CaptureContext parsed = context?["kind"]?.GetValue<string>() switch
+        if (!result.Valid || result.Value is not JsonObject value) return null;
+        if (Text(value["term"]) is not { Length: > 0 } term) return null;
+        JsonNode? node = value["context"];
+        CaptureContext parsed;
+        if (node is not JsonObject context) parsed = new CaptureContext.Unavailable("notCaptured");
+        else
         {
-            "available" => new CaptureContext.Available(context["sentence"]!.GetValue<string>(),
-                Index(context["term"]!["start"]), Index(context["term"]!["length"])),
-            "pending" => new CaptureContext.Pending(context["handle"]!.GetValue<string>()),
-            _ => new CaptureContext.Unavailable(context?["reason"]?.GetValue<string>() ?? "notCaptured"),
-        };
+            switch (Text(context["kind"]))
+            {
+                case "available":
+                    if (Text(context["sentence"]) is not { } sentence ||
+                        context["term"] is not JsonObject range ||
+                        !Index(range["start"], out int start) || !Index(range["length"], out int length))
+                        return null;
+                    parsed = new CaptureContext.Available(sentence, start, length, Cut(context["cut"]),
+                        Text(context["gap"]));
+                    break;
+                case "pending":
+                    if (Text(context["handle"]) is not { } handle) return null;
+                    parsed = new CaptureContext.Pending(handle);
+                    break;
+                case "unavailable":
+                    parsed = new CaptureContext.Unavailable(Text(context["reason"]) ?? "notCaptured");
+                    break;
+                default:
+                    return null;
+            }
+        }
         return new CapturedTerm(term, parsed, value);
     }
 
-    private static int Index(JsonNode? node) =>
-        node is JsonValue scalar && scalar.TryGetValue(out int number) ? number
-        : int.Parse(node!.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture);
+    private static string? Text(JsonNode? node) =>
+        node is JsonValue scalar && scalar.TryGetValue(out string? text) ? text : null;
+
+    /// <summary>The cut's names; an element of another shape is no name and is dropped, never an index into an array
+    /// that may hold numbers.</summary>
+    private static IReadOnlyList<string> Cut(JsonNode? node) =>
+        node is JsonArray array
+            ? array.OfType<JsonValue>().Select(value => value.TryGetValue(out string? name) ? name : null)
+                .Where(name => name is not null).Select(name => name!).ToArray()
+            : [];
+
+    private static bool Index(JsonNode? node, out int number)
+    {
+        number = 0;
+        if (node is not JsonValue scalar) return false;
+        if (scalar.TryGetValue(out number)) return true;
+        return scalar.TryGetValue(out string? text) &&
+            int.TryParse(text, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out number);
+    }
 
     /// <summary>Metadata only: a log line or a dump here never names the sentence.</summary>
     public override string ToString() => $"CapturedTerm({Term.Length} units, {Context.GetType().Name})";

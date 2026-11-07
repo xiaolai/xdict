@@ -519,7 +519,13 @@ public sealed class CaptureController : IDisposable
                     _ = Task.Run(async () =>
                     {
                         try { await readings.RecordAsync(delivery.Term, entry, dictionary, settings); }
-                        catch (Exception) { /* The entry drew; a lost history record must not fail the capture. */ }
+                        catch (Exception error)
+                        {
+                            // The entry drew; a lost history record must not fail the capture. It is still
+                            // observable, and its message names a type, never the sentence.
+                            System.Diagnostics.Debug.WriteLine(
+                                "the reading was not recorded: " + error.GetType().Name + ": " + error.Message);
+                        }
                     });
                 }
             }

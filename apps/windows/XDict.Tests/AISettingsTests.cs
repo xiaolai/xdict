@@ -30,8 +30,14 @@ public class AISettingsTests
     public void TheSettingsFileRoundTripsWithoutTheKey()
     {
         string path = Path.Combine(Path.GetTempPath(), "xdict-ai-" + Guid.NewGuid().ToString("N") + ".json");
+        // A secret really exists while the settings are saved: in Credential Manager, where the shell keeps it. The
+        // file must not carry it or any member that would hold it.
+        string sentinel = "SENTINEL-" + Guid.NewGuid().ToString("N");
+        string target = "XDict.AI.test." + Guid.NewGuid().ToString("N");
+        var store = new WindowsCredentialStore(target);
         try
         {
+            store.Write(sentinel);
             var settings = new AISettings
             {
                 Source = AISourceKind.Http, Model = "deepseek-v4-pro", SendEntryText = true,
@@ -39,8 +45,11 @@ public class AISettingsTests
             };
             settings.Save(path);
             string text = File.ReadAllText(path);
-            Assert.DoesNotContain("secret", text);
-            Assert.DoesNotContain("apiKey", text);
+            Assert.DoesNotContain(sentinel, text);
+            // Case-insensitively: the serializer's own casing is not the test's to assume.
+            foreach (string forbidden in new[] { "apikey", "secret", "credential", "authorization", "\"key\"" })
+                Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(sentinel, store.Read());
             AISettings read = AISettings.Load(path);
             Assert.Equal(AISourceKind.Http, read.Source);
             Assert.Equal("deepseek-v4-pro", read.Model);
@@ -51,6 +60,7 @@ public class AISettingsTests
         }
         finally
         {
+            store.Write(null);
             File.Delete(path);
         }
     }

@@ -27,42 +27,61 @@ public sealed class SyncSession(ServiceClient client, Func<string>? device = nul
         string full = Path.GetFullPath(folder);
         if (!Directory.Exists(full)) throw new DirectoryNotFoundException(full);
         string own = "xdict-" + name + ".xdlog";
-        List<string> inputs = Directory.EnumerateFiles(full, "*.xdlog", SearchOption.TopDirectoryOnly)
-            .Where(path => !string.Equals(Path.GetFileName(path), own, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (inputs.Count > MaxFiles)
-            throw new SyncLimitException($"{full}: {inputs.Count} logs; the bound is {MaxFiles}");
-        long aggregate = 0;
-        var observations = new List<object>();
-        for (int index = 0; index < inputs.Count; index++)
-        {
-            string path = inputs[index];
-            long size = new FileInfo(path).Length;
-            if (size > MaxBytes) throw new SyncLimitException($"{path}: {size} bytes; the bound is {MaxBytes}");
-            aggregate = checked(aggregate + size);
-            if (aggregate > MaxBytes)
-                throw new SyncLimitException($"{path}: the folder's logs exceed {MaxBytes} bytes");
-            observations.Add(client.Observe("sync-" + index, Path.GetFileName(path), path));
-        }
-        string final = Path.Combine(full, own);
-        string temporary = final + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        // One pass owns every observation id it creates: two passes on one client must not release each other's
+        // handles, and a folder listing is I/O that must not run on the caller's dispatcher.
+        string pass = Guid.NewGuid().ToString("N");
+        string output = "sync-" + pass + "-out";
+        var held = new List<string>();
+        string? temporary = null;
         try
         {
-            observations.Add(client.ObserveWrite("sync-output", own, temporary));
+            List<string> inputs = await Task.Run(() => Inputs(full, own), cancellation).ConfigureAwait(false);
+            if (inputs.Count > MaxFiles)
+                throw new SyncLimitException($"{full}: {inputs.Count} logs; the bound is {MaxFiles}");
+            long aggregate = 0;
+            var observations = new List<object>();
+            for (int index = 0; index < inputs.Count; index++)
+            {
+                string path = inputs[index];
+                long size = new FileInfo(path).Length;
+                if (size > MaxBytes) throw new SyncLimitException($"{path}: {size} bytes; the bound is {MaxBytes}");
+                aggregate = checked(aggregate + size);
+                if (aggregate > MaxBytes)
+                    throw new SyncLimitException($"{path}: the folder's logs exceed {MaxBytes} bytes");
+                string id = "sync-" + pass + "-" + index;
+                observations.Add(client.Observe(id, Path.GetFileName(path), path));
+                held.Add(id);
+            }
+            string final = Path.Combine(full, own);
+            temporary = final + "." + pass + ".tmp";
+            observations.Add(client.ObserveWrite(output, own, temporary));
+            held.Add(output);
             Reply reply = await client.CallAsync("ledgerSync", new { device = name },
                 observations, cancellation: cancellation).ConfigureAwait(false);
             // The app's own handle must close before the destination is replaced; the service's duplicate already has.
-            client.Release("sync-output");
+            client.Release(output);
+            held.Remove(output);
             SyncReport report = StudyWire.Read<SyncReport>(reply);
             File.Move(temporary, final, true);
+            temporary = null;
             return report;
         }
         finally
         {
-            client.Release("sync-output");
-            for (int index = 0; index < inputs.Count; index++) client.Release("sync-" + index);
-            File.Delete(temporary);
+            // Every id this pass opened, whether the failure came from an observation, the call or the rename: an
+            // exception between two openings must not leave the earlier one in the client's table.
+            foreach (string id in held) client.Release(id);
+            if (temporary is not null) File.Delete(temporary);
         }
     }
+
+    /// <summary>The logs to merge, at most one past the bound: the listing stops there, so a folder of thousands
+    /// costs one metadata pass and no file opens. The bound itself is checked by the caller, which owns the
+    /// sentence.</summary>
+    private static List<string> Inputs(string full, string own) =>
+        Directory.EnumerateFiles(full, "*.xdlog", SearchOption.TopDirectoryOnly)
+            .Where(path => !string.Equals(Path.GetFileName(path), own, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxFiles + 1)
+            .ToList();
 }

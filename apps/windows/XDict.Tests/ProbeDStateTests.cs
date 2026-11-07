@@ -7,14 +7,31 @@ using Microsoft.Win32;
 using XDict.Models;
 using Xunit;
 
+/// <summary>A fact that reports a skip when the acceptance configuration is absent, instead of passing with no
+/// assertion run.</summary>
+public sealed class ProbeDStateFactAttribute : FactAttribute
+{
+    public ProbeDStateFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XDICT_PROBE_STATE")))
+            Skip = "XDICT_PROBE_STATE is not set: the upgrade acceptance run names the populated state";
+    }
+}
+
 [SupportedOSPlatform("windows")]
 public class ProbeDStateTests
 {
-    [Fact]
+    /// <summary>The state this run reads, or a skip that says so. A variable that is set to a wrong path is not
+    /// skipped: the test runs and its assertions fail, which is the difference between "not asked" and "passed".</summary>
+    private static string Root =>
+        Environment.GetEnvironmentVariable("XDICT_PROBE_STATE") is { Length: > 0 } root
+            ? root
+            : throw new InvalidOperationException("XDICT_PROBE_STATE names the populated state");
+
+    [ProbeDStateFact]
     public void TheReadersStateSurvivesTheUpgrade()
     {
-        string? root = Environment.GetEnvironmentVariable("XDICT_PROBE_STATE");
-        if (string.IsNullOrWhiteSpace(root)) return;
+        string root = Root;
 
         AppSettings settings = AppSettings.Load(Path.Combine(root, "settings.json"));
         Assert.Equal(1.25, settings.Zoom);
@@ -36,7 +53,16 @@ public class ProbeDStateTests
         Assert.Equal(1, library.Dictionaries[1].Order);
         Assert.True(library.Dictionaries[1].Enabled);
         Assert.All(library.Dictionaries, item => Assert.False(string.IsNullOrWhiteSpace(item.Edition)));
-        Assert.All(library.Dictionaries.SelectMany(item => item.Files), file => Assert.True(File.Exists(file.Path), file.Path));
+        // Each dictionary's files, not just the union: an upgrade that dropped every reference of one dictionary left
+        // Assert.All over an empty list vacuously green.
+        foreach (LibraryDictionary dictionary in library.Dictionaries)
+        {
+            Assert.NotEmpty(dictionary.Files);
+            LibraryFile mdx = Assert.Single(dictionary.Files, file => file.Role == LibraryRole.Mdx);
+            Assert.Equal(0, mdx.Order);
+            Assert.False(string.IsNullOrWhiteSpace(mdx.Name));
+            Assert.All(dictionary.Files, file => Assert.True(File.Exists(file.Path), file.Path));
+        }
 
         CaptureSettings capture = CaptureSettings.Load(Path.Combine(root, "capture.json"));
         Assert.Equal(3u, capture.Modifiers);
@@ -48,7 +74,17 @@ public class ProbeDStateTests
         Assert.Equal(1.5, reading.Read(library.Dictionaries[1].Edition).Zoom);
 
         using (RegistryKey? run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
-            Assert.Equal("\"C:\\Program Files (x86)\\XDict\\XDict.exe\"", run?.GetValue("XDict") as string);
+        {
+            // The expected target is derived from this machine's installed artifact, not from the obsolete x86 path:
+            // StartupRegistration.Repair updates that command, and the check must follow what it registers.
+            string? command = run?.GetValue("XDict") as string;
+            Assert.False(string.IsNullOrWhiteSpace(command), "the Run key has no XDict command");
+            string target = command!.Trim('"');
+            string expected = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "XDict", "XDict.exe");
+            Assert.Equal(expected, target, StringComparer.OrdinalIgnoreCase);
+            Assert.True(File.Exists(target), $"the Run command's target does not exist: {target}");
+        }
         Assert.True(Directory.Exists(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Packages", "ai.xdict.app.dictionaryservice", "AC")));
