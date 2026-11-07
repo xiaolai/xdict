@@ -152,7 +152,7 @@ function New-XDictUiaLibrary {
     $library = Join-Path $Folder 'library.json'
     $config = Join-Path $Folder 'library-config.json'
     @{ output = (Join-Path $Folder 'library-result.json'); library = $library; paths = $Mdx } |
-        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $config + '"') `
         -Output (Join-Path $Folder 'library-result.json') -Seconds 180 -Prefix 'xdict-library'

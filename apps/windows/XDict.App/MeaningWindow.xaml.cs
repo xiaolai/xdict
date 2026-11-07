@@ -3,6 +3,7 @@
 // reader asks for the note; the sentence and answer are otherwise only in this window.
 using System.Text.Json;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using XDict.AI;
 using XDict.Client;
@@ -34,8 +35,10 @@ public sealed partial class MeaningWindow : Window
         this.request = request;
         AppWindow.Resize(new SizeInt32((int)Tokens.Size.ReviewWidth, (int)Tokens.Size.ReviewHeight));
         Root.MinHeight = Tokens.Size.ReviewMinHeight;
-        ThemeApplier.Apply(Root, AppSettings.Load().Theme);
+        ThemeApplier.Follow(Root, this);
         Title = Strings.Get("meaning.title");
+        AutomationProperties.SetLabeledBy(Mode, ModeLabel);
+        AutomationProperties.SetLabeledBy(PreviewText, PreviewLabel);
         TitleText.Text = Strings.Get("meaning.title");
         TermText.Text = request.Term;
         MetaText.Text = request.DictionaryName;
@@ -191,15 +194,19 @@ public sealed partial class MeaningWindow : Window
         if (closed || busy || host is null) return;
         if (composition is null) await ComposeAsync();
         if (closed || composition is null) return;
+        AIComposition asking = composition;
         busy = true;
+        // The mode changes the composition, so it is fixed for the whole ask: otherwise the answer would be shown
+        // against a preview the question did not use.
+        Mode.IsEnabled = false;
         AskButton.IsEnabled = false;
         CancelButton.IsEnabled = true;
         StatusText.Text = Strings.Get("meaning.asking");
         inFlight = new CancellationTokenSource();
         try
         {
-            answer = await host.AskAsync(composition, () => AISettings.Load().SendEntryText, inFlight.Token);
-            ShowAnswer(answer, composition.Ungrounded);
+            answer = await host.AskAsync(asking, () => AISettings.Load().SendEntryText, inFlight.Token);
+            ShowAnswer(answer, asking.Ungrounded);
             StatusText.Text = "";
         }
         catch (OperationCanceledException) { StatusText.Text = Strings.Get("meaning.cancelled"); }
@@ -211,6 +218,7 @@ public sealed partial class MeaningWindow : Window
         finally
         {
             busy = false;
+            Mode.IsEnabled = true;
             AskButton.IsEnabled = true;
             CancelButton.IsEnabled = false;
             inFlight.Dispose();

@@ -1,4 +1,5 @@
 // Reading (ADR-0012): the entry's zoom and the dictionary's own style. Speech's controls live in their own pane.
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using XDict.Models;
@@ -17,6 +18,7 @@ public sealed partial class ReadingView : UserControl
         settings = AppSettings.Load();
         Heading.Text = Strings.Get("settings.reading");
         ZoomLabel.Text = Strings.Get("settings.zoom");
+        AutomationProperties.SetLabeledBy(Zoom, ZoomLabel);
         OriginalStyle.Header = Strings.Get("settings.originalStyle");
         // One drag fires dozens of ValueChanged events; the file is written once, a moment after it settles.
         zoomSave = DispatcherQueue.CreateTimer();

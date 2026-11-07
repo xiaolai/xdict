@@ -16,7 +16,7 @@ Invoke-XDictGate -Name 'library-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
     if (-not (Test-Path -LiteralPath $tiny)) { throw "the tiny fixture is missing: $tiny" }
     @{ output = $output; library = (Join-Path $folder 'library.json'); paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $result = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $config + '"') -Output $output `
         -Seconds 120 -Prefix 'library-lab'

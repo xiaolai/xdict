@@ -88,6 +88,7 @@ public sealed record HoverPolicy
 
     private static string[] Normalise(IReadOnlyList<string>? apps) =>
         (apps ?? [])
+        .Where(app => !string.IsNullOrWhiteSpace(app))
         .Select(app => app.Trim())
         .Where(app => app.Length > 0 && app.Length <= 260 && app.IndexOfAny(['\\', '/', ':']) < 0)
         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -103,6 +104,7 @@ public sealed record HoverPolicy
         if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
         return ExcludedApps.Any(app =>
         {
+            if (string.IsNullOrWhiteSpace(app)) return false;
             string stored = app.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? app[..^4] : app;
             return string.Equals(stored, name, StringComparison.OrdinalIgnoreCase);
         });

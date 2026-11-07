@@ -16,7 +16,8 @@ public sealed class HistorySession(
     private readonly Func<double> now = now ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     private readonly Func<int> utcOffset = utcOffset ?? (() => (int)DateTimeOffset.Now.Offset.TotalSeconds);
     private readonly Func<string> device = device ?? (() => DeviceIdentity.Current());
-    private readonly Dictionary<(string Edition, string Key, uint Occurrence), HistoryGloss> glosses = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (string Edition, string Key, uint Occurrence), Task<HistoryGloss>> glosses = new();
 
     public History History { get; private set; } = new([]);
     public IReadOnlyList<HistoryCard> Cards => History.Cards;
@@ -66,15 +67,28 @@ public sealed class HistorySession(
 
     /// <summary>The card's gloss, read from the recorded edition and cached for this session; a dictionary with no
     /// usable text answers no text, never an error.</summary>
-    public async Task<HistoryGloss> GlossAsync(HistoryCard card, CancellationToken cancellation = default)
+    public Task<HistoryGloss> GlossAsync(HistoryCard card, CancellationToken cancellation = default)
     {
         var key = (card.Reading.Edition, card.Reading.EntryKey, card.Reading.Occurrence);
-        if (glosses.TryGetValue(key, out HistoryGloss? known)) return known;
-        HistoryGloss gloss = StudyWire.Read<HistoryGloss>(
-            await client.CallAsync("entryGloss", new { entry = card.EntryRef }, cancellation: cancellation)
-                .ConfigureAwait(false));
-        glosses[key] = gloss;
-        return gloss;
+        // One read per card even when two cards ask at once, and one cache that concurrent callers can use; a failed
+        // or cancelled read leaves no faulted entry behind to fail every later ask.
+        return glosses.GetOrAdd(key, _ => ReadGlossAsync(key, card, cancellation));
+    }
+
+    private async Task<HistoryGloss> ReadGlossAsync((string Edition, string Key, uint Occurrence) key,
+        HistoryCard card, CancellationToken cancellation)
+    {
+        try
+        {
+            return StudyWire.Read<HistoryGloss>(
+                await client.CallAsync("entryGloss", new { entry = card.EntryRef }, cancellation: cancellation)
+                    .ConfigureAwait(false));
+        }
+        catch
+        {
+            glosses.TryRemove(key, out _);
+            throw;
+        }
     }
 
     /// <summary>The reader read the disclosure: keep the history locally from now on, and write the choice.</summary>

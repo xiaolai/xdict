@@ -17,6 +17,8 @@ public sealed partial class HistoryWindow : Window
     private readonly HistorySession session;
     private readonly Action<HistoryCard> openEntry;
     private bool loading = true;
+    private bool activated;
+    private readonly SemaphoreSlim glossGate = new(4, 4);
     private bool busy;
     private int cards;
     private HistoryCard? removed;
@@ -28,14 +30,21 @@ public sealed partial class HistoryWindow : Window
         session = new HistorySession(client);
         AppWindow.Resize(new SizeInt32((int)Tokens.Size.ReviewWidth, (int)Tokens.Size.ReviewHeight));
         Root.MinHeight = Tokens.Size.ReviewMinHeight;
-        ThemeApplier.Apply(Root, AppSettings.Load().Theme);
+        ThemeApplier.Follow(Root, this);
         Title = Strings.Get("history.title");
+        AutomationProperties.SetLabeledBy(Filter, FilterLabel);
         TitleText.Text = Strings.Get("history.title");
         FilterLabel.Text = Strings.Get("history.filter");
         Filter.Items.Add(Strings.Get("history.filter.all"));
         Filter.SelectedIndex = 0;
         RestoreButton.Content = Strings.Get("history.restore");
         Root.Loaded += OnLoaded;
+        // The window is reused: captures and notes that happened since the last look must appear when it comes back.
+        Activated += (_, args) =>
+        {
+            if (!activated) { activated = true; return; }
+            if (args.WindowActivationState != WindowActivationState.Deactivated) _ = GuardAsync(LoadAsync);
+        };
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -189,6 +198,9 @@ public sealed partial class HistoryWindow : Window
 
     private async Task LoadGlossAsync(HistoryCard card, TextBlock target)
     {
+        // Bounded: the history can hold hundreds of cards, and one request per card at once exceeds the client's
+        // queue and leaves blanks; four at a time keeps the service answering.
+        await glossGate.WaitAsync();
         try
         {
             HistoryGloss gloss = await session.GlossAsync(card);
@@ -199,6 +211,10 @@ public sealed partial class HistoryWindow : Window
         catch (Exception)
         {
             // The edition is no longer open: the card shows no gloss rather than a guess.
+        }
+        finally
+        {
+            glossGate.Release();
         }
     }
 

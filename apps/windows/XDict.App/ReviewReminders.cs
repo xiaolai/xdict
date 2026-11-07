@@ -12,6 +12,10 @@ namespace XDict.App;
 public sealed class ReviewReminders : IDisposable
 {
     private const double RepeatAfter = 3600;
+    /// <summary>A check after a failure, so one closed service does not disable reminders until an unrelated action.</summary>
+    private const double RetryAfter = 300;
+    /// <summary>An idle check while nothing is due: a card that becomes due later is still found.</summary>
+    private const double IdleAfter = 900;
 
     private readonly ServiceClient client;
     private readonly Action review;
@@ -22,6 +26,7 @@ public sealed class ReviewReminders : IDisposable
     private bool registered;
     private bool askedPermission;
     private bool disposed;
+    private int refreshes;
 
     public ReviewReminders(ServiceClient client, Action review)
     {
@@ -64,12 +69,16 @@ public sealed class ReviewReminders : IDisposable
     /// <summary>The plan, read again after a setting or a resume; one notification at a time, then a later check.</summary>
     public async Task RefreshAsync()
     {
-        if (!Supported || manager is null) return;
+        if (!Supported || manager is null || disposed) return;
+        int mine = ++refreshes;
         try
         {
             Permission = ReviewReminderPlan.PermissionOf(manager.Setting.ToString());
             LearningSettings settings = LearningSettings.Load();
             ReviewSummary summary = await new ReviewSession(client).SummaryAsync();
+            // A slower refresh that started earlier must not publish over a newer one, or restart a timer after
+            // Dispose.
+            if (disposed || mine != refreshes) return;
             double now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             ReviewReminderPlan plan = ReviewReminderPlan.Plan(now, summary, Permission, settings.RemindersEnabled);
             // Windows has no separate permission call: the first notification is the request, and the OS shows its
@@ -83,7 +92,10 @@ public sealed class ReviewReminders : IDisposable
             }
             if (!plan.CanDeliver)
             {
-                timer?.Stop();
+                // Nothing to deliver now is not nothing to deliver ever: keep a slow check alive while the
+                // settings still ask for reminders.
+                if (settings.RemindersEnabled) Schedule(IdleAfter);
+                else timer?.Stop();
                 return;
             }
             if (plan.Kind is ReminderKind.Due or ReminderKind.Overdue)
@@ -100,14 +112,16 @@ public sealed class ReviewReminders : IDisposable
         }
         catch (Exception error)
         {
-            // The service can be closed or restarting; a reminder must not end the tray. The next refresh retries.
+            // The service can be closed or restarting; a reminder must not end the tray. Retry on a bounded timer.
+            if (disposed || mine != refreshes) return;
             Failure = error.Message;
-            timer?.Stop();
+            Schedule(RetryAfter);
         }
     }
 
     private void Schedule(double seconds)
     {
+        if (disposed) return;
         timer ??= CreateTimer();
         timer.Stop();
         timer.Interval = TimeSpan.FromSeconds(seconds);

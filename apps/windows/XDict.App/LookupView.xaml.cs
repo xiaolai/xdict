@@ -154,7 +154,14 @@ public sealed partial class LookupView : UserControl
             PrimaryButtonText = Strings.Get("settings.keep"),
             CloseButtonText = Strings.Get("settings.close"),
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        ContentDialogResult answer;
+        try { answer = await dialog.ShowAsync(); }
+        catch (Exception error)
+        {
+            Status.Text = Strings.Format("settings.saveFailed", error.Message);
+            return;
+        }
+        if (answer != ContentDialogResult.Primary) return;
         string name = field.Text.Trim();
         if (name.Length == 0 || name.IndexOfAny(['\\', '/', ':']) >= 0 || name.Length > 260)
         {
@@ -203,7 +210,14 @@ public sealed partial class LookupView : UserControl
             PrimaryButtonText = Strings.Get("settings.keep"),
             CloseButtonText = Strings.Get("settings.close"),
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary || proposedModifiers == 0) return;
+        ContentDialogResult change;
+        try { change = await dialog.ShowAsync(); }
+        catch (Exception error)
+        {
+            Status.Text = Strings.Format("settings.saveFailed", error.Message);
+            return;
+        }
+        if (change != ContentDialogResult.Primary || proposedModifiers == 0) return;
         try
         {
             CaptureSettings kept = capture.Rebind(proposedModifiers, proposedKey);

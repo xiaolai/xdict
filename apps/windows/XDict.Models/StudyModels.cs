@@ -24,7 +24,8 @@ public static class StudyGradeNames
         StudyGrade.Again => "again",
         StudyGrade.Hard => "hard",
         StudyGrade.Good => "good",
-        _ => "easy",
+        StudyGrade.Easy => "easy",
+        _ => throw new ArgumentOutOfRangeException(nameof(grade), grade, "an undefined grade has no wire name"),
     };
 }
 

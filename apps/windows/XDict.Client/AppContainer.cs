@@ -45,16 +45,25 @@ internal sealed class AppContainer : IDisposable
             // Ask; on that answer create the profile. Creating one that exists returns ALREADY_EXISTS (or
             // E_UNEXPECTED in use), and then the derived SID is the profile's.
             Marshal.ThrowExceptionForHR(DeriveAppContainerSidFromAppContainerName(name, out sid));
-            try { _ = FolderFor(sid); }
-            catch (Exception error) when (error.HResult == unchecked((int)0x80070002))
+            try
             {
-                FreeSid(sid);
-                sid = IntPtr.Zero;
-                int created = CreateAppContainerProfile(name, "XDict Dictionary Service", "XDict parser sandbox",
-                    IntPtr.Zero, 0, out sid);
-                if (created is unchecked((int)0x800700B7) or unchecked((int)0x8000FFFF))
-                    created = DeriveAppContainerSidFromAppContainerName(name, out sid);
-                Marshal.ThrowExceptionForHR(created);
+                try { _ = FolderFor(sid); }
+                catch (Exception error) when (error.HResult == unchecked((int)0x80070002))
+                {
+                    FreeSid(sid);
+                    sid = IntPtr.Zero;
+                    int created = CreateAppContainerProfile(name, "XDict Dictionary Service", "XDict parser sandbox",
+                        IntPtr.Zero, 0, out sid);
+                    if (created is unchecked((int)0x800700B7) or unchecked((int)0x8000FFFF))
+                        created = DeriveAppContainerSidFromAppContainerName(name, out sid);
+                    Marshal.ThrowExceptionForHR(created);
+                }
+            }
+            catch
+            {
+                // The constructor throws, so Dispose will never run: the SID allocated above would leak.
+                if (sid != IntPtr.Zero) { FreeSid(sid); sid = IntPtr.Zero; }
+                throw;
             }
         }
         try

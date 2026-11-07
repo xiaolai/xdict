@@ -1,4 +1,5 @@
 // Speech (ADR-0012): the dictionary's own recordings and the spoken accent. Reading's controls live in their pane.
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using XDict.Models;
 
@@ -16,6 +17,7 @@ public sealed partial class SpeechView : UserControl
         Heading.Text = Strings.Get("settings.speech");
         UseRecordings.Header = Strings.Get("settings.useRecordings");
         AccentLabel.Text = Strings.Get("settings.accent");
+        AutomationProperties.SetLabeledBy(Accent, AccentLabel);
         Accent.Items.Add(Strings.Get("settings.accent.us"));
         Accent.Items.Add(Strings.Get("settings.accent.uk"));
         UseRecordings.IsOn = settings.UseRecordings;

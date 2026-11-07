@@ -21,14 +21,18 @@ public sealed partial class ExploreWindow : Window
     private sealed record RowView(string Word, string Dict, JsonElement Entry, string Reason);
 
     private readonly ServiceClient client;
-    private readonly IReadOnlyList<OpenDictionary> dictionaries;
+    private readonly Func<IReadOnlyList<OpenDictionary>> dictionaries;
     private readonly Action<JsonElement> openEntry;
+    private string runText = "";
+    private string runMode = "";
+    private IReadOnlyList<string> runDicts = [];
     private RequestGeneration? generation;
     private List<RowView> rows = [];
     private uint offset;
     private uint? next;
 
-    public ExploreWindow(ServiceClient client, IReadOnlyList<OpenDictionary> dictionaries, Action<JsonElement> openEntry)
+    public ExploreWindow(ServiceClient client, Func<IReadOnlyList<OpenDictionary>> dictionaries,
+        Action<JsonElement> openEntry)
     {
         InitializeComponent();
         this.client = client;
@@ -36,7 +40,7 @@ public sealed partial class ExploreWindow : Window
         this.openEntry = openEntry;
         AppWindow.Resize(new SizeInt32((int)Tokens.Size.ExploreWidth, (int)Tokens.Size.ExploreHeight));
         Root.MinHeight = Tokens.Size.ExploreMinHeight;
-        ThemeApplier.Apply(Root, AppSettings.Load().Theme);
+        ThemeApplier.Follow(Root, this);
         Title = Strings.Get("explore.title");
         TitleText.Text = Strings.Get("explore.title");
         ScopeLabel.Text = Strings.Get("explore.scope");
@@ -53,7 +57,7 @@ public sealed partial class ExploreWindow : Window
         AutomationProperties.SetName(Distance, Strings.Get("explore.distance"));
         AutomationProperties.SetName(Results, Strings.Get("explore.resultsList"));
         Scope.Items.Add(Strings.Get("explore.all"));
-        foreach (OpenDictionary dictionary in dictionaries) Scope.Items.Add(dictionary.Name);
+        foreach (OpenDictionary dictionary in dictionaries()) Scope.Items.Add(dictionary.Name);
         Scope.SelectedIndex = 0;
         foreach (string key in ModeKeys)
         {
@@ -109,13 +113,21 @@ public sealed partial class ExploreWindow : Window
 
     private const uint PageSize = 50;
 
-    private Task ReloadAsync() => LoadAsync(0);
+    /// <summary>A fresh run captures the reader's query, mode and scope; page turns reuse them, so an edit to the
+    /// box cannot be searched from the previous page's offset under the new text.</summary>
+    private Task ReloadAsync()
+    {
+        runText = Query.Text.Trim();
+        runMode = SelectedMode();
+        runDicts = SelectedDictionaries();
+        return LoadAsync(0);
+    }
 
     private async Task LoadAsync(uint from)
     {
-        string text = Query.Text.Trim();
+        string text = runText;
         if (text.Length == 0) return;
-        IReadOnlyList<string> dicts = SelectedDictionaries();
+        IReadOnlyList<string> dicts = runDicts;
         if (dicts.Count == 0)
         {
             rows = [];
@@ -125,7 +137,7 @@ public sealed partial class ExploreWindow : Window
         }
         RequestGeneration mine = client.NewGeneration("explore");
         generation = mine;
-        string mode = SelectedMode();
+        string mode = runMode;
         StatusText.Text = "";
         try
         {
@@ -212,13 +224,14 @@ public sealed partial class ExploreWindow : Window
     }
 
     private string DictionaryName(string handle) =>
-        dictionaries.FirstOrDefault(dictionary => dictionary.Handle == handle)?.Name ?? handle;
+        dictionaries().FirstOrDefault(dictionary => dictionary.Handle == handle)?.Name ?? handle;
 
     private IReadOnlyList<string> SelectedDictionaries()
     {
+        IReadOnlyList<OpenDictionary> current = dictionaries();
         int index = Scope.SelectedIndex;
-        if (index <= 0) return dictionaries.Select(dictionary => dictionary.Handle).ToList();
-        return index - 1 < dictionaries.Count ? [dictionaries[index - 1].Handle] : [];
+        if (index <= 0) return current.Select(dictionary => dictionary.Handle).ToList();
+        return index - 1 < current.Count ? [current[index - 1].Handle] : [];
     }
 
     private object ModeBody(string mode) => mode switch

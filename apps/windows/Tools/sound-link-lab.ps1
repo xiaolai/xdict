@@ -15,7 +15,7 @@ Invoke-XDictGate -Name 'sound-link-lab' -Inputs (Get-XDictLabInputs -Layout $lay
     $config = Join-Path $folder 'config.json'
     $result = Join-Path $folder 'result.json'
     @{ output = $result; fixtures = (Join-Path $env:LOCALAPPDATA 'XDict\library-fixtures') } |
-        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $lab = Invoke-XDictTask -Executable $exe -Arguments ('--sound-link-lab "' + $config + '"') -Output $result `
         -Seconds 180 -Prefix 'xdict-sound-link'

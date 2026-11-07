@@ -18,7 +18,7 @@ Invoke-XDictGate -Name 'search-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     # 1. Register the fixture into a private library through the library window lab.
     $libraryConfig = Join-Path $folder 'library-config.json'
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
         -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-library' 

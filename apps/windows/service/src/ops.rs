@@ -478,15 +478,24 @@ impl Service {
             }
             "setWordPack" => self.set_word_pack(request, sources),
             "clearWordPack" => {
+                // The same lock as loading, installing and building: the four transitions are one state machine.
+                let _pack = self
+                    .pack_lock
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 self.core.detach_word_pack();
                 let installed = self.installed_pack();
                 if let Err(error) = std::fs::remove_file(&installed)
                     && error.kind() != std::io::ErrorKind::NotFound
                 {
-                    eprintln!(
-                        "the installed word pack {} could not be removed: {error}",
-                        installed.display()
-                    );
+                    // Reporting success would leave the pack on disk for the next lazy load to install again.
+                    return Err(Failure::Core(CoreError::Io {
+                        kind: xdict_core::IoKind::Other,
+                        detail: format!(
+                            "the installed word pack {} could not be removed: {error}",
+                            installed.display()
+                        ),
+                    }));
                 }
                 record(json!({ "pack": null }))
             }
@@ -594,6 +603,10 @@ impl Service {
         request: &Request,
         mut sources: HashMap<String, HandleSource>,
     ) -> Result<Answer, Failure> {
+        let _pack = self
+            .pack_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let body: SetWordPackBody = decode(&request.operation)?;
         let source = sources.remove(&body.file.file).ok_or_else(|| {
             Failure::admission(format!(
@@ -641,6 +654,10 @@ impl Service {
         events: &dyn Events,
         mut sources: HashMap<String, HandleSource>,
     ) -> Result<Answer, Failure> {
+        let _pack = self
+            .pack_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let body: BuildWordPackBody = decode(&request.operation)?;
         if body.sources.len() > 64 {
             return Err(Failure::admission(format!(
@@ -908,15 +925,16 @@ impl Service {
             .map_err(CoreError::from)
             .map_err(Failure::Core)?;
         let target = directory.join("installed.jsonl");
-        let temp = directory.join("installed.jsonl.tmp");
+        // A temporary of its own per call: two installations must not truncate each other's copy.
+        let temp = directory.join(format!(
+            "installed.{}-{}.jsonl.tmp",
+            std::process::id(),
+            self.sync_serial.fetch_add(1, Ordering::Relaxed)
+        ));
         std::fs::copy(from, &temp)
             .map_err(CoreError::from)
             .map_err(Failure::Core)?;
-        if target.exists() {
-            std::fs::remove_file(&target)
-                .map_err(CoreError::from)
-                .map_err(Failure::Core)?;
-        }
+        // Rename replaces atomically; deleting the old pack first turned a crash between the two into data loss.
         std::fs::rename(&temp, &target)
             .map_err(CoreError::from)
             .map_err(Failure::Core)

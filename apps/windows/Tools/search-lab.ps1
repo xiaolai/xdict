@@ -22,12 +22,12 @@ Invoke-XDictGate -Name 'search-lab' -Inputs (Get-XDictLabInputs -Layout $layout)
     if (-not (Test-Path -LiteralPath $tiny)) { throw "the tiny fixture is missing: $tiny" }
     $libraryConfig = Join-Path $folder 'library-config.json'
     @{ output = (Join-Path $folder 'library-result.json'); library = (Join-Path $folder 'library.json'); paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $added = Invoke-XDictWindowLab -Config $libraryConfig -Output (Join-Path $folder 'library-result.json') -Name 'library'
     if ($added.count -lt 1) { throw 'the library lab added no dictionary' }
     $searchConfig = Join-Path $folder 'search-config.json'
     @{ output = (Join-Path $folder 'search-result.json'); library = (Join-Path $folder 'library.json'); query = 'cafe' } |
-        ConvertTo-Json | Set-Content -LiteralPath $searchConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $searchConfig -Encoding UTF8
     $found = Invoke-XDictWindowLab -Config $searchConfig -Output (Join-Path $folder 'search-result.json') -Name 'search'
     Write-Host ($found | ConvertTo-Json -Depth 5)
     if ($found.hits -lt 1) { throw 'the search window found nothing for cafe' }

@@ -9,10 +9,20 @@ namespace XDict.App;
 
 public sealed partial class SetupView : UserControl
 {
+    private readonly LibraryStore store;
+
     public SetupView(LibraryStore store)
     {
+        this.store = store;
         InitializeComponent();
         Heading.Text = Strings.Get("settings.setup");
+        Refresh();
+    }
+
+    /// <summary>Re-read every row: the setup facts change while Settings stays open.</summary>
+    public void Refresh()
+    {
+        Rows.Children.Clear();
         Add("SetupWindows", Strings.Format("setup.windows", Environment.OSVersion.VersionString));
         Add("SetupDictionaries", Strings.Format("setup.dictionaries", store.Dictionaries.Count));
         AISettings ai = AISettings.Load();

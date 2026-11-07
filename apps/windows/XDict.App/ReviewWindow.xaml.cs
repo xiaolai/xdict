@@ -42,7 +42,7 @@ public sealed partial class ReviewWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(
             (int)Tokens.Size.ReviewWidth, (int)Tokens.Size.ReviewHeight));
         Root.MinHeight = Tokens.Size.ReviewMinHeight;
-        ThemeApplier.Apply(Root, AppSettings.Load().Theme);
+        ThemeApplier.Follow(Root, this);
         Title = Strings.Get("review.title");
         TitleText.Text = Strings.Get("review.title");
         NoteLabel.Text = Strings.Get("review.note");
@@ -183,19 +183,22 @@ public sealed partial class ReviewWindow : Window
 
     private async Task LoadGlossAsync(StudyCard card)
     {
+        string text;
         try
         {
             HistoryGloss gloss = StudyWire.Read<HistoryGloss>(
                 await client.CallAsync("entryGloss", new { entry = card.Target.EntryRef }));
-            GlossText.Text = string.IsNullOrWhiteSpace(gloss.Text)
-                ? Strings.Get("review.noGloss")
-                : gloss.Text;
+            text = string.IsNullOrWhiteSpace(gloss.Text) ? Strings.Get("review.noGloss") : gloss.Text;
         }
         catch (Exception)
         {
             // The entry is not open here or has no usable text; the card can still be graded.
-            GlossText.Text = Strings.Get("review.noGloss");
+            text = Strings.Get("review.noGloss");
         }
+        // Grading can move to the next card while this read is in flight; the previous card's gloss must not be
+        // shown against the new one.
+        if (!ReferenceEquals(session.Current, card)) return;
+        GlossText.Text = text;
         GlossText.Visibility = Visibility.Visible;
     }
 

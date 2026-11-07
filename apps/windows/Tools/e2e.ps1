@@ -87,7 +87,10 @@ function Show-E2EReport {
 
 if ($Only) {
     # A comma-separated list: the UIA stages run over SSH, the rest can run detached (each context has its own limits).
-    $names = @($Only -split ',' | ForEach-Object { $_.Trim() })
+    # Every name must exist: silently dropping a typo ran the rest and reported success.
+    $names = @($Only -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $unknown = @($names | Where-Object { $stages.Name -notcontains $_ })
+    if ($unknown.Count -gt 0) { throw ("no stage named " + ($unknown -join ', ')) }
     $stages = @($stages | Where-Object { $names -contains $_.Name })
 }
 if ($stages.Count -eq 0) { throw "no stage named $Only" }

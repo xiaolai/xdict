@@ -33,6 +33,11 @@ public sealed partial class AboutView : UserControl
             },
             CloseButtonText = Strings.Get("settings.close"),
         };
-        await dialog.ShowAsync();
+        try { await dialog.ShowAsync(); }
+        catch (Exception error)
+        {
+            // Another window can already own this UI thread's dialog; the notices are not worth a crash.
+            System.Diagnostics.Debug.WriteLine("notices: " + error.Message);
+        }
     }
 }

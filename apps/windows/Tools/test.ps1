@@ -14,9 +14,9 @@ Invoke-XDictGate -Name 'test' -Full:$Full -Action {
     if ($LASTEXITCODE -ne 0) { throw 'the Windows token check found a literal' }
     cargo fmt --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --check
     if ($LASTEXITCODE -ne 0) { throw 'the service formatting failed' }
-    cargo test --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml')
+    cargo test --locked --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml')
     if ($LASTEXITCODE -ne 0) { throw 'the service unit tests failed' }
-    cargo clippy --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --all-targets -- -D warnings
+    cargo clippy --locked --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { throw 'the service clippy gate failed' }
     . (Join-Path $PSScriptRoot 'service-fixtures.ps1')
     $env:XDICT_SERVICE = $layout.Service

@@ -17,10 +17,10 @@ Invoke-XDictGate -Name ('build-' + $configuration.ToLower()) -Full:$Full -Action
         else { $previousFlags + ' ' + $serviceFlags }
     try {
         if ($Release) {
-            cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --release
+            cargo build --locked --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml') --release
         }
         else {
-            cargo build --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml')
+            cargo build --locked --manifest-path (Join-Path $layout.AppRoot 'service\Cargo.toml')
         }
         if ($LASTEXITCODE -ne 0) { throw 'the service did not build' }
     }
@@ -28,7 +28,7 @@ Invoke-XDictGate -Name ('build-' + $configuration.ToLower()) -Full:$Full -Action
     dotnet build (Join-Path $layout.AppRoot 'XDict.slnx') -c $configuration -warnaserror
     if ($LASTEXITCODE -ne 0) { throw 'the solution did not build' }
 } -Inputs (Get-XDictBuildInputs -Layout $layout) `
-  -Extra @($configuration, (& rustc --version), (& dotnet --version))
+  -Extra @($configuration, (& rustc --version), (& dotnet --version), $env:RUSTFLAGS)
 
 $output = Get-XDictAppOutput -Configuration $configuration
 Write-Host ("app: {0}" -f (Join-Path $output 'XDict.exe'))

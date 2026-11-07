@@ -592,7 +592,7 @@ public sealed partial class MainWindow : Window
     /// scheme and policy, in one vertical scroller. A dictionary with no hit contributes nothing; a lookup failure
     /// skips that dictionary rather than failing the page. Its panes answer their own links and sounds.
     /// </summary>
-    private async Task ShowAllAsync(SearchHit seed, string query)
+    private async Task ShowAllAsync(SearchHit seed, string query, bool record = true)
     {
         if (client is null || session is null) return;
         EntryTab? existing = tabs.FirstOrDefault(tab => tab.AllWord == seed.Headword);
@@ -641,7 +641,7 @@ public sealed partial class MainWindow : Window
                         view => section.Children.Add(view), readingPreferences);
                     var context = new PaneContext(dictionary.Handle, hit.Entry.Clone(), hit.Headword, pane);
                     pane.Message += message => _ = GuardAsync(() => OnAllPaneMessageAsync(message, context));
-                    pane.Failure += OnPaneFailure;
+                    pane.Failure += reason => OnPaneFailure(lease, reason);
                     EntryResponse response = await source.EntryAsync(hit.Entry);
                     await pane.ShowAsync(response);
                     if (!tabs.Contains(tab))
@@ -679,7 +679,7 @@ public sealed partial class MainWindow : Window
         {
             showGate.Release();
         }
-        if (!complete) return;
+        if (!complete || !record) return;
         trail.Push(new Visit(seed.Edition, seed.Entry.Clone(), query));
         UpdateTrail();
     }
@@ -732,7 +732,9 @@ public sealed partial class MainWindow : Window
         try
         {
             if (newTab && SelectOpen(entry)) return;
-            EntryTab target = newTab || ActiveTab is null ? NewTab(query) : ActiveTab!;
+            // An All page is several panes, not a single one: restoring an entry into it would clear its host while
+            // its extra leases and All metadata stayed behind. Such a restore opens a tab of its own.
+            EntryTab target = newTab || ActiveTab is null || ActiveTab.AllWord is not null ? NewTab(query) : ActiveTab!;
             Tabs.SelectedItem = target.Item;
             // The handle changes when the session closes and reopens a dictionary; the old pane still sends it.
             bool rebuilt = !target.Lease.Matches(edition, dictionary.Handle);
@@ -742,7 +744,7 @@ public sealed partial class MainWindow : Window
             if (built)
             {
                 pane.Message += OnPaneMessage;
-                pane.Failure += OnPaneFailure;
+                pane.Failure += reason => OnPaneFailure(target.Lease, reason);
             }
             EntryResponse response = await source.EntryAsync(entry);
             await pane.ShowAsync(response);
@@ -872,10 +874,11 @@ public sealed partial class MainWindow : Window
             await FollowLinkAsync(message.Value);
     });
 
-    /// <summary>The renderer died: drop the pane so the next entry builds a live one instead of failing forever.</summary>
-    private void OnPaneFailure(string reason)
+    /// <summary>The renderer died: drop **that** pane so the next entry builds a live one instead of failing
+    /// forever. Resetting the active lease dropped the wrong pane when an All page's pane failed.</summary>
+    private void OnPaneFailure(PaneLease lease, string reason)
     {
-        paneLease.Reset();
+        lease.Reset();
         StatusText.Text = Strings.Get("entry.guardFailed");
         TraceFailure("renderer: " + reason);
     }
@@ -1078,7 +1081,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnFindTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (FindBar.Visibility == Visibility.Visible) await FindInEntryAsync(forward: true);
+        if (FindBar.Visibility == Visibility.Visible) await FindGuardedAsync(forward: true);
     }
 
     private async void OnFindKeyDown(object sender, KeyRoutedEventArgs e)
@@ -1093,13 +1096,24 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             bool shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            await FindInEntryAsync(forward: !shift);
+            await FindGuardedAsync(forward: !shift);
         }
     }
 
-    private async void OnFindNext(object sender, RoutedEventArgs e) => await FindInEntryAsync(forward: true);
+    private async void OnFindNext(object sender, RoutedEventArgs e) => await FindGuardedAsync(forward: true);
 
-    private async void OnFindPrevious(object sender, RoutedEventArgs e) => await FindInEntryAsync(forward: false);
+    private async void OnFindPrevious(object sender, RoutedEventArgs e) => await FindGuardedAsync(forward: false);
+
+    private async Task FindGuardedAsync(bool forward)
+    {
+        try { await FindInEntryAsync(forward); }
+        catch (Exception error)
+        {
+            // A WebView2 script failure (a closed pane, a navigating page) must not escape an async-void handler.
+            StatusText.Text = Strings.Format("find.failed", error.Message);
+            TraceFailure("find: " + error.Message);
+        }
+    }
 
     private void OnFindClose(object sender, RoutedEventArgs e)
     {
@@ -1215,7 +1229,9 @@ public sealed partial class MainWindow : Window
             exploreWindow.Activate();
             return;
         }
-        exploreWindow = new ExploreWindow(client, session.Dictionaries.ToList(),
+        // The provider, not a snapshot: closing Settings reopens the session with new handles, and this window's
+        // requests must use the ones that are open now.
+        exploreWindow = new ExploreWindow(client, () => session.Dictionaries.ToList(),
             entry => _ = GuardAsync(() => OpenExploredAsync(entry)));
         exploreWindow.Closed += (_, _) => exploreWindow = null;
         exploreWindow.Activate();
@@ -1262,6 +1278,13 @@ public sealed partial class MainWindow : Window
     private void OnMainWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (quitting) return;
+        if (capture is null || !capture.TrayVisible)
+        {
+            // With no tray and no shortcut there would be no way back to this window: closing quits instead of
+            // hiding the process in a state the reader cannot see or end.
+            Quit();
+            return;
+        }
         args.Cancel = true;
         AppWindow.Hide();
     }
@@ -1384,10 +1407,11 @@ public sealed partial class MainWindow : Window
     {
         if (quitting || session is null || store is null) return;
         string? chosen = SelectedEdition();
+        int selectedIndex = ActiveTab is { } active ? tabs.IndexOf(active) : -1;
         // Reopening changes every handle and closes the panes built on the old ones, so the tabs are rebuilt rather
-        // than left sending a stale handle. The entry on screen is the one the reader keeps.
-        JsonElement? shown = currentEntry?.Clone();
-        string? shownEdition = paneLease.Edition;
+        // than left sending a stale handle. Every tab the reader had is rebuilt — including each All page — and the
+        // one that was selected is selected again.
+        var saved = tabs.Select(tab => (tab.Lease.Edition, tab.Entry?.Clone(), tab.Headword, tab.AllWord)).ToList();
         CloseAllTabs();
         await session.OpenAsync(store.Dictionaries);
         // Reading & Speech is global: a stored edition preference follows the settings from now on. The old handle
@@ -1396,10 +1420,20 @@ public sealed partial class MainWindow : Window
         ReadingPreferences current = ReadingPreferenceStore.FromSettings(settings, ThemeApplier.Effective(settings.Theme));
         foreach (LibraryDictionary dictionary in store.Dictionaries)
             if (readingPreferences.Has(dictionary.Edition)) readingPreferences.Write(dictionary.Edition, current);
-        // Show the entry again: the refresh closed its handle, so this rebuilds the pane and reads the preference.
-        if (shown is { } entry && shownEdition is { } edition &&
-            session.Dictionaries.Any(item => item.Edition == edition))
-            await ShowAsync(edition, entry, string.Empty, record: false);
+        foreach ((string? edition, JsonElement? entry, string? headword, string? allWord) in saved)
+        {
+            if (edition is null || entry is not { } kept) continue;
+            if (!session.Dictionaries.Any(item => item.Edition == edition)) continue;
+            if (allWord is not null)
+                await ShowAllAsync(new SearchHit(edition, "", kept, allWord, "", []), allWord, record: false);
+            else
+                await ShowAsync(edition, kept, headword ?? "", record: false, newTab: true);
+        }
+        if (selectedIndex >= 0 && selectedIndex < tabs.Count)
+        {
+            Tabs.SelectedItem = tabs[selectedIndex].Item;
+            ActivateTab(tabs[selectedIndex]);
+        }
         ScopeBox.Items.Clear();
         ScopeBox.Items.Add(Strings.Get("search.all"));
         foreach (OpenDictionary dictionary in session.Dictionaries) ScopeBox.Items.Add(dictionary.Name);

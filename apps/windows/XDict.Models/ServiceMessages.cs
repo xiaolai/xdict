@@ -30,6 +30,11 @@ public static class ServiceMessages
         "closed" => "service.installation",
         "deadline" => "service.deadline",
         "staleHandle" => "service.restarted",
+        // The core's typed errors reach this overload whenever a caller holds the type rather than the JSON; the
+        // envelope refusal was mapped only on the other path.
+        "unsupported" => "error.unsupported",
+        "malformed" => "error.malformed",
+        "envelopeTooLarge" => "error.envelopeTooLarge",
         _ => "app.serviceFailed",
     }, language ?? Strings.Language);
 }

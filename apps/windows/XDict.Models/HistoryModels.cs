@@ -2,7 +2,6 @@
 // removal tombstone, and the entry gloss a card leads with (ADR-0023, ADR-0037). The core groups, collapses and
 // labels; this layer parses the shapes and maps the card's own facts.
 using System.Text.Json.Serialization;
-using XDict.Contract;
 
 namespace XDict.Models;
 

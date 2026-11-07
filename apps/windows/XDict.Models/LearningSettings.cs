@@ -51,7 +51,12 @@ public sealed record LearningSettings
         {
             if (!File.Exists(path)) return new LearningSettings();
             LearningSettings loaded = JsonSerializer.Deserialize<LearningSettings>(File.ReadAllText(path)) ?? new();
-            return loaded with { TargetLanguages = loaded.TargetLanguages ?? [] };
+            // A hand-edited file can carry null entries; the service's Vec<String> refuses them as a whole record.
+            return loaded with
+            {
+                TargetLanguages = (loaded.TargetLanguages ?? [])
+                    .Where(language => !string.IsNullOrWhiteSpace(language)).ToList(),
+            };
         }
         catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
         {

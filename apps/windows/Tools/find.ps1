@@ -17,7 +17,7 @@ Invoke-XDictGate -Name 'find-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -
     @{
         mode = 'find'; library = $library; result = $resultPath
         exe = (Join-Path (Get-XDictAppOutput) 'XDict.exe')
-    } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+    } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $result = Invoke-XDictTask -Executable 'powershell.exe' `
         -Arguments ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $PSScriptRoot 'uia-drive.ps1') + '" "' + $config + '"') `
         -Output $resultPath -Seconds 240 -Prefix 'xdict-find'

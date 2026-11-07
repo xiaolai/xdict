@@ -417,7 +417,8 @@
     "library.wordPack.cancelled": "The build was cancelled; nothing was installed.",
     "ai.endpointInsecure": "Use an https address. Plain http is allowed only for a server on this machine.",
     "hover.saveFailed": "The hover setting could not be saved: {0}",
-    "review.conflictsFailed": "The conflict list could not be read: {0}"
+    "review.conflictsFailed": "The conflict list could not be read: {0}",
+    "find.failed": "The page could not be searched: {0}"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -837,6 +838,7 @@
     "library.wordPack.cancelled": "构建已取消；未安装任何内容。",
     "ai.endpointInsecure": "请使用 https 地址；只有本机上的服务器可以使用 http。",
     "hover.saveFailed": "悬停设置无法保存：{0}",
-    "review.conflictsFailed": "无法读取冲突列表：{0}"
+    "review.conflictsFailed": "无法读取冲突列表：{0}",
+    "find.failed": "无法在页面中查找：{0}"
   }
 }

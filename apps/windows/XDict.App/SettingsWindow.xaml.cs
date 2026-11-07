@@ -39,7 +39,11 @@ public sealed partial class SettingsWindow : Window
         SetupItem.Content = Strings.Get("settings.setup");
         AboutItem.Content = Strings.Get("settings.about");
         dictionaries = new DictionariesView(store, client, this);
-        dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
+        dictionaries.LibraryChanged += () =>
+        {
+            LibraryChanged?.Invoke();
+            learning?.RefreshLibrary();
+        };
         reading = new ReadingView();
         speech = new SpeechView();
         lookup = new LookupView(capture);
@@ -55,6 +59,8 @@ public sealed partial class SettingsWindow : Window
             Pages.Children.Add(page);
         Nav.SelectedItem = DictionariesItem;
         Show(dictionaries);
+        // Closing cancels what this window started: a second Settings must not build beside the first's import.
+        Closed += (_, _) => dictionaries.CancelOperations();
     }
 
     private void OnRouteChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -76,6 +82,7 @@ public sealed partial class SettingsWindow : Window
 
     private void Show(UIElement page)
     {
+        if (ReferenceEquals(page, setup)) setup.Refresh();
         dictionaries.Visibility = page == dictionaries ? Visibility.Visible : Visibility.Collapsed;
         reading.Visibility = page == reading ? Visibility.Visible : Visibility.Collapsed;
         speech.Visibility = page == speech ? Visibility.Visible : Visibility.Collapsed;

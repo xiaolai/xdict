@@ -14,7 +14,7 @@ Invoke-XDictGate -Name 'sound-lab' -Inputs (Get-XDictLabInputs -Layout $layout) 
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $config = Join-Path $folder 'config.json'
     $result = Join-Path $folder 'result.json'
-    @{ output = $result } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+    @{ output = $result } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $sound = Invoke-XDictTask -Executable $exe -Arguments ('--sound-lab "' + $config + '"') -Output $result `
         -Seconds 120 -Prefix 'xdict-sound'

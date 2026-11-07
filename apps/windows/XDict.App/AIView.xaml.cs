@@ -2,6 +2,7 @@
 // entry switch, the answer language and the two CLI programs. Status checks are local unless the reader asks a
 // source; the key is never displayed.
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -29,6 +30,14 @@ public sealed partial class AIView : UserControl
         ModelLabel.Text = Strings.Get("ai.model");
         EndpointLabel.Text = Strings.Get("ai.endpoint");
         KeyLabel.Text = Strings.Get("ai.key");
+        // A visual label beside a control is not an accessible name: associate the two, so a screen reader reads
+        // "Endpoint" rather than only the control's type.
+        AutomationProperties.SetLabeledBy(Source, SourceLabel);
+        AutomationProperties.SetLabeledBy(Profile, ProfileLabel);
+        AutomationProperties.SetLabeledBy(Model, ModelLabel);
+        AutomationProperties.SetLabeledBy(Endpoint, EndpointLabel);
+        AutomationProperties.SetLabeledBy(KeyBox, KeyLabel);
+        AutomationProperties.SetLabeledBy(AnswerLanguage, LanguageLabel);
         KeyBox.PlaceholderText = Strings.Get("ai.key.placeholder");
         SaveKeyButton.Content = Strings.Get("ai.key.save");
         RemoveKeyButton.Content = Strings.Get("ai.key.remove");

@@ -23,6 +23,13 @@ public sealed partial class DictionariesView : UserControl
     private CancellationTokenSource? building;
     private List<LibraryDictionary> rows = [];
 
+    /// <summary>The Settings window is closing: an import or a pack build it started must not outlive it.</summary>
+    public void CancelOperations()
+    {
+        importing?.Cancel();
+        building?.Cancel();
+    }
+
     public DictionariesView(LibraryStore store, ServiceClient client, Window owner, bool askLanguages = true)
     {
         InitializeComponent();
@@ -105,6 +112,9 @@ public sealed partial class DictionariesView : UserControl
         finally
         {
             client.Release(id);
+            // The row's controls were disabled for the request; an exception must not leave them that way.
+            WordPackInstall.IsEnabled = true;
+            WordPackRemove.IsEnabled = true;
         }
     });
 

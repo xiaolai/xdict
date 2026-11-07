@@ -32,7 +32,7 @@ function Invoke-MeasureApp {
     param([string]$Mode, [int]$Count, [string]$Output)
     $config = Join-Path $folder ('measure-' + $Mode + '-' + [Guid]::NewGuid().ToString('N') + '.json')
     @{ output = $Output; library = $library; mode = $Mode; count = $Count; queries = $queries } |
-        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $config -Encoding Ascii
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $config -Encoding UTF8
     return Invoke-Lab -Arguments ('--measure-lab "' + $config + '" --client-deadline 180') -Output $Output
 }
 
@@ -44,7 +44,7 @@ if (-not $SkipImport) {
         $oneConfig = Join-Path $folder ('library-config-' + $imported + '.json')
         $oneResult = Join-Path $folder ('library-result-' + $imported + '.json')
         @{ output = $oneResult; library = $library; paths = @($path) } |
-            ConvertTo-Json | Set-Content -LiteralPath $oneConfig -Encoding Ascii
+            ConvertTo-Json | Set-Content -LiteralPath $oneConfig -Encoding UTF8
         $one = Invoke-Lab -Arguments ('--library-lab "' + $oneConfig + '" --client-deadline 300') -Output $oneResult -Seconds 600
         if ($null -eq $one) { Write-Host ("import timed out: " + (Split-Path -Leaf $path)) }
         elseif ($one.status -and $one.status -ne '') { Write-Host ("import " + (Split-Path -Leaf $path) + ": " + $one.status) }

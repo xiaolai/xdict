@@ -12,7 +12,7 @@ function Invoke-MainPass {
     # 2. The main pass: the real chord over a Notepad selection.
     if (-not $Only -or $Only -eq 'main') {
     @{ output = (Join-Path $folder 'capture-result.json'); mode = 'main'; settings = $settings; library = $library; text = $html } |
-        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $main = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $config + '"') -Output (Join-Path $folder 'capture-result.json')
     Write-Host ($main | ConvertTo-Json -Depth 6)
     if ($main.PSObject.Properties['error']) { throw "the capture lab failed: $($main.error)" }
@@ -44,7 +44,7 @@ function Invoke-NotepadPass {
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
     $notepadConfig = Join-Path $folder 'notepad-config.json'
     @{ output = (Join-Path $folder 'notepad-result.json'); mode = 'notepad'; settings = $settings; library = $library; text = $text } |
-        ConvertTo-Json | Set-Content -LiteralPath $notepadConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $notepadConfig -Encoding UTF8
     $notepadRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $notepadConfig + '"') -Output (Join-Path $folder 'notepad-result.json')
     Write-Host ($notepadRun | ConvertTo-Json -Depth 6)
     if ($notepadRun.PSObject.Properties['error']) { throw "the Notepad pass failed: $($notepadRun.error)" }
@@ -62,7 +62,7 @@ function Invoke-SuspendedPass {
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
     $suspendedConfig = Join-Path $folder 'suspended-config.json'
     @{ output = (Join-Path $folder 'suspended-result.json'); mode = 'suspended'; settings = $settings; library = $library; text = $html } |
-        ConvertTo-Json | Set-Content -LiteralPath $suspendedConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $suspendedConfig -Encoding UTF8
     $suspended = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $suspendedConfig + '"') -Output (Join-Path $folder 'suspended-result.json')
     Write-Host ($suspended | ConvertTo-Json -Depth 6)
     if (-not $suspended.panelShown) { throw 'the panel did not show with the service suspended' }
@@ -137,7 +137,7 @@ $word.Quit()
         try {
             $wordConfig = Join-Path $folder 'word-config.json'
             @{ output = (Join-Path $folder 'word-result.json'); mode = 'word'; settings = $settings; library = $library; text = $docx } |
-                ConvertTo-Json | Set-Content -LiteralPath $wordConfig -Encoding Ascii
+                ConvertTo-Json | Set-Content -LiteralPath $wordConfig -Encoding UTF8
             $wordRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $wordConfig + '"') -Output (Join-Path $folder 'word-result.json')
         }
         finally {
@@ -161,7 +161,7 @@ $word.Quit()
         Stop-XDictLabProcesses -Name @('XDict', 'msedge', 'chrome', 'WINWORD') -Since $started
         $pdfConfig = Join-Path $folder 'pdf-config.json'
         @{ output = (Join-Path $folder 'pdf-result.json'); mode = 'pdf'; settings = $settings; library = $library; text = $pdf } |
-            ConvertTo-Json | Set-Content -LiteralPath $pdfConfig -Encoding Ascii
+            ConvertTo-Json | Set-Content -LiteralPath $pdfConfig -Encoding UTF8
         $pdfRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $pdfConfig + '"') -Output (Join-Path $folder 'pdf-result.json')
         Write-Host ($pdfRun | ConvertTo-Json -Depth 6)
         if (-not $pdfRun.panelShown -or $pdfRun.term -ne 'run') {
@@ -182,7 +182,7 @@ function Invoke-RelaunchPass {
     Start-Sleep -Seconds 1
     $relaunchConfig = Join-Path $folder 'relaunch-config.json'
     @{ output = (Join-Path $folder 'relaunch-result.json'); mode = 'relaunch'; settings = $settings; library = $library; text = $html } |
-        ConvertTo-Json | Set-Content -LiteralPath $relaunchConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $relaunchConfig -Encoding UTF8
     $relaunch = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $relaunchConfig + '"') -Output (Join-Path $folder 'relaunch-result.json')
     Write-Host ($relaunch | ConvertTo-Json -Depth 6)
     if ($relaunch.PSObject.Properties['error']) { throw "the relaunch pass failed: $($relaunch.error)" }
@@ -222,7 +222,7 @@ try { if (-not $notepad.HasExited) { Stop-Process -Id $notepad.Id -Force } } cat
                 Start-Sleep -Seconds 3
                 $elevatedConfig = Join-Path $folder 'elevated-config.json'
                 @{ output = (Join-Path $folder 'elevated-result.json'); mode = 'elevated'; settings = $settings; library = $library; text = $text } |
-                    ConvertTo-Json | Set-Content -LiteralPath $elevatedConfig -Encoding Ascii
+                    ConvertTo-Json | Set-Content -LiteralPath $elevatedConfig -Encoding UTF8
                 $elevated = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $elevatedConfig + '"') -Output (Join-Path $folder 'elevated-result.json')
                 Write-Host ($elevated | ConvertTo-Json -Depth 6)
                 if ($elevated.PSObject.Properties['error']) { throw ('the elevated capture failed: ' + $elevated.error) }
@@ -279,7 +279,7 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     # 1. A private library through the library lab.
     $libraryConfig = Join-Path $folder 'library-config.json'
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $prepared = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') -Output (Join-Path $folder 'library-result.json')
     if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
     Stop-XDictLabProcesses -Name @('XDict') -Since $started

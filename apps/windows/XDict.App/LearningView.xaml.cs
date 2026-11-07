@@ -1,6 +1,7 @@
 // Learning (ADR-0023): the review target, and the reader's own export and erase of what XDict keeps on this PC.
 // The history switch and its first-run disclosure are WS-P2's, behind Probe A; this pane holds no history surface.
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -29,6 +30,7 @@ public sealed partial class LearningView : UserControl
         this.reminders = reminders;
         settings = LearningSettings.Load();
         Heading.Text = Strings.Get("settings.learning");
+        AutomationProperties.SetLabeledBy(Retention, RetentionLabel);
         HistorySwitch.Header = Strings.Get("learning.history");
         HistoryDetail.Text = Strings.Get("learning.historyDetail");
         HistorySwitch.IsOn = settings.HistoryEnabled;
@@ -98,6 +100,9 @@ public sealed partial class LearningView : UserControl
         try { await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:notifications")); }
         catch (Exception error) { Status.Text = Strings.Format("learning.settingsFailed", error.Message); }
     }
+
+    /// <summary>Rebuilds the language choices after dictionaries were imported or edited while Settings is open.</summary>
+    public void RefreshLibrary() => BuildLanguages();
 
     private void BuildLanguages()
     {
@@ -169,7 +174,7 @@ public sealed partial class LearningView : UserControl
     {
         bool chosen = !string.IsNullOrWhiteSpace(settings.SyncFolder);
         SyncFolderText.Text = chosen ? settings.SyncFolder! : Strings.Get("sync.notSet");
-        SyncNow.IsEnabled = chosen;
+        SyncNow.IsEnabled = chosen && !syncing;
     }
 
     private async void OnChooseSyncFolder(object sender, RoutedEventArgs e)
@@ -193,9 +198,12 @@ public sealed partial class LearningView : UserControl
         }
     }
 
+    private bool syncing;
+
     private async void OnSyncNow(object sender, RoutedEventArgs e)
     {
-        if (settings.SyncFolder is not { } folder) return;
+        if (syncing || settings.SyncFolder is not { } folder) return;
+        syncing = true;
         SyncNow.IsEnabled = false;
         SyncStatus.Text = Strings.Get("sync.running");
         try
@@ -217,7 +225,10 @@ public sealed partial class LearningView : UserControl
         }
         finally
         {
+            syncing = false;
             SyncNow.IsEnabled = !string.IsNullOrWhiteSpace(settings.SyncFolder);
+            // Newly merged cards can be due; the reminder plan must not wait for an unrelated action.
+            if (reminders is not null) _ = reminders.RefreshAsync();
         }
     }
 

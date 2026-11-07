@@ -8,7 +8,7 @@ $folder = Join-Path $env:LOCALAPPDATA ('XDict\entry-evidence\' + $id)
 New-Item -ItemType Directory -Force -Path $folder | Out-Null
 $output = Join-Path $folder 'result.json'
 $config = Join-Path $folder 'config.json'
-@{ output = $output; mode = $Mode; corpus = (Get-XDictCorpus); fixtures = (Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures'); cases = (Join-Path $layout.RepoRoot 'conformance\fixtures\hostile\cases.json') } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+@{ output = $output; mode = $Mode; corpus = (Get-XDictCorpus); fixtures = (Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures'); cases = (Join-Path $layout.RepoRoot 'conformance\fixtures\hostile\cases.json') } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
 $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
 $action = New-ScheduledTaskAction -Execute $exe -Argument ('--entry-lab "' + $config + '"')
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited

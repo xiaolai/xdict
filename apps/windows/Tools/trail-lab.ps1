@@ -16,14 +16,14 @@ Invoke-XDictGate -Name 'trail-lab' -Inputs (Get-XDictLabInputs -Layout $layout) 
     $library = Join-Path $folder 'library.json'
     $libraryConfig = Join-Path $folder 'library-config.json'
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
+        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding UTF8
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
     $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
         -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
 
     $config = Join-Path $folder 'config.json'
     $result = Join-Path $folder 'result.json'
-    @{ output = $result; library = $library } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
+    @{ output = $result; library = $library } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
     $uia = Invoke-XDictTask -Executable $exe -Arguments ('--trail-lab "' + $config + '"') -Output $result `
         -Seconds 180 -Prefix 'xdict-trail-lab'
     Write-Host ($uia | ConvertTo-Json -Depth 4)
