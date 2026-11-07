@@ -139,5 +139,10 @@ struct SenseClickTests {
         #expect(dom.contains("XDictSenseCore.step("))
         let css = EntryStyle.bundled.text("marks.css")
         #expect(css.contains("[data-xdict-chosen]"), "the chosen sense has no visible mark")
+        // **A tint, never a ring** (D49, 2026-11-07): a passing tap must not look like a focus state the reader has
+        // entered, and a background takes no room either, so the mark still never moves the text.
+        #expect(css.contains("[data-xdict-chosen]{background:var(--xdict-blue-tint)"),
+                "the chosen sense is not tinted")
+        #expect(!css.contains("[data-xdict-chosen]{outline"), "the chosen sense is ringed like a focus state")
     }
 }
