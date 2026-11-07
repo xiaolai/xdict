@@ -29,13 +29,20 @@ Invoke-XDictGate -Name 'search-scope-uia' -Inputs (Get-XDictLabInputs -Layout $l
     # Paths travel as data: the driver reads them from a JSON file beside itself, so no apostrophe or quote in a
     # profile folder can end a string literal or become source.
     $driverConfig = Join-Path $folder 'driver-config.json'
-    @{ library = $library; exe = $exe; launch = $launchId; tools = $PSScriptRoot; result = $result; quit = $quit } |
+    @{ library = $library; exe = $exe; launch = $launchId; tools = $PSScriptRoot; result = $result; quit = $quit
+       strings = (Join-Path $layout.AppRoot 'XDict.Models\Strings\strings.json') } |
         ConvertTo-Json | Set-Content -LiteralPath $driverConfig -Encoding UTF8
     $template = @'
 $ErrorActionPreference = 'Stop'
 $config = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'driver-config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $resultPath = $config.result
 $env:XDICT_LIBRARY = $config.library
+# Every language's sentence for a completed query that found nothing, read from the app's own string table: the
+# status text is localised, and hard-coding one language would pass on an English host and fail on a Chinese one.
+$tables = Get-Content -LiteralPath $config.strings -Raw -Encoding UTF8 | ConvertFrom-Json
+$noMatch = @($tables.PSObject.Properties | ForEach-Object {
+    $_.Value.PSObject.Properties | Where-Object { $_.Name -eq 'search.noMatch' } | ForEach-Object { ([string]$_.Value).Trim() }
+})
 $app = Start-Process -FilePath $config.exe -ArgumentList ('--launch-id ' + $config.launch) -PassThru
 try {
     Add-Type -AssemblyName UIAutomationClient
@@ -77,7 +84,10 @@ try {
             if (-not $status) { return -1 }
             $name = $status.Current.Name
             if ($name -match '(\d+)') { return [int]$Matches[1] }
-            # No count is not "no results": the query has not completed, and 0 would satisfy the Tiny assertion.
+            # A completed query with nothing found says so in its own sentence, and that is the app's own words for
+            # zero — read from its string table, so a localised sentence is recognised and an empty or unknown one is
+            # not: no sentence at all still means the query has not completed (0 would satisfy the Tiny assertion).
+            if ($noMatch -contains $name.Trim()) { return 0 }
             return -2
         }
         function Set-Scope([string]$name) {
@@ -113,7 +123,10 @@ try {
     $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 catch {
-    @{ error = $_.Exception.Message } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
+    # The counts read before a failure survive it; a bare sentence loses what the run had established.
+    if ($result) { $result.error = $_.Exception.Message; $out = $result }
+    else { $out = @{ error = $_.Exception.Message } }
+    $out | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 }
 finally {
     Set-Content -LiteralPath $config.quit -Value '' -Encoding Ascii
