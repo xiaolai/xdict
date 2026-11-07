@@ -15,7 +15,6 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use serde_json::Value;
 use xdict_core::{ByteSource, CoreError, FileIdentity};
 
 use crate::failure::Failure;
@@ -430,46 +429,6 @@ pub fn close_handle(handle: u64) {
 /// A value that can name a HANDLE here; 0 never does.
 fn usable(handle: u64) -> bool {
     handle != 0 && handle <= i64::MAX as u64
-}
-
-/// The handles one received record carries, owned from the moment it parses: each was duplicated into this process
-/// for this request and is the service's to close. A refusal before admission (malformed, contractMismatch, an
-/// answer, cancel, busy) drops this and so closes them; `admit` is the one place that takes them over. A body that is
-/// not JSON names no value the service could close.
-pub struct Carried<C: Fn(u64)> {
-    handles: Vec<u64>,
-    close: C,
-}
-
-impl<C: Fn(u64)> Carried<C> {
-    pub fn of(record: &Value, close: C) -> Self {
-        let mut handles = Vec::new();
-        let files = record.get("files").and_then(Value::as_array);
-        for handle in files
-            .into_iter()
-            .flatten()
-            .filter_map(|file| file.get("handle").and_then(Value::as_u64))
-        {
-            // One value named twice is one handle: closing it twice could close a handle opened since.
-            if usable(handle) && !handles.contains(&handle) {
-                handles.push(handle);
-            }
-        }
-        Self { handles, close }
-    }
-
-    /// Hands the handles to `admit`, which closes each one on every path of its own.
-    pub fn into_admission(mut self) {
-        self.handles.clear();
-    }
-}
-
-impl<C: Fn(u64)> Drop for Carried<C> {
-    fn drop(&mut self) {
-        for handle in self.handles.drain(..) {
-            (self.close)(handle);
-        }
-    }
 }
 
 // The held object's times may have moved since the last observation. Admit that same file object so the core's
